@@ -102,5 +102,8 @@ Using above parameters Taylor Reynolds number is estimated by
   Re \simeq \dfrac{8.5}{(\eta\_T \kappa_0)^{5/6} N^{2/9}\_{F}}
 \\]
 
+# TODO
+* More detail explanation of Uhlenbeck-Ornstein process
+* Add code for computing Re
 
 # Reference
