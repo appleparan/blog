@@ -21,7 +21,7 @@ Pros:
 Cons:
   * Only can be applied to periodic domain
 
-# Governing Equtation
+# Governing Equation
 
 ## Navier-Stokes equation to rotational form
 Original Navier-Stokes equation in **convection form** is
