@@ -52,7 +52,7 @@ $$
 
 ## Removing pressure term
 
-If I take divergence from Navier-Stokes equation in rotational form, 
+If I take divergence from Navier-Stokes equation in rotational form,
 
 $$
 \begin{align}
@@ -74,7 +74,7 @@ Combining two equation and then..
 $$
 \begin{align}
 \dfrac{d \hat{u}_i }{d t} &= -i \kappa_i \left( -i \dfrac{\kappa_j}{\kappa^2} \hat{H}_j \right ) + \hat{H}_i - \nu \kappa^2 \hat{u}_i \\\
-\dfrac{d \hat{u}_i }{d t} &= -\dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i - \nu \kappa^2 \hat{u}_i 
+\dfrac{d \hat{u}_i }{d t} &= -\dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i - \nu \kappa^2 \hat{u}_i
 \end{align}
 $$
 
@@ -82,7 +82,7 @@ where $\kappa$ is a wavenumber. Now I have new N-S equation without pressure ter
 
 $$
 \begin{align}
-\dfrac{d \hat{u}_i }{d t} &= -\dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i - \nu \kappa^2 \hat{u}_i 
+\dfrac{d \hat{u}_i }{d t} &= -\dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i - \nu \kappa^2 \hat{u}_i
 \end{align}
 $$
 
@@ -104,7 +104,7 @@ $$
 f(t) \dfrac{d \hat{u}}{dt} + (\nu \kappa^2 f(t))\hat{u}_j &= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t) \\\
 f(t) \dfrac{d \hat{u}}{dt} + (\nu \kappa^2 e^{\nu \kappa^2 t})\hat{u}_j  &= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t) \\\
 f(t) \dfrac{d \hat{u}}{dt} + (\dfrac{d e^{\nu \kappa^2 t}}{dt})\hat{u}_j  &= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t) \\\
-\dfrac{d \hat{u}_i f(t)}{dt} &= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t) 
+\dfrac{d \hat{u}_i f(t)}{dt} &= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t)
 \end{align}
 $$
 
@@ -170,7 +170,7 @@ $$
 
 ## Navier Stokes Equation
 * Chevalier, M. et al., 2007, SIMSON - A Pseudo-Spectral Solver for Incompressible Boundary Layer Flows https://www.mech.kth.se/mech/info_tritamek.jsp?TritaMekID=315
-* Canuto, Claudio, et al. Spectral methods in fluid dynamics. Springer Science & Business Media, 2012. 
+* Canuto, Claudio, et al. Spectral methods in fluid dynamics. Springer Science & Business Media, 2012.
 
 ## RK3 method
 * Lundbladh, Anders, et al. "An efficient spectral method for simulation of incompressible flow over a flat plate." Trita-mek. Tech. Rep 11 (1999).
