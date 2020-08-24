@@ -4,6 +4,9 @@ baseurl:             ""
 
 markdown:            kramdown
 highlighter:         rouge
+lsi:                 false
+excerpt_separator:   "\n\n"
+incremental:         false
 
 exclude:             ['*.sublime-*', 'README.md', 'LICENSE', 'Gemfile', 'Gemfile.lock', 'vendor/bundle']
 
