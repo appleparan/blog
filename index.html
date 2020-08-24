@@ -4,10 +4,11 @@ title: Home
 ---
 <div class="page">
   <header>
-    <h1 class="landing-title">Posts</h1>
+    <h1 class="landing-title">Latest Posts</h1>
   </header>
 
   <div class="blog-index">
+    <!-- ref: https://gist.github.com/nimbupani/1421828 -->
     {% assign post = site.posts.first %}
     {% assign content = post.content %}
     {% include post_detail.html %}
