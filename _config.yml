@@ -18,6 +18,10 @@ sass:
   sass_dir:          _sass
   style:             :compressed
 
+scholar:
+  style: modern-language-association
+  source: _bibliography
+
 author:
   name:              Liam Jongsu Kim
   url:               appleparan.github.io
@@ -27,3 +31,4 @@ plugins:
   - jekyll-coffeescript
   - jekyll-paginate
   - jekyll-gist
+  - jekyll/scholar
