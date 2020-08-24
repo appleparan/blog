@@ -7,6 +7,8 @@ tags:
 use_math: true
 ---
 
+(This content is originally written by ‪Kyongmin Yeo's manual)
+
 # Introduction
 
 The spectral method is solving certain differential equation by some "basis function", typically sinusoids with Fourier method.
