@@ -1,5 +1,5 @@
-title:               Celeste
-url:                 https://nicoelayda.github.io
+title:               Liam Jongsu Kim's Blog
+url:                 https://blog.liam.kim
 baseurl:             ""
 
 markdown:            kramdown
@@ -19,9 +19,9 @@ sass:
   style:             :compressed
 
 author:
-  name:              Nico Elayda
-  url:               nicoelayda.github.io
-  email:             nico@elayda.com
+  name:              Liam Jongsu Kim
+  url:               appleparan.github.io
+  email:             jongsukim8@gmail.com
 
 plugins:
   - jekyll-coffeescript
