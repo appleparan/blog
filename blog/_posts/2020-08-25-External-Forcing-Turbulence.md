@@ -66,7 +66,7 @@ in which discretized Wiener proces is
   dW^n \sim \mathcal{N} (0, (a\_n + b\_n) \Delta t)
 \\]
 
-# Estimating Re
+# Estimating Reynolds Number
 
 ## Given parameters
 * \\(\nu\\) : Fluid viscosity
@@ -95,7 +95,7 @@ in which discretized Wiener proces is
   \eta\_T \equiv (\nu^3 / \epsilon_T)
   \\]
 
-## Predicted Re
+## Predicted \\(Re\\)
 Using above parameters Taylor Reynolds number is estimated by 
 
 \\[
@@ -104,6 +104,6 @@ Using above parameters Taylor Reynolds number is estimated by
 
 # TODO
 * More detail explanation of Uhlenbeck-Ornstein process
-* Add code for computing Re
+* Add code for computing \\(Re\\)
 
 # Reference
