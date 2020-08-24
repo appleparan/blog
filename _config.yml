@@ -22,11 +22,17 @@ scholar:
   style: modern-language-association
   source: _bibliography
 
+jekyll_get:
+  - data: github
+    json: 'https://api.github.com/users/appleparan/repos'
+    cache: false
+
 author:
   name:              Liam Jongsu Kim
   url:               appleparan.github.io
   email:             jongsukim8@gmail.com
 
+plugins_dir: ./_plugins
 plugins:
   - jekyll-coffeescript
   - jekyll-paginate
