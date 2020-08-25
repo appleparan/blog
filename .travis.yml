@@ -7,8 +7,8 @@ script:
   - JEKYLL_ENV=production bundle exec jekyll build --destination site
 deploy:
   provider: pages
-  local-dir: ./site
-  target-branch: master
+  local-dir: .
+  target-branch: gh-pages
   email: deploy@travis-ci.org
   name: Deployment Bot
   skip-cleanup: true
