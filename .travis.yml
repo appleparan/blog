@@ -5,7 +5,6 @@ rvm:
 install:
   - bundle install
   - gem install jekyll
-  - gem install jekyll-site-map
   - gem install emoji_for_jekyll
   - gem install jekyll-scholar
 
