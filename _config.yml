@@ -14,7 +14,7 @@ permalink:           pretty
 paginate:            5
 paginate_path:       /blog/:num
 
-sass:
+sassc:
   sass_dir:          _sass
   style:             :compressed
 
@@ -34,7 +34,7 @@ author:
 
 plugins_dir: ./_plugins
 plugins:
-  - jekyll-coffeescript
+  - emoji_for_jekyll
   - jekyll-paginate
   - jekyll-gist
   - jekyll/scholar

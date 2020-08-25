@@ -1,10 +1,7 @@
 source 'https://rubygems.org'
 
-# disable github build
-#gem 'github-pages', group: :jekyll_plugins
-
-# travis CI build
 gem "jekyll"
+gem "kramdown-parser-gfm"
 
 # plugins
 gem "emoji_for_jekyll", group: :jekyll_plugins
