@@ -6,6 +6,8 @@ install:
   - bundle install
   - gem install jekyll
   - gem install emoji_for_jekyll
+  - gem install jekyll-paginate
+  - gem install jekyll-gist
   - gem install jekyll-scholar
 
 branches:
