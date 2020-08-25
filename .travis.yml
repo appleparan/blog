@@ -1,18 +1,40 @@
 language: ruby
-cache: bundler
+rvm:
+  - 2.7.0
+
+install:
+  - bundle install
+  - gem install jekyll
+  - gem install jekyll-site-map
+  - gem install emoji_for_jekyll
+  - gem install jekyll-scholar
+
 branches:
   only:
-  - release
+  - master
+  
 script:
-  - JEKYLL_ENV=production bundle exec jekyll build --destination site
+  - JEKYLL_ENV=production 
+
+notifications:
+  email:
+    recipients:
+      jongsukim8@gmail.com
+    on_success: always
+    on_failure: always
+
+sudo: false
+addons:
+  opt:
+    packages:
+      - ncftp
 deploy:
   provider: pages
-  local-dir: .
-  target-branch: gh-pages
-  email: deploy@travis-ci.org
-  name: Deployment Bot
-  skip-cleanup: true
-  github-token: $GITHUB_TOKEN
-  keep-history: true
+  target_branch: gh-pages
+  fqdn: blog.liam.kim
+  project_name: blog
+  skip_cleanup: true
+  github_token: $GITHUB_TOKEN
+  keep_history: false
   on:
-    branch: release
+    branch: master
