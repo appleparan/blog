@@ -38,6 +38,11 @@ Using following vector identity,
 \end{align}
 
 The Navier-Stoke sequations in **rotational form** can be obatained.
+The reason is explained in the paper, *Numerical Simulation of Incompressible Flows Within Simple Boundaries. I. Galerkin (Spectral) Representations*.
+
+{% quote Orszag1971a --file 2017-07-17-Psuedo-spectral-method %}
+The reason is that pseudospectral approximation to the rotation, rather than Reynolds stress, form of the nonlinear terms of the Navier~Stokes equations semiconserves (cf. {% cite Orszag1971 --file 2017-07-17-Psuedo-spectral-method %}, Numerical simulation of incompressible flows within simple boundaries: Accuracy, Section 3) energy so that aliasing errors, although present, can not directly cause unconditional nonlinear instability
+{% endquote %}
 
 \begin{align}
 \dfrac{\partial u_i}{\partial t} &= -\dfrac{\partial P}{\partial x_i} + H_i + \nu \nabla^2 u \newline
@@ -105,8 +110,8 @@ this can be more simpler by introducing new term \\(\widehat{NL}\\)
 
 ### Time Discretization by RK3 method
 
-For low-storage RK3 method (2-register, 3-stage, 3rd order), the coefficients are given by following table 
-{% cite Lundbladh:1999vy --file 2017-07-17-Psuedo-spectral-method  %}, {% cite Yu1992  --file 2017-07-17-Psuedo-spectral-method  %}, {% cite Wray1990 --file 2017-07-17-Psuedo-spectral-method %}
+For low-storage RK3 method (2-register, 3-stage, 3rd order), the coefficients are given by following table
+{% cite Lundbladh:1999vy --file 2017-07-17-Psuedo-spectral-method %}, {% cite Yu1992  --file 2017-07-17-Psuedo-spectral-method  %}, {% cite Wray1990 --file 2017-07-17-Psuedo-spectral-method %}
 
 
 | order   | \\(a_n\\) | \\(b_n\\) | \\(c_n\\) |

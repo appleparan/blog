@@ -19,7 +19,7 @@ sassc:
   style:             :compressed
 
 scholar:
-  style: modern-language-association
+  style: apa
   source: _bibliography
 
 jekyll_get:
