@@ -32,6 +32,8 @@ author:
   url:               appleparan.github.io
   email:             jongsukim8@gmail.com
 
+google_analytics: UA-19932832-3
+
 plugins_dir: ./_plugins
 plugins:
   - emoji_for_jekyll
