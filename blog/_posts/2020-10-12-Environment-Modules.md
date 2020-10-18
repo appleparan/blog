@@ -4,6 +4,8 @@ title: Environment Modules 사용하기
 tags:
   - Modules
   - Environments
+  - Server Engineering
+  - HPC
 use_math: false
 ---
 

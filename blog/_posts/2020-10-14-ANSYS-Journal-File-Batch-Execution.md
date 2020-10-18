@@ -2,12 +2,14 @@
 layout: post
 title: ANSYS Batch mode로 실행하기
 tags:
-  - Modules
-  - Environments
+  - ANSYS
+  - Batch mode
+  - Journal Files
+  - HPC
 use_math: false
 ---
 
-내가 담당하는 일은 아니지만, 연구실에서 2년전부터 ANSYS(정확히는 ANSYS Fluent)를 사용하고 있다. 그동안의 사용방식은 GUI로 바로 실행하는 형태였는데, 효율적 자원 관리를 위해 잡스케줄러를 사용해서 batch mode로 전환하고자 한다.
+내가 담당하는 일은 아니지만, 연구실에서 2년전부터 ANSYS(정확히는 ANSYS Fluent)를 사용하고 있다. 그동안의 사용방식은 GUI로 바로 실행하는 형태였는데, 효율적 HPC 자원 관리를 위해 잡스케줄러를 사용해서 batch mode로 전환하고자 한다.
 
 ANSYS는 프로그램의 사이즈 치고는 공개된 문서가 찾기 힘들고 리셀러 홈페이지에서 문서보기도 좀 복잡하기도 해서 batch mode로 어떻게 실행하는지 알기가 힘들었다. 게다가 난 내 일도 아니라서 ANSYS를 잘 쓸 줄 몰라서 더더욱 알기 힘들었다. 우리 연구실은 SGE를 주로 쓰는데 ANSYS에서 GUI형태로 SGE Job submission을 지원하기는 하지만 queue나 parallel environment설정을 어떻게 하는지 몰라서 포기했기에 어쩔 수 없이 아래와 같은 텍스트 방식을 고집할 수 밖에 없었다.
 
