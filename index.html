@@ -2,19 +2,48 @@
 layout: default
 title: Home
 ---
-<div class="page">
-  <header>
-    <h1 class="landing-title">Latest Post</h1>
-  </header>
 
-  <div class="blog-index">
-    <!-- ref: https://gist.github.com/nimbupani/1421828 -->
-    {% assign post = site.posts.first %}
-    {% assign content = post.content %}
-    {% include post_detail.html %}
+<div class="home-title">
+  <p class="home-heading">{{ site.title }}</p>
+</div>
+
+<nav>
+  <ul>
+    <li><a class="link" href="{{ site.baseurl }}/">Home</a></li>
+    <li><a class="link" href="{{ site.baseurl }}/tags">Tags</a></li>
+    <li><a class="link" href="{{ site.baseurl }}/archive">Archive</a></li>
+    <li><a class="link" href="{{ site.baseurl }}/about">About</a></li>
+  </ul>
+</nav>
+
+<div class="posts">
+  {% for post in paginator.posts %}
+  <div class="post">
+    <h1 class="post-title">
+      <a href="{{ post.url | base_url }}">
+        {{ post.title }}
+      </a>
+    </h1>
+    
+    <span class="post-date">{{ post.date | date_to_string }}</span>
+    {{ post.content | truncatewords: 100 }}
   </div>
-  <!--
-  <div class="text-center">
-  </div>
-  -->
+  {% endfor %}
+</div>
+
+<div class="pagination">
+  {% if paginator.next_page %}
+  <a class="pagination-item older" href="{{ paginator.next_page_path | base_url }}">Older</a>
+  {% else %}
+  <span class="pagination-item older">Older</span>
+  {% endif %}
+  {% if paginator.previous_page %}
+  {% if paginator.page == 2 %}
+  <a class="pagination-item newer" href="{{ '/' | base_url }}">Newer</a>
+  {% else %}
+  <a class="pagination-item newer" href="{{ paginator.previous_page_path | base_url }}">Newer</a>
+  {% endif %}
+  {% else %}
+  <span class="pagination-item newer">Newer</span>
+  {% endif %}
 </div>

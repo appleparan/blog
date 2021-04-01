@@ -1,6 +1,8 @@
-title:               Liam Jongsu Kim's Blog
+title:               'Jongsu Liam Kim | Blog'
+tagline:             ''
+description:         ''
 url:                 https://blog.liam.kim
-baseurl:             ""
+baseurl:             ''
 
 markdown:            kramdown
 highlighter:         rouge
@@ -14,7 +16,13 @@ permalink:           pretty
 paginate:            5
 paginate_path:       /blog/:num
 
-sassc:
+moving:
+  avatar_url: "images/profile.jpg" # avatar in about page
+  about_you:
+  date_format: "%b %d" # date format of posts in home page
+  back_to: "Home" # In the post page, you have a back button above the title, you can custom the text by yourself.
+
+sass:
   sass_dir:          _sass
   style:             :compressed
 
@@ -28,13 +36,14 @@ jekyll_get:
     cache: false
 
 author:
-  name:              Liam Jongsu Kim
-  url:               appleparan.github.io
+  name:              Jongsu Liam Kim
+  url:               liam.kim
   email:             jongsukim8@gmail.com
 
 plugins_dir: ./_plugins
 plugins:
   - emoji_for_jekyll
   - jekyll-paginate
+  - jekyll-feed
   - jekyll-gist
   - jekyll/scholar
