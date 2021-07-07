@@ -1,0 +1,832 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+
+ <title>Jongsu Liam Kim | Blog</title>
+ <link href="https://blog.liam.kim/atom.xml" rel="self"/>
+ <link href="https://blog.liam.kim/"/>
+ <updated>2021-07-07T02:26:04+00:00</updated>
+ <id>https://blog.liam.kim</id>
+ <author>
+   <name>Jongsu Liam Kim</name>
+   <email>jongsukim8@gmail.com</email>
+ </author>
+
+ 
+ <entry>
+   <title>ANSYS Batch mode로 실행하기</title>
+   <link href="https://blog.liam.kim/2020/10/14/ANSYS-Journal-File-Batch-Execution/"/>
+   <updated>2020-10-14T00:00:00+00:00</updated>
+   <id>https://blog.liam.kim/2020/10/14/ANSYS-Journal-File-Batch-Execution</id>
+   <content type="html">&lt;p&gt;내가 담당하는 일은 아니지만, 연구실에서 2년전부터 ANSYS(정확히는 ANSYS Fluent)를 사용하고 있다. 그동안의 사용방식은 GUI로 바로 실행하는 형태였는데, 효율적 HPC 자원 관리를 위해 잡스케줄러를 사용해서 batch mode로 전환하고자 한다.&lt;/p&gt;
+
+&lt;p&gt;ANSYS는 프로그램의 사이즈 치고는 공개된 문서가 찾기 힘들고 리셀러 홈페이지에서 문서보기도 좀 복잡하기도 해서 batch mode로 어떻게 실행하는지 알기가 힘들었다. 게다가 난 내 일도 아니라서 ANSYS를 잘 쓸 줄 몰라서 더더욱 알기 힘들었다. 우리 연구실은 SGE를 주로 쓰는데 ANSYS에서 GUI형태로 SGE Job submission을 지원하기는 하지만 queue나 parallel environment설정을 어떻게 하는지 몰라서 포기했기에 어쩔 수 없이 아래와 같은 텍스트 방식을 고집할 수 밖에 없었다.&lt;/p&gt;
+
+&lt;p&gt;참고로 이번에도 역시 나의 구세주 &lt;a href=&quot;https://www.ksc.re.kr/gsjw/jcs/sft#docout-7&quot;&gt;KISTI 매뉴얼&lt;/a&gt;과 &lt;a href=&quot;https://docs.rescale.com/articles/ansys-start-here/&quot;&gt;Rescale 문서&lt;/a&gt;가 큰 도움이 되었다.&lt;/p&gt;
+
+&lt;p&gt;ANSYS를 batch 모드로 실행하는 과정은 간략하게 다음과 같다.&lt;/p&gt;
+
+&lt;h1 id=&quot;ansys-batch-mode-방식-간략하게&quot;&gt;ANSYS batch mode 방식 (간략하게)&lt;/h1&gt;
+&lt;ol&gt;
+  &lt;li&gt;ANSYS GUI Command를 텍스트로 실행할 수 있는 Journal file 생성&lt;/li&gt;
+  &lt;li&gt;fluent 실행시 -i 옵션을 통해 journal file을 input으로 넣어줌&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;하지만 journal file의 문법이 참 찾기가 어려운데, 위에서도 설명했듯이 ANSYS는 GUI프로그램이지만 이를 Text로 실행할 수 있게 해주는 TUI(Text User Interface)가 존재하는데 이를 기록한 것이 journal file이다. TUI는 자체 커맨드도 있지만, 기본적으로는 &lt;a href=&quot;https://en.wikipedia.org/wiki/Scheme_(programming_language)&quot;&gt;Scheme&lt;/a&gt;의 또 다른 dialect라고 할 수 있겠다. &lt;strong&gt;단순하게 말하면 ANSYS Console에서 실행하는 명령어&lt;/strong&gt;이다. Scheme은 학부 때 과제로 경험해보고, 마법사책(SICP) 볼 때 말고는 접할 일이 없던 언어라 무척 당황했는데, 다행히 단순하게 돌릴때 Scheme문법을 사용할 일은 없었다.&lt;/p&gt;
+
+&lt;p&gt;애니웨이, ANSYS Fluent를 돌릴 때 크게 두 가지 케이스가 있는데 하나는 stationary simulation일 때고, 하나는 traisient simulation이다. 명령어가 살짝 다르기 때문에 각각의 journal file을 작성하고 이를 jobscript에서 fluent 실행할 때 넣어주는 방식을 취하기로 했다.&lt;/p&gt;
+
+&lt;h1 id=&quot;ansys-batch-mode-방식-자세하게-ansys-2020-r1-기준&quot;&gt;ANSYS batch mode 방식 (자세하게), ANSYS 2020 R1 기준&lt;/h1&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;ANSYS를 GUI로 실행한다.&lt;/li&gt;
+  &lt;li&gt;시뮬레이션에 필요한 Mesh 설정 및 각종 파라미터를 설정한다. TUI로 이 과정을 할 수도 있지만, 명령어를 다 알기도 힘들고, 최대한 journal file을 간단하게 만들고자 했다.&lt;/li&gt;
+  &lt;li&gt;이를 case file로 저장한다. (압축해서 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.cas.gz&lt;/code&gt;로 내보내기를 추천) 그렇게 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.cas.gz&lt;/code&gt; 파일이 생성된다.&lt;/li&gt;
+  &lt;li&gt;mesh파일을 보통 case파일과 같은 폴더에 넣고 작업한다고 가정하고 2~3을 진행했다.&lt;/li&gt;
+  &lt;li&gt;서버를 쓰면, mesh 파일과 case file를 특정 디렉토리에 넣는다.&lt;/li&gt;
+  &lt;li&gt;다음과 같이 journal file을 작성한다.
+    &lt;ol&gt;
+      &lt;li&gt;Stationary
+        &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; (set! *cx-exit-on-error* #t)
+
+ ;; batch options
+ /file/set-batch-options yes yes yes yes
+ ;; read case file
+ /file/read-case wst.cas.gz
+ ;; disable HDF5
+ /file/cff-files no
+ ;; initialize the solution
+ /solve/initialize/initialize/
+ ;; save residuals plot as &quot;residual-xxxx.jpg&quot; at every 10 iteration, xxxx is a iteration number
+ /solve/execute-commands/add-edit save_residuals 10 &quot;iteration&quot; &quot;/solve/monitors/residual/plot? yes /display/set-window 1 /display/save-picture residual-%i.jpg&quot;
+ ;; iterate 100 step
+ /solve/iterate 100
+ ;; write data file as &quot;wst.data&quot;
+ /file/write-case-data wst.data
+ ;; exit FLUENT
+ /exit yes
+ ;; blank line at end
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;        &lt;/div&gt;
+      &lt;/li&gt;
+      &lt;li&gt;Transient
+        &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; (set! *cx-exit-on-error* #t)
+
+ /file/set-batch-options yes yes yes yes
+ ;; read case file
+ /file/read-case wst.cas.gz
+ ;; disable HDF5 output
+ /file/cff-files no
+ ;; initialize the solution
+ /solve/initialize/initialize/
+ ;; save residuals plot as &quot;residual.jpg&quot; at every 10 time-step
+ /solve/execute-commands/add-edit save_residuals 10 &quot;time-step&quot; &quot;/solve/monitors/residual/plot? yes /display/set-window 1 /display/save-picture residual-%t.jpg&quot;
+ ;; time step interval for auto-save
+ /file/auto-save/data-frequency 10
+ ;; set suffix (in this case, time-step) for auto-saved files
+ /file/auto-save append-file-name-with time-step 6
+ ;; time step size (dt)
+ /solve/set/transient-controls/time-step-size 8.33333e-5
+ ;; iterate 10 time step, each time step has 20 iteration,
+ /solve/dual-time-iterate 10 20
+ ;; write data file
+ /file/write-case-data wst.data
+ ;; exit FLUENT
+ /exit yes
+ ;; blank line at end
+
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;        &lt;/div&gt;
+        &lt;p&gt;Line by Line으로 설명하자면&lt;/p&gt;
+        &lt;ul&gt;
+          &lt;li&gt;batch option
+   ```
+   (set! &lt;em&gt;cx-exit-on-error&lt;/em&gt; #t)&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+    &lt;/ol&gt;
+
+    &lt;p&gt;/file/set-batch-options yes yes yes yes
+   ```
+ 이 부분은, overlap 되는 부분이 있긴 한데, ANSYS에서 File-&amp;gt;Batch Options의 설정이다. &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;(set! *cx-exit-on-error* #t)&lt;/code&gt; 이 커맨드는 Scheme문법의 ANSYS GUI 커맨드로 Exit on error를 체크하는 것이고, 아래 TUI 커맨드 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;/file/set-batch-options yes yes yes yes&lt;/code&gt;는 원래는 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Confirm File Overwrite&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Hide Questions&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Exit on Error&lt;/code&gt; 이 세 가지를 묻는 옵션이었으나 20.1 기준으로는 실제 콘솔에서 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;/file/set-batch-options&lt;/code&gt;을 해봤을 경우 한 가지 더 묻는데, 지금 기억이 안나서 스킵.. 여튼 이걸 다 yes하는 이유는 job 실행시 저거 묻는다고 멈추는데 서버에서 그걸 interactive하게 대답하기 힘드므로 그걸 무시하기 위해서이다.&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;Read case file
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;  ;; read case file
+  /file/read-case wst.cas.gz
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+    &lt;p&gt;journal file의 주석은 Scheme을 따라 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;;;&lt;/code&gt;로 처리하였다. 단순하게 case file &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;wst.cas.gz&lt;/code&gt;를 읽는 명령어&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Disabling HDF5 output
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;  ;; disable HDF5 output
+  /file/cff-files no
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+    &lt;p&gt;개인적으로 시뮬레이션 output HDF5를 선호하는 편인데, ANSYS에서 끄는 이유는 &lt;a href=&quot;https://forum.ansys.com/discussion/17423/reading-h5-file-into-ansys-for-post-processing&quot;&gt;CFD-Post에서 지원을 안해서&lt;/a&gt;, 근데 20.1부터 HDF5 output이 디폴트로 설정되어 있다. (..) 언젠가는 지원해주겠지만 일단은 지금은 끄자.&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Solver initalization, 이것도 뭐 GUI에서 하는 그 intialization
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;  ;; initialize the solution
+  /solve/initialize/initialize/
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Plot residual
+    &lt;ul&gt;
+      &lt;li&gt;우리 연구실에서 GUI를 선호하는 이유 중 하나가 실시간으로 residual 확인하면서 계산이 터지는지 안터지는지 확인하고 싶어서인데, 최근에서야 이걸 알아냈다. 처음에는 복잡하게 텍스트파일로 매번 출력해서 다운받고 다른 프로그램으로 그래프 그려서 보려고 했는데, 더 편하게 바로 plot 해줄 수 있는 명령어가 있다.&lt;/li&gt;
+      &lt;li&gt;기본적인 원리는 ANSYS에서 iteration 혹은 time-step별로 실행할 수 있는 커맨드를 추가할 수 있는 execute commands 기능을 사용하는 것이다. residual을 특정 iteration 혹은 time-step마다 출력하게 하고 이를 그림으로 출력하는게 그 원리&lt;/li&gt;
+      &lt;li&gt;Stationary simulation에서는 다음 명령에서 iteration 기준으로 10번째마다 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;residual-xxxx.png&lt;/code&gt;를 출력하는 것. 여기서 xxxx는 iteration number를 말한다. &lt;em&gt;이렇게 하면 그림파일이 많이 나오겠지만, 이렇게 안하면 overwrite할거냐고 물어보면서 플랏이 제대로 그려지지 않는다.&lt;/em&gt; 이를 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;save_residuals&lt;/code&gt;라는 커맨드로 저장한다.
+        &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;  ;; save residuals plot as &quot;residual-xxxx.jpg&quot; at every 10 iteration, xxxx is a iteration number
+  /solve/execute-commands/add-edit save_residuals 10 &quot;iteration&quot; &quot;/solve/monitors/residual/plot? yes /display/set-window 1 /display/save-picture residual-%i.jpg&quot;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;        &lt;/div&gt;
+      &lt;/li&gt;
+      &lt;li&gt;Transient simulation의 경우는 time step 기준으로 10번째마다 위에서 설명한 것 같이 파일을 출력한다.
+        &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;  ;; save residuals plot as &quot;residual.jpg&quot; at every 10 time-step
+  /solve/execute-commands/add-edit save_residuals 10 &quot;time-step&quot; &quot;/solve/monitors/residual/plot? yes /display/set-window 1 /display/save-picture residual-%t.jpg&quot;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;        &lt;/div&gt;
+      &lt;/li&gt;
+      &lt;li&gt;&lt;strong&gt;너무 자주 plot하면 시뮬레이션이 느려진다&lt;/strong&gt; 적당히 조절하자&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Auto-save
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;  ;; time step interval for auto-save
+  /file/auto-save/data-frequency 10
+  ;; set suffix (in this case, time-step) for auto-saved files
+  /file/auto-save append-file-name-with time-step 6
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+    &lt;ul&gt;
+      &lt;li&gt;Transient simultation은 시간이 오래 걸려서 중간 중간 저장하는게 중요한데 이 저장하는 frequency와 filename을 변경하는 옵션이다. 지금 같은 경우 10 step 마다 저장하고, 중간 저장 suffix을 time-step으로 지정하는 것. 그런데 이 옵션 제대로 테스트 안해봐서 확실하진 않다.&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Simulation
+    &lt;ul&gt;
+      &lt;li&gt;Stationary simulation
+        &lt;ul&gt;
+          &lt;li&gt;이건 단순하다. 100 stp의 iteration을 돌린다.
+            &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;;; iterate 100 step
+/solve/iterate 100
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;            &lt;/div&gt;
+          &lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+      &lt;li&gt;Transient simulation
+        &lt;ul&gt;
+          &lt;li&gt;transient한 경우는 time step size(소위 말하는 dt)를 설정하고, 각 step 마다 몇 번 iteration을 돌리는 지 설정하고 돌려야하는데, 이렇게 돌리는게 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;/solve/dual-time-iterate&lt;/code&gt;에서 총 time step(10)과 각 iteration별 time step(20)을 매개변수로 넘기면 된다.
+            &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;;; time step size (dt)
+/solve/set/transient-controls/time-step-size 8.33333e-5
+;; iterate 10 time step, each time step has 20 iteration,
+/solve/dual-time-iterate 10 20
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;            &lt;/div&gt;
+          &lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Write case
+    &lt;ul&gt;
+      &lt;li&gt;계산이 끝나면 당연히 결과물을 저장해아하니깐, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;/file/write-case-data&lt;/code&gt; 명령어를 쓴다.
+        &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;;; write data file
+/file/write-case-data wst.data
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;        &lt;/div&gt;
+      &lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Exit Fluent
+    &lt;ul&gt;
+      &lt;li&gt;다른 journal file에도 있길래 넣었는데, 이거 안넣으면 제대로 종료가 안되는 모양이다. 괜히 제대로 종료안되면 라이센스는 라이센스대로 점유하고 자원은 자원대로 못 쓸테니 써줘야한다.
+        &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;;; exit FLUENT
+/exit yes
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;        &lt;/div&gt;
+      &lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;Blank line
+    &lt;ul&gt;
+      &lt;li&gt;혹시 몰라 EOF(End of File)를 위해 넣었다.&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;Job scheduler file 작성 (SGE 기준)&lt;/p&gt;
+
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; #!/bin/bash
+ #$ -cwd
+ #$ -V
+ #$ -N 잡이름
+ #$ -S /bin/sh
+ #$ -j y
+ #$ -q 큐이름
+ #$ -pe ParallelEnvironment이름 코어수
+
+ # Load module even you run jobs
+ module purge
+ module load ansys/20.1/fluent
+
+ cpus=코어수
+
+ # execute Fluent
+ fluent 3ddp -rsh -t${cpus} -gu -i wst.in &amp;gt; wst.output
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+
+    &lt;p&gt;각자 서버마다 사정이 있으므로 나머지는 알아서 하면 되지만, 맨 마지막 줄은 반드시 저렇게 해야한다.&lt;/p&gt;
+    &lt;ul&gt;
+      &lt;li&gt;3ddp : 3D Double Precision&lt;/li&gt;
+      &lt;li&gt;-rsh : rsh 방식으로 remote connection 구축, 이건 서버마다 환경이 다르므로 바꿔도 된다. 디폴트는 ssh방식&lt;/li&gt;
+      &lt;li&gt;-t{cpus} : 굳이 이처럼 cpus변수 안만들고 직접 숫자 넣어줘도 된다. 다만 잡스케줄러의 코어수와는 맞춰주자.&lt;/li&gt;
+      &lt;li&gt;-gu : GUI는 안쓰지만 그래픽은 쓰는 옵션. 일반적인 batch mode이면 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;-g&lt;/code&gt;를 써야하지만 residual plot때문에 그래픽이 필요하므로 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;-gu&lt;/code&gt;로 바꿔줬다.&lt;/li&gt;
+      &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;-i wst.in&lt;/code&gt; : 위에서 저장한 journal file을 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;wst.in&lt;/code&gt;이라고 저장했다면, 여기서 실행할 때 ‘i’nput으로 넣어주는 것.&lt;/li&gt;
+      &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;&amp;gt; wst.output&lt;/code&gt; : fluent 실행결과를 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;wst.output&lt;/code&gt;으로 저장하는 건데 어차피 SGE의 경우 job id에 따라 output이 따로 나오고, ANSYS transcript file(&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.trn&lt;/code&gt;)이 따로 생성되기 때문에 없애도 상관없을 것 같다.&lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;Job submit : 위에서 저장한 잡스크립트 파일을 SGE의 job submit 명령어인 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;qsub&lt;/code&gt;을 통해 제출&lt;/p&gt;
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;qsub 잡스크립트파일
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;이게 다이다.
+복잡하지만, Journal file을 잘 만들면 GUI로 안해도 Text로 어느정도 대체할 수 있고 이를 fluent 실행시 input으로 넣어주면 된다. 사실 &lt;strong&gt;계속 수정중이고, 테스트도 계속하고 있어서 완벽하다 할 수는 없다&lt;/strong&gt;. 그래서 보통은 내부 매뉴얼로 만들고 마는 문서인데, 너무나 문서를 찾기가 힘들어서 필요로 하시는 분들도 있을 것 같고, 정리도 할 겸 적어보았다.&lt;/p&gt;
+
+&lt;h1 id=&quot;reference&quot;&gt;Reference&lt;/h1&gt;
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;https://www.ksc.re.kr/gsjw/jcs/sft#docout-7&quot;&gt;KISTI Manual&lt;/a&gt; : 국가슈퍼컴퓨팅센터 -&amp;gt; 기술지원 -&amp;gt; 소프트웨어&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://docs.rescale.com/articles/ansys-start-here/&quot;&gt;Rescale 문서&lt;/a&gt; : FAQ에 Residual plot 내용이 있었다.&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;http://blog.ksc.re.kr/attachment/cfile9.uf@99D2954E5C0F6D9916BDE4.pdf&quot;&gt;ANSYS Fluent Getting Start guide&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://www.afs.enea.it/project/neptunius/docs/fluent/html/tuilist/main_pre.htm&quot;&gt;ANSYS Fluent TUI Command List&lt;/a&gt; 오래된 사이트라 그런지 TLS 에러가 나는데 크롬의 경우 고급눌러서 “안전하지 않음으로 이동”을 누르면 들어가진다. 참고로 12.0 기준이라 달라진 명령어가 있는데 이는 콘솔창에서 help 명령어 등을 통해 제대로 된 명령어 및 매개변수를 체크하고 사용하기 바란다.&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://davis68.github.io/me498cf-fa16/resources/flec08/handout-tui-scheme.pdf&quot;&gt;Fluent - Scheme 기초&lt;/a&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;http://www.cfdresearch.com/wp-content/uploads/2018/08/scheme-programing-Javurek.pdf&quot;&gt;Fluent - Scheme 문서&lt;/a&gt; 거의 유일한 Fluent에서의 Scheme 문서. 무려 ANSYS 5,6 기준이지만 아직도 적용되는게 많다. 이것도 독일어로 된 문서가 따로 있고, 그걸 번역한 것&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;http://cfdyna.com/CFDHT/FluentErrors.html&quot;&gt;Fluent Troubleshooting&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</content>
+ </entry>
+ 
+ <entry>
+   <title>Environment Modules 사용하기</title>
+   <link href="https://blog.liam.kim/2020/10/12/Environment-Modules/"/>
+   <updated>2020-10-12T00:00:00+00:00</updated>
+   <id>https://blog.liam.kim/2020/10/12/Environment-Modules</id>
+   <content type="html">&lt;p&gt;오랫동안 연구실에서 서버관리를 담당해왔다. 처음에는 단순 서버 on/off 정도만 하는 일이었는데, 별것도 아닌걸로 업체 통하면 시간도 오래걸리고 설명하기도 복잡하다보니 내가 처리하게 되었다. 그러다보니 점점 일이 늘어나서 서버 구축포함 대부분의 이슈를 내 선에서 해결하고자 노력하고 있다.&lt;/p&gt;
+
+&lt;p&gt;그런데 처음에는 다들 Fortran만 써서 상관없었지만 연구주제가 다양해지면서 다양한 환경을 구축할 필요가 생겼다. 다른 컴파일러, 다른 언어, 다른 서버 등등. 당연히 환경변수를 건드려야할 일이 많았다. 하지만, 유저들 대부분 환경변수가 뭔지도 모르는 사람들이다. 그래서 그동안 사용한 방법은 curl을 통해 미리 작성된 .bashrc를 받게 하는 것이었다. 디폴트 bashrc를 변경할 수도 있었겠지만, 상황에 따라 각자의 bashrc를 업데이트해야하는 경우도 생겨서 좀 더 안전하게 가려고 했다. 이 방법은 유연하게 대처하기 힘들고 특이사항이 생기면 내가 직접 수정해줘야하고, 환경변수가 지속적으로 append되는 경우 불필요하게 환경변수가 중복되는 경우가 생기기도 했다. 그러나, bashrc를 직접 건드리다가 PATH 같은 변수들을 날려먹고 나한테 찾아오는 경우가 종종 있었기에 나쁘지 않다고 생각했다.&lt;/p&gt;
+
+&lt;p&gt;그러다가 &lt;a href=&quot;https://www.ksc.re.kr/gsjw/jcs/hd#docout-0&quot;&gt;KISTI 누리온 매뉴얼&lt;/a&gt;을 접할 기회가 생겼는데, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module&lt;/code&gt;이라는 걸 쓴다는걸 알게 되었다. 우리 연구실보다도 훨씬 많은 사용자와 많은 환경을 지원해야하는 KISTI에서 각자 환경에 맡게 module을 load해서 쓰는 방법이었다. 패키지 페이지는 다음과 같다.&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;http://modules.sourceforge.net/&quot;&gt;Environment Modules&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;홈페이지 소개란에 있던 이 패키지의 사용목적은 정확히 내가 원하는 그것이었다.&lt;/p&gt;
+
+&lt;blockquote&gt;
+  &lt;p&gt;Typically users initialize their environment when they log in by setting environment information for every application they will reference during the session. The Environment Modules package is a tool that simplify shell initialization and lets users easily modify their environment during the session with modulefiles.&lt;/p&gt;
+&lt;/blockquote&gt;
+
+&lt;p&gt;어차피 현재까지 연구실 서버에서 쓰는 환경이 compiler 버전 변경, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Python&lt;/code&gt; 사용시 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;.pyenv&lt;/code&gt; or &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Anaconda&lt;/code&gt; 방식 변경, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;CUDA&lt;/code&gt; 사용 여부, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;ANSYS&lt;/code&gt; 사용여부 정도라서 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;PATH&lt;/code&gt;와 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;LD_LIBRARY_PATH&lt;/code&gt; 정도만 append 하는 정도라 복잡한 기능을 쓸 필요는 없었다. 그래서 단순하게 사용법만을 소개해둔다.&lt;/p&gt;
+
+&lt;h1 id=&quot;사용법&quot;&gt;사용법&lt;/h1&gt;
+
+&lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module&lt;/code&gt;의 사용법은 쉽다. 유저들에겐 아래 명령어들만 숙지시키면 된다.&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module avail&lt;/code&gt; : 사용가능한 모듈 보기 (줄여서 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module av&lt;/code&gt;)&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module load MODULENAME&lt;/code&gt; or &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module add MODULENAME&lt;/code&gt; : module avail로 확인한 특정 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;MODULENAME&lt;/code&gt; load&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module unload MODULENAME&lt;/code&gt; or &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module rm MODULENAME&lt;/code&gt; : module avail로 확인한 특정 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;MODULENAME&lt;/code&gt; unload&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module list&lt;/code&gt; : 현재 사용중인 모듈 출력&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module purge&lt;/code&gt; : 현재 사용중인 &lt;strong&gt;모든&lt;/strong&gt; 모듈 삭제&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Job scheduler 사용시 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module purge&lt;/code&gt; 시키고, 다음 예시와 같이 필요한 module을 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;load&lt;/code&gt; 하도록 했다.&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;  module purge
+  module load gcc/10.1
+  module load gcc/10.1/fftw3/3.3.8
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h1 id=&quot;설치&quot;&gt;설치&lt;/h1&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;&lt;a href=&quot;https://modules.readthedocs.io/en/latest/INSTALL.html#installation-instructions&quot;&gt;modules의 INSTALL 문서&lt;/a&gt; 를 참고해서 모듈을 설치한다. 일반적인 소스컴파일 과정인 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;./configure&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;make&lt;/code&gt;, &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;make install&lt;/code&gt;을 따른다. CentOS의 경우 심플하게 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;yum install environment-modules&lt;/code&gt; 써도 된다.&lt;/li&gt;
+  &lt;li&gt;Configuration section을 따라 initialization을 실행한다. 나는 유저들의 bashrc에 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;source PREFIX/init/bash&lt;/code&gt; 를 넣는걸 선호했다. (&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;bash&lt;/code&gt; 사용시) &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;PREFIX&lt;/code&gt;는 default가 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;/usr/local/Modules&lt;/code&gt; (소스 컴파일 default 값)이거나 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;/usr/share/Modules&lt;/code&gt;(&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;yum 설치시&lt;/code&gt;)로 잡힌다.&lt;/li&gt;
+  &lt;li&gt;Configuration에서 default로 불러들일 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module path&lt;/code&gt;와 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;modulefiles&lt;/code&gt;를 지정하는 파트가 있는데 사용자들이 어떤걸 쓸지 어떻게 알고 정하나 싶어서 나는 지정하지 않았다.&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h1 id=&quot;how-it-works&quot;&gt;How it works&lt;/h1&gt;
+
+&lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Modules&lt;/code&gt;의 원리는 다음과 같다.&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;지정된 위치 (디폴트는 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;/usr/local/Modules/modulefiles&lt;/code&gt;)의 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;modulefiles&lt;/code&gt;를 읽고 그 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;modulefiles&lt;/code&gt;를 읽어서 필요한 환경변수를 추가하거나 삭제하는 것.&lt;/li&gt;
+  &lt;li&gt;modulefiles 디렉토리내의 서브 디렉토리는 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module list&lt;/code&gt;에서 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;/&lt;/code&gt;로 처리된다. (i.e. &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;gcc/10.1/fftw3/3.3.8&lt;/code&gt;은 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;PREFIX/modulefiles/gcc/10.1/fftw3/3.3.8&lt;/code&gt;라는 모듈 파일이 존재하는 것이다) 실제로 가보면 예제들이 몇개 있는데 대부분 참고용이니 다른디렉토리에 복사해두고 지웠다.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&quot;modulefile-생성하기&quot;&gt;modulefile 생성하기&lt;/h1&gt;
+
+&lt;p&gt;그럼 제일 중요한 modulefile은 어떻게 구성되어있냐 하면, &lt;a href=&quot;https://modules.readthedocs.io/en/latest/modulefile.html&quot;&gt;자체 문법&lt;/a&gt;이 있다. 하지만 이걸 다 알고 쓸 필요는 없다. 일반적인 쉘 스크립트를 modulefiles로 자동으로 변환해주는 파이썬 스크립트가 패키지 안에 때문!&lt;/p&gt;
+
+&lt;p&gt;예를 들어,&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;gcc 사용을 위해 환경변수 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;PATH&lt;/code&gt;와 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;LD_LIBRARY_PATH&lt;/code&gt;가 필요하다고 하자.&lt;/p&gt;
+
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; export PATH=/APP/gcc/10.1/bin:$PATH
+ export LD_LIBRARY_PATH=/APP/gcc/10.1/bin:$LD_LIBRARY_PATH
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+
+    &lt;p&gt;가 필요하다고 하자. 이 부분만을 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;_bashrc_gcc10&lt;/code&gt;이라고 저장한다음에&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;이를 다음 명령어를 통해 modulefile로 출력한다.&lt;/p&gt;
+
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; PREFIX/bin/createmodule.sh _bashrc_gcc10 &amp;gt; modules_gcc10
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+
+    &lt;p&gt;이라고 하면 modulefile &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;modules_gcc10&lt;/code&gt;이 만들어진다. python script도 있다.&lt;/p&gt;
+
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; python PREFIX/bin/createmodule.py _bashrc_gcc10 &amp;gt; modules_gcc10
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;이렇게 만들어진 modulefile을 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;modulefiles&lt;/code&gt; 위치에 복사하면 끝. 구조적으로 관리가 필요하다면 modulefiles 디렉토리를 환경에 따라 디렉토리 구조로 바꿔주면 된다.&lt;/p&gt;
+
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; cp modules_gcc10 PREFIX/modulefiles/gcc10
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;바로 &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;module avail&lt;/code&gt;을 통해 확인할 수 있다. (reboot 불필요)&lt;/p&gt;
+
+    &lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt; ---------------- PREFIX/modulefiles ----------------
+ gcc10
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;    &lt;/div&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;삭제도 그냥 single &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;modulefile&lt;/code&gt;이나 서브 디렉토리를 삭제하면 된다.&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;참 쉽죠?&lt;/p&gt;
+
+&lt;h1 id=&quot;pros-and-cons&quot;&gt;Pros and Cons&lt;/h1&gt;
+
+&lt;h2 id=&quot;pros&quot;&gt;Pros&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;사용자들이 위험하게 .bashrc나 .bash_profile을 건드릴 필요가 없다.&lt;/li&gt;
+  &lt;li&gt;PATH등이 불필요하게 append돼서 duplicate될 일이 없다.&lt;/li&gt;
+  &lt;li&gt;관리자 입장에서 module의 추가, 삭제 및 수정이 매우 쉽고 편리하다.&lt;/li&gt;
+  &lt;li&gt;문서의 Cookbook section을 보면 알겠지만, 다양한 방식으로 사용자화가 가능하다.&lt;/li&gt;
+  &lt;li&gt;제일 중요한것, &lt;strong&gt;유저들이 사용하기 편리하다.&lt;/strong&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;cons&quot;&gt;Cons&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;아직까지 단점을 모르겠다.&lt;/li&gt;
+&lt;/ul&gt;
+</content>
+ </entry>
+ 
+ <entry>
+   <title>비개발자들에게도 권하는 개발자 도구들</title>
+   <link href="https://blog.liam.kim/2020/10/05/Developer-Tools-for-Everyone/"/>
+   <updated>2020-10-05T00:00:00+00:00</updated>
+   <id>https://blog.liam.kim/2020/10/05/Developer-Tools-for-Everyone</id>
+   <content type="html">&lt;p&gt;생각외로 많은 이공계 학생들이 프로그래밍을 못한다. CS가 아니면 대부분.. 특히 시뮬레이션 위주의 과학계산 연구를 하는 사람들도 알고리즘 자체는 복잡하지만 코드 아키텍처는 간단한 프로그래밍을 주로 한다. OOP니 FP니 없어도 Init - Read - Compute - Write 구조의 코드로 수십년동안 시뮬레이션 하는 경우도 있다. 오랫동안 대학원 생활을 하면서 이런 비 CS출신 이공계학생들을 보니 다음과 같은 특징이 있다는 걸 알게 되었다.&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;그 전에는 코딩경험이 전무하거나, C/Fortran, 혹은 Matlab 문법 정도만을 안다.&lt;/li&gt;
+  &lt;li&gt;리눅스는 물론이고 CLI환경에 대해 익숙하지 않다.&lt;/li&gt;
+  &lt;li&gt;대부분 개발자 툴에 대해 모르거나 필요성을 느끼지 못한다.&lt;/li&gt;
+  &lt;li&gt;그렇다고 새로운 툴을 적극적으로 배우려고 하지 않는데, 그 이유는 지금쓰고 있는 정도로도 결과가 잘 나오기 때문이다. 즉, 필요성을 느끼지 못한다.&lt;/li&gt;
+  &lt;li&gt;레거시(Legacy) 코드가 존재하는데 연식이 십년단위인 것도 존재하며, 버전관리 및 리팩토링은 이루어지지 않고, 연구주제에 따라 고쳐쓰다보니 파편화가 심각하다. 이에 따른 버그들이 실재하지만, 버그 존재 자체를 인지하지 못하거나 회피한다.&lt;/li&gt;
+  &lt;li&gt;레거시 코드 중에서 문서가 남겨지는 코드들은 극소수이며, 대부분 도제방식으로 코드 사용법을 알려준다. 따라서 시간이 지날수록 누락되는 부분이 있고, 이 부분은 블랙박스처럼 여겨지며 코드 개선을 더욱 어렵게 한다.&lt;/li&gt;
+  &lt;li&gt;디버깅은 화면 출력(print문 등등)을 사용함. 디버거를 사용할 줄 알는 사람이 매우 적다.&lt;/li&gt;
+  &lt;li&gt;수치해석 코드의 경우 대부분의 코드가 Init-Read-Loop-Write형식의 구조이며, 실수(real number, floating point number)로 출력된 결과물을 눈으로 보고 사람이 판단해야하는 경우가 많기 때문에 테스트를 작성하기가 쉽지 않음.&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;이를 개선하기 위한 각종 툴들이 존재하나, 이를 정리한 문서가 별로 없었는데 마침 얼마전에 &lt;a href=&quot;https://missing.csail.mit.edu/&quot;&gt;The Missing Semester of Your CS Education&lt;/a&gt; 라는 과목을 알게 되었다.
+(&lt;a href=&quot;https://missing-semester-kr.github.io/?fbclid=IwAR023hFv8pI84e4eow1qSc2U9pNo2FR0ptLYM41bkRtqy2jA0hzvuGLHM7k&quot;&gt;한글 번역&lt;/a&gt;)&lt;/p&gt;
+
+&lt;p&gt;위 강의에서 대상은 “Your CS Education” 이라고 되어있지만, 실제로는 비전공자 포함 모든 프로그래머를 대상으로 하는 것이 아닌가 하는 생각이 들었다.&lt;/p&gt;
+
+&lt;p&gt;CS에서도 코드가 잘 관리되지 않는 경우가 많지만, 그래도 많은 사람들이 이를 쉽게 해결하기 위해 여러가지 툴을 개발하였고, 이 툴들을 많이 쓰고 또 잘 쓰고자 노력한다. 그렇기에 자연스럽게 배울 수 있는 기회도 많고, 배울 수 밖에 없는 상황이 만들어지기도 한다. 하지만, 과학계산 분야는 위에서 언급하다시피 툴이 있는지도 모르고, 안다 하더라도 배울 필요성을 잘 못 느낄 뿐더러, 배운다고 하더라도 문서로 배우기보단 누군가 강의하고 이를 받아들이기를 매우 선호한다. (물론 내 선입견일수도 있지만, 내 경험상 그렇다는 얘기. 물론 잘 관리되는 곳도 있다.) 수업을 따로 만들지 않는 이상 이런 걸 찾아보는 사람은 드물고 배우는 것도 힘겨워하는 것 같았다.&lt;/p&gt;
+
+&lt;p&gt;여튼, 위에서 언급한 MIT강의가 딱 이런 사람들을 위한 강의가 아닌가 싶다. 이런 툴들이 강의를 듣거나 설명을 듣는다고 한번에 해결될 문제는 아니지만, 그래도 툴의 존재도 모르는 것보다는 낫지 않은가. 한국의 Top-down 선호 정서상 교수님들이 이런 툴들을 알고 쓰기를 장려한다면 내가 다른 학생들에게 추천하는 것보다 훨씬 쉽게 해결될 문제이지만, 사실 교수님들도 이런걸 잘 아시는 분들을 본 적이 드물다. 당장 연구실적이 급하긴 하니깐 이해는 하지만 장기적으로 볼때는 모두가 이런 툴들을 쓰는게 낫지 않겠는가. 나도 툴을 잘 쓴다고는 어디가서 이야기하진 못하지만, 그래도 안쓰는것보단 낫다고 생각한다. 그동안 여러번 연구실에 이런 툴들을 소개하고 추천해줬지만 대부분 연구 결과가 급하기에 강제적으로 쓰게 하지 않는 이상 쉽지 않다. 그런 사실을 잘 알기에 이 강의를 더욱 추천하고, 학교에서 수업형태로 가르쳤으면 좋겠다.&lt;/p&gt;
+
+&lt;p&gt;또한, 이 강의에서 설명하지 못한 부분도 몇 가지가 있는데, 그 중 중요한 걸 뽑자면&lt;/p&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;(영어로 쓰여진) 개발 문서를 읽고 이해하는 방법&lt;/li&gt;
+  &lt;li&gt;검색하는 법&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;정도가 있다. 1,2번이 된다면 위의 강의가 그렇게 필수적인게 아니다. 이게 된다면 툴 이름만 알려줘도 알아서 찾아서 쓸 수 있기 때문. 그러나 1,2번은 그동안 경험적으로 체득한 결과라 생각해서 쉽게 설명하기 어려웠는데 마침 최근에 &lt;a href=&quot;https://boxnwhis.kr/2020/09/27/ir-for-developers.html?fbclid=IwAR1J7ydMI5JWBxXyBn8wbbDA-sr-QP7HYtGPILOBH2uX2AIsm1spZyTNQDQ&quot;&gt;개발자를 위한 정보 검색 팁&lt;/a&gt; 이라는 글을 알게 되었다. 이 글이야 말로 내가 고민하던 문제를 완벽하게 설명해준 글이다. 이걸 미리 알았다면 난 그동안 고생을 덜 해도 되지 않았을까 하는 생각이 들 정도로 퀄리티도 훌륭하고 체계적으로 잘 설명해주신 포스트다.&lt;/p&gt;
+
+&lt;p&gt;지금까지 소개한 두 링크를 잘 숙지한다면 비개발자도 충분히 일의 효율성을 높일 수 있을 것이라 생각한다. 강추!&lt;/p&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;a href=&quot;https://missing.csail.mit.edu/&quot;&gt;The Missing Semester of Your CS Education&lt;/a&gt;
+(&lt;a href=&quot;https://missing-semester-kr.github.io/?fbclid=IwAR023hFv8pI84e4eow1qSc2U9pNo2FR0ptLYM41bkRtqy2jA0hzvuGLHM7k&quot;&gt;한글 번역&lt;/a&gt;)&lt;/li&gt;
+  &lt;li&gt;&lt;a href=&quot;https://boxnwhis.kr/2020/09/27/ir-for-developers.html?fbclid=IwAR1J7ydMI5JWBxXyBn8wbbDA-sr-QP7HYtGPILOBH2uX2AIsm1spZyTNQDQ&quot;&gt;개발자를 위한 정보 검색 팁&lt;/a&gt;&lt;/li&gt;
+&lt;/ul&gt;
+</content>
+ </entry>
+ 
+ <entry>
+   <title>(Draft) External Forcing of Homogeneous Isotropic Turbulence</title>
+   <link href="https://blog.liam.kim/2020/08/25/External-Forcing-Turbulence/"/>
+   <updated>2020-08-25T00:00:00+00:00</updated>
+   <id>https://blog.liam.kim/2020/08/25/External-Forcing-Turbulence</id>
+   <content type="html">&lt;p&gt;(This content is originally written by ‪Kyongmin Yeo’s manual)&lt;/p&gt;
+
+&lt;h1 id=&quot;introduction&quot;&gt;Introduction&lt;/h1&gt;
+
+&lt;p&gt;To maintain stationary turbulence, external force term is added to Navier-Stokes equation
+\[
+  \dfrac{d \hat{u}_i}{dt} = - i \kappa_{i} \hat{P} + \hat{H}_i - \nu \kappa^2 \hat{u}_i + \hat{f}_i
+\]&lt;/p&gt;
+
+&lt;p&gt;where \(\hat{f}_i\) is a external forcing term.&lt;/p&gt;
+
+&lt;p&gt;\(\hat{f}_i\) is defined as the projection of a vector \(\hat{\mathbf{b}}\) onto the plane normal to the wavenumber vector \(\mathbf{\kappa}\) to ensure divergence-free condition.&lt;/p&gt;
+
+&lt;p&gt;\[
+  \hat{f}_{i} = \hat{b}_{i} - \dfrac{\kappa_i}{\kappa^2} \kappa_j \hat{b}_{j}
+\]&lt;/p&gt;
+
+&lt;p&gt;So, how we define vector \(\hat{\mathbf{b}}\)?
+Eswaran &amp;amp; Pope suggested stochastic forcing.
+They define 3D complex vector \(\hat{\mathbf{b}}\) which is non-zero in the range \(0 &amp;lt; \kappa &amp;lt; \kappa_f \), in which \(\kappa_f\) is the maximum forcing wavenumber. This can be interpreted as forcing to sphere in wavenumber space.&lt;/p&gt;
+
+&lt;p&gt;\(\hat{\mathbf{b}}\) is composed of six independent Uhlenbeck-Ornstein process.&lt;/p&gt;
+
+&lt;p&gt;\[
+  \hat{\mathbf{b}} = \begin{bmatrix} UO1 \newline UO3 \newline UO5 \newline \end{bmatrix} + i \begin{bmatrix} UO2 \newline UO4 \newline UO6 \newline \end{bmatrix}
+\]&lt;/p&gt;
+
+&lt;h1 id=&quot;solving-uhlenbeck-ornstein-process&quot;&gt;Solving Uhlenbeck-Ornstein process&lt;/h1&gt;
+
+&lt;p&gt;Each stochastic process, \(UO1 ~ UO6\), is chosen so as to satisfy hte Langevin equation with a time scale \(T^f_L\) and stadnard deviation \(\sigma_f\),&lt;/p&gt;
+
+&lt;p&gt;\[
+  dUO = - \dfrac{UO}{T^f_L} \Delta t + \left( \dfrac{2\sigma^2_f}{T^f_L} \right)^{1/2} dW_t
+\]&lt;/p&gt;
+
+&lt;p&gt;in which \(W_t\) denotes a Wiener process satisfying
+\[
+  dW_t \sim \mathcal{N} (0, \Delta t)
+\]&lt;/p&gt;
+
+&lt;p&gt;Analytical solution to Langevin equation is given by&lt;/p&gt;
+
+&lt;p&gt;\[
+  UO(t) = UO(0) e^{-t/T^f_L} + e^{-t/T^f_L} \int^t_{0} e^{s/T^f_L} (2\sigma^2_f/T^f_L)^{1/2}dW_s
+\]&lt;/p&gt;
+
+&lt;p&gt;Above solution can be solved discretely by applying Itô integral. With RK3 method, UO process discretized solution is&lt;/p&gt;
+
+&lt;p&gt;\[
+  UO^{n+1} = e^{-(a_n+b_n)\Delta t / T^f_L}\left[ UO^{n} + e^{s/T^f_L} (2\sigma^2_f/T^f_L)^{1/2}dW_s dW^n \right]
+\]&lt;/p&gt;
+
+&lt;p&gt;in which discretized Wiener proces is&lt;/p&gt;
+
+&lt;p&gt;\[
+  dW^n \sim \mathcal{N} (0, (a_n + b_n) \Delta t)
+\]&lt;/p&gt;
+
+&lt;h1 id=&quot;estimating-reynolds-number&quot;&gt;Estimating Reynolds Number&lt;/h1&gt;
+
+&lt;h2 id=&quot;given-parameters&quot;&gt;Given parameters&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;\(\nu\) : Fluid viscosity&lt;/li&gt;
+  &lt;li&gt;\(\beta\) : constant (\(=0.8\))&lt;/li&gt;
+  &lt;li&gt;\(\kappa_0\) : smallest wavenumber&lt;/li&gt;
+  &lt;li&gt;\(\kappa_f\) : maximum forcing wavenumber&lt;/li&gt;
+  &lt;li&gt;\(T_L\) : Forcing time scale&lt;/li&gt;
+  &lt;li&gt;\(\epsilon^* \equiv \sigma^2 T_L \) where \(\sigma\) is a forcing amplitude, usually just given by constant&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;assumptions&quot;&gt;Assumptions&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;\(\epsilon \propto N_f \epsilon^*\)
+\begin{align}
+  \epsilon &amp;amp;= \dfrac{4\epsilon^* T_e N_f}{T_L + T_e} \newline
+  T_e &amp;amp;= \dfrac{\beta}{(N_f \epsilon^* \kappa^2_{0})^{1/3}}
+\end{align}&lt;/li&gt;
+  &lt;li&gt;\(\kappa^{-1}_{0}\) : Integral length scales&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;computed-parameters&quot;&gt;Computed parameters&lt;/h2&gt;
+&lt;ul&gt;
+  &lt;li&gt;\(N_f\) : The number of forced modes, \(\kappa &amp;lt; \kappa_f&amp;gt;\), counted manually&lt;/li&gt;
+  &lt;li&gt;Predicted value of the energy dissipation, replace \(T_e\) by \(\beta / (N_f \epsilon^* \kappa^2_{0})^{1/3}\)
+\[
+  \epsilon^*_{T} \equiv \dfrac{4 \epsilon^* N_f}{1 + T_{L} N^{1/3}_{F}/\beta}
+\]&lt;/li&gt;
+  &lt;li&gt;Predicted Kolmogorov microscale
+\[
+\eta_T \equiv (\nu^3 / \epsilon_T)
+\]&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h2 id=&quot;predicted-re&quot;&gt;Predicted \(Re\)&lt;/h2&gt;
+&lt;p&gt;Using above parameters Taylor Reynolds number is estimated by&lt;/p&gt;
+
+&lt;p&gt;\[
+  Re \simeq \dfrac{8.5}{(\eta_T \kappa_0)^{5/6} N^{2/9}_{F}}
+\]&lt;/p&gt;
+
+&lt;h1 id=&quot;todo&quot;&gt;TODO&lt;/h1&gt;
+&lt;ul&gt;
+  &lt;li&gt;More detail explanation of Uhlenbeck-Ornstein process&lt;/li&gt;
+  &lt;li&gt;Add code for computing \(Re\)&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&quot;reference&quot;&gt;Reference&lt;/h1&gt;
+</content>
+ </entry>
+ 
+ <entry>
+   <title>(Note) Tox workflow</title>
+   <link href="https://blog.liam.kim/2018/07/14/Tox-Workflow/"/>
+   <updated>2018-07-14T00:00:00+00:00</updated>
+   <id>https://blog.liam.kim/2018/07/14/Tox-Workflow</id>
+   <content type="html">&lt;h1 id=&quot;what-do-i-need-to-install&quot;&gt;What do I need to install&lt;/h1&gt;
+
+&lt;ul&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;tox&lt;/code&gt; : virtualenv for testing&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;tox-pyenv&lt;/code&gt; : &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pyenv&lt;/code&gt; plugin for &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;tox&lt;/code&gt;&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pytest&lt;/code&gt; : testing framework&lt;/li&gt;
+  &lt;li&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;pipreqs&lt;/code&gt; : generates &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;requirements.txt&lt;/code&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&quot;what-do-i-need-to-do&quot;&gt;What do I need to do&lt;/h1&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;Checkout &lt;a href=&quot;https://github.com/audreyr/cookiecutter&quot;&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;cookiecutter&lt;/code&gt;&lt;/a&gt;&lt;/p&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;create virtualenv using pyenv&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;div class=&quot;language-shell highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;pyenv &lt;span class=&quot;nb&quot;&gt;install&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;some versions&quot;&lt;/span&gt;
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;pip &lt;span class=&quot;nb&quot;&gt;install &lt;/span&gt;tox tox-pyenv
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;pyenv &lt;span class=&quot;nb&quot;&gt;local&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;my_env&quot;&lt;/span&gt; &lt;span class=&quot;s2&quot;&gt;&quot;some versions&quot;&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;ol&gt;
+  &lt;li&gt;
+    &lt;p&gt;create &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;src&lt;/code&gt; directory and change some settings&lt;/p&gt;
+
+    &lt;ul&gt;
+      &lt;li&gt;Why I use &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;src/&lt;/code&gt; directory?
+        &lt;ul&gt;
+          &lt;li&gt;Check Hynek’s &lt;a href=&quot;https://hynek.me/articles/testing-packaging/&quot;&gt;post&lt;/a&gt;&lt;/li&gt;
+        &lt;/ul&gt;
+      &lt;/li&gt;
+    &lt;/ul&gt;
+  &lt;/li&gt;
+  &lt;li&gt;
+    &lt;p&gt;As the post says, modify &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;setup.py&lt;/code&gt;&lt;/p&gt;
+  &lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;h1 id=&quot;example-of-executing-tox&quot;&gt;Example of executing tox&lt;/h1&gt;
+
+&lt;div class=&quot;language-shell highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;pyenv &lt;span class=&quot;nb&quot;&gt;install &lt;/span&gt;3.8.2
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;pyenv virtualenv &lt;span class=&quot;nt&quot;&gt;-p&lt;/span&gt; Python3.8 3.8.2 my_env
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;pip &lt;span class=&quot;nb&quot;&gt;install &lt;/span&gt;tox tox-pyenv
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;pyenv &lt;span class=&quot;nb&quot;&gt;local &lt;/span&gt;my_env 3.8.2
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;write code and tests then&lt;/p&gt;
+
+&lt;div class=&quot;language-shell highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;pipreqs &lt;span class=&quot;nb&quot;&gt;.&lt;/span&gt;
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;pip &lt;span class=&quot;nb&quot;&gt;install&lt;/span&gt; &lt;span class=&quot;nt&quot;&gt;-e&lt;/span&gt; &lt;span class=&quot;nb&quot;&gt;.&lt;/span&gt;
+&lt;span class=&quot;nv&quot;&gt;$ &lt;/span&gt;tox
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+</content>
+ </entry>
+ 
+ <entry>
+   <title>Navier Stokes Equation Solver for Homogeneous Isotropic Turbulence</title>
+   <link href="https://blog.liam.kim/2017/07/17/Psuedo-spectral-method/"/>
+   <updated>2017-07-17T00:00:00+00:00</updated>
+   <id>https://blog.liam.kim/2017/07/17/Psuedo-spectral-method</id>
+   <content type="html">&lt;p&gt;(This content is originally written by ‪Kyongmin Yeo’s manual)&lt;/p&gt;
+
+&lt;h1 id=&quot;introduction&quot;&gt;Introduction&lt;/h1&gt;
+
+&lt;p&gt;The spectral method is solving certain differential equation by some “basis function”, typically sinusoids with Fourier method.
+With the Navier-Stokes equation, it can remove presssure term in N-S equation and solve viscous term analytically.&lt;/p&gt;
+
+&lt;p&gt;Pros:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Removing pressure term is huge performance advantage&lt;/li&gt;
+  &lt;li&gt;Accurate result because differential operator doesn’t depends on grid size&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;Cons:&lt;/p&gt;
+&lt;ul&gt;
+  &lt;li&gt;Only can be applied to periodic domain&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;h1 id=&quot;governing-equation&quot;&gt;Governing Equation&lt;/h1&gt;
+
+&lt;h2 id=&quot;navier-stokes-equation-to-rotational-form&quot;&gt;Navier-Stokes equation to rotational form&lt;/h2&gt;
+&lt;p&gt;Original Navier-Stokes equation in &lt;strong&gt;convection form&lt;/strong&gt; is&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+\dfrac{\partial u_i}{\partial t} &amp;amp;= -\dfrac{\nabla p}{\rho} - (u \cdot \nabla) u + \nu \nabla^2 u \newline
+\nabla \cdot u &amp;amp;= 0
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;Using following vector identity,&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+\dfrac{1}{2} \nabla (A \cdot A) = (A \cdot \nabla) A + A \times (\nabla \times A)
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;The Navier-Stoke sequations in &lt;strong&gt;rotational form&lt;/strong&gt; can be obatained.
+The reason is explained in the paper, &lt;em&gt;Numerical Simulation of Incompressible Flows Within Simple Boundaries. I. Galerkin (Spectral) Representations&lt;/em&gt;.&lt;/p&gt;
+
+&lt;blockquote&gt;&lt;p&gt;The reason is that pseudospectral approximation to the rotation, rather than Reynolds stress, form of the nonlinear terms of the Navier~Stokes equations semiconserves (cf. &lt;a class=&quot;citation&quot; href=&quot;#Orszag1971&quot;&gt;(Orszag, 1971)&lt;/a&gt;, Numerical simulation of incompressible flows within simple boundaries: Accuracy, Section 3) energy so that aliasing errors, although present, can not directly cause unconditional nonlinear instability&lt;/p&gt;&lt;cite&gt;&lt;a class=&quot;citation&quot; href=&quot;#Orszag1971a&quot;&gt;(Orszag, 1971)&lt;/a&gt;&lt;/cite&gt;&lt;/blockquote&gt;
+
+&lt;p&gt;\begin{align}
+\dfrac{\partial u_i}{\partial t} &amp;amp;= -\dfrac{\partial P}{\partial x_i} + H_i + \nu \nabla^2 u \newline
+\dfrac{\partial u_i}{\partial x_i} &amp;amp;= 0
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;where&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+P &amp;amp;= \dfrac{p}{\rho} + \dfrac{1}{2} u_j u_j \newline
+H_i &amp;amp;= \epsilon_{i,j,k} u_j \omega_k = u \times (\nabla \times u)
+\end{align}&lt;/p&gt;
+
+&lt;h2 id=&quot;removing-pressure-term&quot;&gt;Removing pressure term&lt;/h2&gt;
+
+&lt;p&gt;The pressure Poisson equation can be obatained by taking divergence from Navier-Stokes equation in rotational form&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+\nabla^2 P = \dfrac{\partial H_j}{\partial x_j}
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;Expanding N-S equation and Poisson equation to Fourier space gives&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+\dfrac{d \hat{u}_i }{d t} &amp;amp;= -i \kappa_i \hat{P} + \hat{H}_i - \nu \kappa^2 \hat{u}_i \newline
+-\kappa^2 \hat{P} &amp;amp;= i \kappa_j \hat{H}_j
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;Combining two equation and then&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+\dfrac{d \hat{u}_i }{d t} &amp;amp;= -i \kappa_i \left( -i \dfrac{\kappa_j}{\kappa^2} \hat{H}_j \right ) + \hat{H}_i - \nu \kappa^2 \hat{u}_i \newline
+\dfrac{d \hat{u}_i }{d t} &amp;amp;= -\dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i - \nu \kappa^2 \hat{u}_i
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;where \( \kappa \) is a wavenumber. Final Navier Stokes equation is obtained without pressure term&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+\dfrac{d \hat{u}_i }{d t} &amp;amp;= -\dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i - \nu \kappa^2 \hat{u}_i
+\end{align}&lt;/p&gt;
+
+&lt;h2 id=&quot;treating-viscous-term-analytically&quot;&gt;Treating viscous term analytically&lt;/h2&gt;
+
+&lt;p&gt;To treat a viscous terms analytically, multiply following formula to Navier Stokes equation w/o pressure form&lt;/p&gt;
+
+&lt;p&gt;\begin{equation}
+f(t) = e^{\nu \kappa^2 t}
+\end{equation}&lt;/p&gt;
+
+&lt;p&gt;Then the equation becomes..&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+\left[ \dfrac{d \hat{u}}{dt} + \nu \kappa^2 \hat{u}_j \right] \times f(t) &amp;amp;= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] \times f(t) \newline
+f(t) \dfrac{d \hat{u}}{dt} + (\nu \kappa^2 f(t))\hat{u}_j &amp;amp;= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t) \newline
+f(t) \dfrac{d \hat{u}}{dt} + (\nu \kappa^2 e^{\nu \kappa^2 t})\hat{u}_j  &amp;amp;= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t) \newline
+f(t) \dfrac{d \hat{u}}{dt} + (\dfrac{d e^{\nu \kappa^2 t}}{dt})\hat{u}_j  &amp;amp;= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t) \newline
+\dfrac{d \hat{u}_i f(t)}{dt} &amp;amp;= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t)
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;this can be more simpler by introducing new term \(\widehat{NL}\)&lt;/p&gt;
+
+&lt;p&gt;\begin{equation}
+\dfrac{d \hat{u}_i e^{\nu \kappa^2 t}}{dt} = \widehat{NL} e^{\nu \kappa^2 t}
+\end{equation}&lt;/p&gt;
+
+&lt;h3 id=&quot;time-discretization-by-rk3-method&quot;&gt;Time Discretization by RK3 method&lt;/h3&gt;
+
+&lt;p&gt;For low-storage RK3 method (2-register, 3-stage, 3rd order), the coefficients are given by following table
+&lt;a class=&quot;citation&quot; href=&quot;#Lundbladh:1999vy&quot;&gt;(Lundbladh et al., 1999)&lt;/a&gt;, &lt;a class=&quot;citation&quot; href=&quot;#Yu1992&quot;&gt;(Yu et al., 1992)&lt;/a&gt;, &lt;a class=&quot;citation&quot; href=&quot;#Wray1990&quot;&gt;(Wray, 1990)&lt;/a&gt;&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;order&lt;/th&gt;
+      &lt;th&gt;\(a_n\)&lt;/th&gt;
+      &lt;th&gt;\(b_n\)&lt;/th&gt;
+      &lt;th&gt;\(c_n\)&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;1st&lt;/td&gt;
+      &lt;td&gt;8/15&lt;/td&gt;
+      &lt;td&gt;0&lt;/td&gt;
+      &lt;td&gt;0&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;2nd&lt;/td&gt;
+      &lt;td&gt;5/12&lt;/td&gt;
+      &lt;td&gt;-17/60&lt;/td&gt;
+      &lt;td&gt;8/15&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;3rd&lt;/td&gt;
+      &lt;td&gt;3/4&lt;/td&gt;
+      &lt;td&gt;-5/12&lt;/td&gt;
+      &lt;td&gt;2/3&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;Assume equations are given by following form,&lt;/p&gt;
+
+&lt;p&gt;\begin{equation}
+\dfrac{\partial Q}{\partial t} = R(Q)
+\end{equation}&lt;/p&gt;
+
+&lt;p&gt;The low-storage RK3 method applied to the above equation using RK3 coefficients.&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+Q^1 &amp;amp;= Q^n + \Delta t \left( \dfrac{8}{15} R^n \right)  \newline
+Q^2 &amp;amp;= Q^1 + \Delta t \left( \dfrac{5}{12} R^n  - \dfrac{17}{60} R^1\right) \newline
+Q^{n+1} &amp;amp;= Q^2 + \Delta t \left( \dfrac{3}{4} R^n  - \dfrac{5}{12} R^2\right)
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;Before applying RK3 method to Navier-Stokes equation, apply low-storage RK3 method to reaction-diffusion equation&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+\dfrac{\partial \psi}{\partial t} &amp;amp;= G + L \psi \newline
+\psi^{n+1} &amp;amp;= \psi^{n}  + a_n \Delta t G^n + b_n \Delta t G^{n-1} + (a_n + b_n) \Delta t \left(\dfrac{L \psi^{n+1} + L \psi^n}{2} \right)
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;Then the Navier Stokes equation w/o pressure term can be discretized by above method&lt;/p&gt;
+
+&lt;p&gt;\[
+  \dfrac{d \hat{u} e^{\nu \kappa^2 t}}{dt} = \widehat{NL} e^{\nu \kappa^2 t}
+\]&lt;/p&gt;
+
+&lt;p&gt;Discretization of LHS&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+LHS = \dfrac{\hat{u}^{n+1}_i e^{\nu \kappa^2 (t+a_n \Delta t + b_n \Delta t)} - \hat{u}^{n}_i e^{\nu \kappa^2 t}} {\Delta t}
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;Discretization of RHS  (denoting RHS as \( G \))&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+RHS &amp;amp;= \widehat{NL}^n e^{\nu \kappa^2 t} \newline
+&amp;amp;= a_n\widehat{NL}^n e^{\nu \kappa^2 t} \newline
+&amp;amp;+ b_n\widehat{NL}^{n - 1} e^{\nu \kappa^2 (t - a_{n-1} \Delta t - b_{n-1} \Delta t)}
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;Compensating \( e^{\nu \kappa^2 t} \) on both sides&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+\hat{u}^{n+1}_i e^{\nu \kappa^2 (a_n \Delta t + b_n \Delta t)} - \hat{u}^{n}_i &amp;amp;= a_n \Delta t \widehat{NL}^n \newline \newline
+&amp;amp;+ b_n \Delta t \widehat{NL}^{n - 1} e^{\nu \kappa^2 (- a_{n-1} \Delta t - b_{n-1} \Delta t)}
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;Finally&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+\hat{u}^{n+1}_i &amp;amp;= \left[ a_n \Delta t \widehat{NL}^n + \hat{u}^{n}_i \right ] e^{-\nu \kappa^2 (a_n + b_n) \Delta t} \newline
+&amp;amp; + b_n \Delta t \widehat{NL}^{n - 1} e^{-\nu \kappa^2 (a_n + b_n + a_{n-1}+ b_{n-1}) \Delta t}
+\end{align}&lt;/p&gt;
+
+&lt;p&gt;or&lt;/p&gt;
+
+&lt;p&gt;\begin{align}
+\hat{u}^{n+1}_i &amp;amp;= \left[ a_n \Delta t \widehat{NL}^n + \hat{u}^{n}_i \right ] e^{-\nu \kappa^2 (c_n - c_{n+1}) \Delta t} \newline
+&amp;amp; + b_n \Delta t \widehat{NL}^{n - 1} e^{-\nu \kappa^2 (c_{n-1} - c_{n+1}) \Delta t}
+\end{align}&lt;/p&gt;
+
+&lt;h1 id=&quot;reference&quot;&gt;Reference&lt;/h1&gt;
+
+&lt;ol class=&quot;bibliography&quot;&gt;&lt;li&gt;&lt;span id=&quot;Lundbladh:1999vy&quot;&gt;Lundbladh, A., Berlin, S., Skote, M., &amp;amp; Hildings, C. (1999). An efficient spectral method for simulation of incompressible flow over a flat plate. &lt;i&gt;TRITA-MEK Technical {\Ldots}&lt;/i&gt;.&lt;/span&gt;&lt;/li&gt;
+&lt;li&gt;&lt;span id=&quot;Hussaini1988&quot;&gt;Hussaini, M. Y., Zang, T. A., Canuto, C., &amp;amp; Quarteroni, A. (1988). &lt;i&gt;Spectral Methods in Fluid Dynamics&lt;/i&gt;. Springer Berlin Heidelberg. http://link.springer.com/10.1007/978-3-642-84108-8&lt;/span&gt;&lt;/li&gt;
+&lt;li&gt;&lt;span id=&quot;Lundbladh2007&quot;&gt;Lundbladh, M. C. P. S. A., &amp;amp; Henningson, D. (2007). &lt;i&gt;Flows, SIMSON A Pseudo-Spectral Solver for Incompressible Boundary Layer&lt;/i&gt;. 100. http://www.mech.kth.se/ mattias/simson-user-guide-v4.0.pdf&lt;/span&gt;&lt;/li&gt;
+&lt;li&gt;&lt;span id=&quot;Wray1990&quot;&gt;Wray, A. A. (1990). &lt;i&gt;Minimal storage time advancement schemes for spectral methods&lt;/i&gt;.&lt;/span&gt;&lt;/li&gt;
+&lt;li&gt;&lt;span id=&quot;Yu1992&quot;&gt;Yu, S. T., Tsai, Y. L. P., &amp;amp; Hsieh, K. C. (1992). Runge-Kutta methods combined with compact difference schemes for the unsteady Euler equations. &lt;i&gt;NASA Technical Memorandum&lt;/i&gt;. http://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19930006613.pdf&lt;/span&gt;&lt;/li&gt;
+&lt;li&gt;&lt;span id=&quot;Orszag1971&quot;&gt;Orszag, S. A. (1971). Numerical Simulation of Incompressible Flows Within Simple Boundaries. I. Galerkin (Spectral) Representations. &lt;i&gt;Studies in Applied Mathematics&lt;/i&gt;, &lt;i&gt;50&lt;/i&gt;(4), 293–327. https://doi.org/10.1002/sapm1971504293&lt;/span&gt;&lt;/li&gt;
+&lt;li&gt;&lt;span id=&quot;Orszag1971a&quot;&gt;Orszag, S. A. (1971). Numerical simulation of incompressible flows within simple boundaries: Accuracy. &lt;i&gt;Journal of Fluid Mechanics&lt;/i&gt;, &lt;i&gt;49&lt;/i&gt;(1), 75–112. https://doi.org/10.1017/S0022112071001940&lt;/span&gt;&lt;/li&gt;&lt;/ol&gt;
+</content>
+ </entry>
+ 
+
+</feed>

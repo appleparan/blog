@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+  <head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name=description content="">
+  <meta name=author content="">
+
+  <title>
+     (Draft) External Forcing of Homogeneous Isotropic Turbulence &middot; Jongsu Liam Kim | Blog 
+  </title>
+
+  
+  <link rel="canonical" href="/2020/08/25/External-Forcing-Turbulence/" />
+  
+
+  <!-- Style sheet -->
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link rel="stylesheet" href="/css/styles.css " />
+
+  <!-- Syntax Highlight, highlight.js - 10.7.1 -->
+  <link rel="stylesheet"
+    href="/assets/css/dracula.css">
+  <script src="/assets/js/highlight.pack.js"></script>
+  <script>hljs.highlightAll();</script>
+
+  <!-- icons  -->
+  <link
+    rel="apple-touch-icon-precomposed"
+    sizes="144x144"
+    href="/assets/icons/apple-touch-icon-precomposed.png"
+  />
+  <link rel="shortcut icon" type="image/x-icon" href="/assets/favicon.ico" />
+
+  
+    <script type="text/x-mathjax-config">
+window.MathJax = {
+    tex: {
+      inlineMath: [              // start/end delimiter pairs for in-line math
+        ['\\(', '\\)']
+      ],
+      displayMath: [             // start/end delimiter pairs for display math
+        ['$$', '$$'],
+        ['\\[', '\\]']
+      ],
+      processEscapes: true,       // use \$ to produce a literal dollar sign
+      processEnvironments: true,  // process \begin{xxx}...\end{xxx} outside math mode
+      processRefs: true,          // process \ref{...} outside of math mode
+      maxMacros: 1000,           // maximum number of macro substitutions per expression
+      maxBuffer: 5 * 1024,       // maximum size for the internal TeX string (5K)
+      tags: 'ams',              // or 'ams' or 'all'
+      tagSide: 'right',          // side for \tag macros
+      tagIndent: '0.8em',        // amount to indent tags
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.0.5/es5/tex-svg-full.js"
+  integrity="sha512-68Ru9/UE+l1KhgM0zJjV8h8/81/NEC1l4DQx+zWA2YxzQsOM9WE+8rIqMW+P59PBCc1ngHJ6X7St/i6s0B6beg=="
+  crossorigin="anonymous"></script>
+
+  
+  <!-- <script type="text/x-mathjax-config">
+window.MathJax = {
+    tex: {
+      inlineMath: [              // start/end delimiter pairs for in-line math
+        ['\\(', '\\)']
+      ],
+      displayMath: [             // start/end delimiter pairs for display math
+        ['$$', '$$'],
+        ['\\[', '\\]']
+      ],
+      processEscapes: true,       // use \$ to produce a literal dollar sign
+      processEnvironments: true,  // process \begin{xxx}...\end{xxx} outside math mode
+      processRefs: true,          // process \ref{...} outside of math mode
+      maxMacros: 1000,           // maximum number of macro substitutions per expression
+      maxBuffer: 5 * 1024,       // maximum size for the internal TeX string (5K)
+      tags: 'ams',              // or 'ams' or 'all'
+      tagSide: 'right',          // side for \tag macros
+      tagIndent: '0.8em',        // amount to indent tags
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.0.5/es5/tex-svg-full.js"
+  integrity="sha512-68Ru9/UE+l1KhgM0zJjV8h8/81/NEC1l4DQx+zWA2YxzQsOM9WE+8rIqMW+P59PBCc1ngHJ6X7St/i6s0B6beg=="
+  crossorigin="anonymous"></script>
+ -->
+
+  <link
+    rel="alternate"
+    type="application/rss+xml"
+    title="RSS"
+    href="/atom.xml"
+  />
+</head>
+
+
+  <body>
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+          <article
+  class="post h-entry"
+  itemscope
+  itemtype="http://schema.org/BlogPosting"
+>
+  <head>
+    <title>(Draft) External Forcing of Homogeneous Isotropic Turbulence</title>
+  </head>
+  <header class="post-header">
+    <div class="post-back">
+      <a class="black-link" href="https://blog.liam.kim">
+        ← Home
+      </a>
+    </div>
+
+    <h1 class="post-title p-name" itemprop="name headline">
+      (Draft) External Forcing of Homogeneous Isotropic Turbulence
+    </h1>
+    <p class="post-meta">
+      <time
+        class="dt-published"
+        datetime="2020-08-25T00:00:00+00:00"
+        itemprop="datePublished"
+      >Aug 25, 2020
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <p>(This content is originally written by ‪Kyongmin Yeo’s manual)</p>
+
+<h1 id="introduction">Introduction</h1>
+
+<p>To maintain stationary turbulence, external force term is added to Navier-Stokes equation
+\[
+  \dfrac{d \hat{u}_i}{dt} = - i \kappa_{i} \hat{P} + \hat{H}_i - \nu \kappa^2 \hat{u}_i + \hat{f}_i
+\]</p>
+
+<p>where \(\hat{f}_i\) is a external forcing term.</p>
+
+<p>\(\hat{f}_i\) is defined as the projection of a vector \(\hat{\mathbf{b}}\) onto the plane normal to the wavenumber vector \(\mathbf{\kappa}\) to ensure divergence-free condition.</p>
+
+<p>\[
+  \hat{f}_{i} = \hat{b}_{i} - \dfrac{\kappa_i}{\kappa^2} \kappa_j \hat{b}_{j}
+\]</p>
+
+<p>So, how we define vector \(\hat{\mathbf{b}}\)?
+Eswaran &amp; Pope suggested stochastic forcing.
+They define 3D complex vector \(\hat{\mathbf{b}}\) which is non-zero in the range \(0 &lt; \kappa &lt; \kappa_f \), in which \(\kappa_f\) is the maximum forcing wavenumber. This can be interpreted as forcing to sphere in wavenumber space.</p>
+
+<p>\(\hat{\mathbf{b}}\) is composed of six independent Uhlenbeck-Ornstein process.</p>
+
+<p>\[
+  \hat{\mathbf{b}} = \begin{bmatrix} UO1 \newline UO3 \newline UO5 \newline \end{bmatrix} + i \begin{bmatrix} UO2 \newline UO4 \newline UO6 \newline \end{bmatrix}
+\]</p>
+
+<h1 id="solving-uhlenbeck-ornstein-process">Solving Uhlenbeck-Ornstein process</h1>
+
+<p>Each stochastic process, \(UO1 ~ UO6\), is chosen so as to satisfy hte Langevin equation with a time scale \(T^f_L\) and stadnard deviation \(\sigma_f\),</p>
+
+<p>\[
+  dUO = - \dfrac{UO}{T^f_L} \Delta t + \left( \dfrac{2\sigma^2_f}{T^f_L} \right)^{1/2} dW_t
+\]</p>
+
+<p>in which \(W_t\) denotes a Wiener process satisfying
+\[
+  dW_t \sim \mathcal{N} (0, \Delta t)
+\]</p>
+
+<p>Analytical solution to Langevin equation is given by</p>
+
+<p>\[
+  UO(t) = UO(0) e^{-t/T^f_L} + e^{-t/T^f_L} \int^t_{0} e^{s/T^f_L} (2\sigma^2_f/T^f_L)^{1/2}dW_s
+\]</p>
+
+<p>Above solution can be solved discretely by applying Itô integral. With RK3 method, UO process discretized solution is</p>
+
+<p>\[
+  UO^{n+1} = e^{-(a_n+b_n)\Delta t / T^f_L}\left[ UO^{n} + e^{s/T^f_L} (2\sigma^2_f/T^f_L)^{1/2}dW_s dW^n \right]
+\]</p>
+
+<p>in which discretized Wiener proces is</p>
+
+<p>\[
+  dW^n \sim \mathcal{N} (0, (a_n + b_n) \Delta t)
+\]</p>
+
+<h1 id="estimating-reynolds-number">Estimating Reynolds Number</h1>
+
+<h2 id="given-parameters">Given parameters</h2>
+<ul>
+  <li>\(\nu\) : Fluid viscosity</li>
+  <li>\(\beta\) : constant (\(=0.8\))</li>
+  <li>\(\kappa_0\) : smallest wavenumber</li>
+  <li>\(\kappa_f\) : maximum forcing wavenumber</li>
+  <li>\(T_L\) : Forcing time scale</li>
+  <li>\(\epsilon^* \equiv \sigma^2 T_L \) where \(\sigma\) is a forcing amplitude, usually just given by constant</li>
+</ul>
+
+<h2 id="assumptions">Assumptions</h2>
+<ul>
+  <li>\(\epsilon \propto N_f \epsilon^*\)
+\begin{align}
+  \epsilon &amp;= \dfrac{4\epsilon^* T_e N_f}{T_L + T_e} \newline
+  T_e &amp;= \dfrac{\beta}{(N_f \epsilon^* \kappa^2_{0})^{1/3}}
+\end{align}</li>
+  <li>\(\kappa^{-1}_{0}\) : Integral length scales</li>
+</ul>
+
+<h2 id="computed-parameters">Computed parameters</h2>
+<ul>
+  <li>\(N_f\) : The number of forced modes, \(\kappa &lt; \kappa_f&gt;\), counted manually</li>
+  <li>Predicted value of the energy dissipation, replace \(T_e\) by \(\beta / (N_f \epsilon^* \kappa^2_{0})^{1/3}\)
+\[
+  \epsilon^*_{T} \equiv \dfrac{4 \epsilon^* N_f}{1 + T_{L} N^{1/3}_{F}/\beta}
+\]</li>
+  <li>Predicted Kolmogorov microscale
+\[
+\eta_T \equiv (\nu^3 / \epsilon_T)
+\]</li>
+</ul>
+
+<h2 id="predicted-re">Predicted \(Re\)</h2>
+<p>Using above parameters Taylor Reynolds number is estimated by</p>
+
+<p>\[
+  Re \simeq \dfrac{8.5}{(\eta_T \kappa_0)^{5/6} N^{2/9}_{F}}
+\]</p>
+
+<h1 id="todo">TODO</h1>
+<ul>
+  <li>More detail explanation of Uhlenbeck-Ornstein process</li>
+  <li>Add code for computing \(Re\)</li>
+</ul>
+
+<h1 id="reference">Reference</h1>
+
+  </div>
+
+  <a class="u-url" href="/2020/08/25/External-Forcing-Turbulence/" hidden></a>
+</article>
+
+      </div>
+    </main>
+
+    <script src='/assets/js/script.js'></script>
+  </body>
+</html>

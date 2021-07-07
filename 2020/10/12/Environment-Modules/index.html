@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+  <head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name=description content="">
+  <meta name=author content="">
+
+  <title>
+     Environment Modules 사용하기 &middot; Jongsu Liam Kim | Blog 
+  </title>
+
+  
+  <link rel="canonical" href="/2020/10/12/Environment-Modules/" />
+  
+
+  <!-- Style sheet -->
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link rel="stylesheet" href="/css/styles.css " />
+
+  <!-- Syntax Highlight, highlight.js - 10.7.1 -->
+  <link rel="stylesheet"
+    href="/assets/css/dracula.css">
+  <script src="/assets/js/highlight.pack.js"></script>
+  <script>hljs.highlightAll();</script>
+
+  <!-- icons  -->
+  <link
+    rel="apple-touch-icon-precomposed"
+    sizes="144x144"
+    href="/assets/icons/apple-touch-icon-precomposed.png"
+  />
+  <link rel="shortcut icon" type="image/x-icon" href="/assets/favicon.ico" />
+
+  
+  <!-- <script type="text/x-mathjax-config">
+window.MathJax = {
+    tex: {
+      inlineMath: [              // start/end delimiter pairs for in-line math
+        ['\\(', '\\)']
+      ],
+      displayMath: [             // start/end delimiter pairs for display math
+        ['$$', '$$'],
+        ['\\[', '\\]']
+      ],
+      processEscapes: true,       // use \$ to produce a literal dollar sign
+      processEnvironments: true,  // process \begin{xxx}...\end{xxx} outside math mode
+      processRefs: true,          // process \ref{...} outside of math mode
+      maxMacros: 1000,           // maximum number of macro substitutions per expression
+      maxBuffer: 5 * 1024,       // maximum size for the internal TeX string (5K)
+      tags: 'ams',              // or 'ams' or 'all'
+      tagSide: 'right',          // side for \tag macros
+      tagIndent: '0.8em',        // amount to indent tags
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.0.5/es5/tex-svg-full.js"
+  integrity="sha512-68Ru9/UE+l1KhgM0zJjV8h8/81/NEC1l4DQx+zWA2YxzQsOM9WE+8rIqMW+P59PBCc1ngHJ6X7St/i6s0B6beg=="
+  crossorigin="anonymous"></script>
+ -->
+
+  <link
+    rel="alternate"
+    type="application/rss+xml"
+    title="RSS"
+    href="/atom.xml"
+  />
+</head>
+
+
+  <body>
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+          <article
+  class="post h-entry"
+  itemscope
+  itemtype="http://schema.org/BlogPosting"
+>
+  <head>
+    <title>Environment Modules 사용하기</title>
+  </head>
+  <header class="post-header">
+    <div class="post-back">
+      <a class="black-link" href="https://blog.liam.kim">
+        ← Home
+      </a>
+    </div>
+
+    <h1 class="post-title p-name" itemprop="name headline">
+      Environment Modules 사용하기
+    </h1>
+    <p class="post-meta">
+      <time
+        class="dt-published"
+        datetime="2020-10-12T00:00:00+00:00"
+        itemprop="datePublished"
+      >Oct 12, 2020
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <p>오랫동안 연구실에서 서버관리를 담당해왔다. 처음에는 단순 서버 on/off 정도만 하는 일이었는데, 별것도 아닌걸로 업체 통하면 시간도 오래걸리고 설명하기도 복잡하다보니 내가 처리하게 되었다. 그러다보니 점점 일이 늘어나서 서버 구축포함 대부분의 이슈를 내 선에서 해결하고자 노력하고 있다.</p>
+
+<p>그런데 처음에는 다들 Fortran만 써서 상관없었지만 연구주제가 다양해지면서 다양한 환경을 구축할 필요가 생겼다. 다른 컴파일러, 다른 언어, 다른 서버 등등. 당연히 환경변수를 건드려야할 일이 많았다. 하지만, 유저들 대부분 환경변수가 뭔지도 모르는 사람들이다. 그래서 그동안 사용한 방법은 curl을 통해 미리 작성된 .bashrc를 받게 하는 것이었다. 디폴트 bashrc를 변경할 수도 있었겠지만, 상황에 따라 각자의 bashrc를 업데이트해야하는 경우도 생겨서 좀 더 안전하게 가려고 했다. 이 방법은 유연하게 대처하기 힘들고 특이사항이 생기면 내가 직접 수정해줘야하고, 환경변수가 지속적으로 append되는 경우 불필요하게 환경변수가 중복되는 경우가 생기기도 했다. 그러나, bashrc를 직접 건드리다가 PATH 같은 변수들을 날려먹고 나한테 찾아오는 경우가 종종 있었기에 나쁘지 않다고 생각했다.</p>
+
+<p>그러다가 <a href="https://www.ksc.re.kr/gsjw/jcs/hd#docout-0">KISTI 누리온 매뉴얼</a>을 접할 기회가 생겼는데, <code class="language-plaintext highlighter-rouge">module</code>이라는 걸 쓴다는걸 알게 되었다. 우리 연구실보다도 훨씬 많은 사용자와 많은 환경을 지원해야하는 KISTI에서 각자 환경에 맡게 module을 load해서 쓰는 방법이었다. 패키지 페이지는 다음과 같다.</p>
+
+<ul>
+  <li><a href="http://modules.sourceforge.net/">Environment Modules</a></li>
+</ul>
+
+<p>홈페이지 소개란에 있던 이 패키지의 사용목적은 정확히 내가 원하는 그것이었다.</p>
+
+<blockquote>
+  <p>Typically users initialize their environment when they log in by setting environment information for every application they will reference during the session. The Environment Modules package is a tool that simplify shell initialization and lets users easily modify their environment during the session with modulefiles.</p>
+</blockquote>
+
+<p>어차피 현재까지 연구실 서버에서 쓰는 환경이 compiler 버전 변경, <code class="language-plaintext highlighter-rouge">Python</code> 사용시 <code class="language-plaintext highlighter-rouge">.pyenv</code> or <code class="language-plaintext highlighter-rouge">Anaconda</code> 방식 변경, <code class="language-plaintext highlighter-rouge">CUDA</code> 사용 여부, <code class="language-plaintext highlighter-rouge">ANSYS</code> 사용여부 정도라서 <code class="language-plaintext highlighter-rouge">PATH</code>와 <code class="language-plaintext highlighter-rouge">LD_LIBRARY_PATH</code> 정도만 append 하는 정도라 복잡한 기능을 쓸 필요는 없었다. 그래서 단순하게 사용법만을 소개해둔다.</p>
+
+<h1 id="사용법">사용법</h1>
+
+<p><code class="language-plaintext highlighter-rouge">module</code>의 사용법은 쉽다. 유저들에겐 아래 명령어들만 숙지시키면 된다.</p>
+
+<ul>
+  <li><code class="language-plaintext highlighter-rouge">module avail</code> : 사용가능한 모듈 보기 (줄여서 <code class="language-plaintext highlighter-rouge">module av</code>)</li>
+  <li><code class="language-plaintext highlighter-rouge">module load MODULENAME</code> or <code class="language-plaintext highlighter-rouge">module add MODULENAME</code> : module avail로 확인한 특정 <code class="language-plaintext highlighter-rouge">MODULENAME</code> load</li>
+  <li><code class="language-plaintext highlighter-rouge">module unload MODULENAME</code> or <code class="language-plaintext highlighter-rouge">module rm MODULENAME</code> : module avail로 확인한 특정 <code class="language-plaintext highlighter-rouge">MODULENAME</code> unload</li>
+  <li><code class="language-plaintext highlighter-rouge">module list</code> : 현재 사용중인 모듈 출력</li>
+  <li><code class="language-plaintext highlighter-rouge">module purge</code> : 현재 사용중인 <strong>모든</strong> 모듈 삭제</li>
+</ul>
+
+<p>Job scheduler 사용시 <code class="language-plaintext highlighter-rouge">module purge</code> 시키고, 다음 예시와 같이 필요한 module을 <code class="language-plaintext highlighter-rouge">load</code> 하도록 했다.</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>  module purge
+  module load gcc/10.1
+  module load gcc/10.1/fftw3/3.3.8
+</code></pre></div></div>
+
+<h1 id="설치">설치</h1>
+
+<ol>
+  <li><a href="https://modules.readthedocs.io/en/latest/INSTALL.html#installation-instructions">modules의 INSTALL 문서</a> 를 참고해서 모듈을 설치한다. 일반적인 소스컴파일 과정인 <code class="language-plaintext highlighter-rouge">./configure</code>, <code class="language-plaintext highlighter-rouge">make</code>, <code class="language-plaintext highlighter-rouge">make install</code>을 따른다. CentOS의 경우 심플하게 <code class="language-plaintext highlighter-rouge">yum install environment-modules</code> 써도 된다.</li>
+  <li>Configuration section을 따라 initialization을 실행한다. 나는 유저들의 bashrc에 <code class="language-plaintext highlighter-rouge">source PREFIX/init/bash</code> 를 넣는걸 선호했다. (<code class="language-plaintext highlighter-rouge">bash</code> 사용시) <code class="language-plaintext highlighter-rouge">PREFIX</code>는 default가 <code class="language-plaintext highlighter-rouge">/usr/local/Modules</code> (소스 컴파일 default 값)이거나 <code class="language-plaintext highlighter-rouge">/usr/share/Modules</code>(<code class="language-plaintext highlighter-rouge">yum 설치시</code>)로 잡힌다.</li>
+  <li>Configuration에서 default로 불러들일 <code class="language-plaintext highlighter-rouge">module path</code>와 <code class="language-plaintext highlighter-rouge">modulefiles</code>를 지정하는 파트가 있는데 사용자들이 어떤걸 쓸지 어떻게 알고 정하나 싶어서 나는 지정하지 않았다.</li>
+</ol>
+
+<h1 id="how-it-works">How it works</h1>
+
+<p><code class="language-plaintext highlighter-rouge">Modules</code>의 원리는 다음과 같다.</p>
+
+<ul>
+  <li>지정된 위치 (디폴트는 <code class="language-plaintext highlighter-rouge">/usr/local/Modules/modulefiles</code>)의 <code class="language-plaintext highlighter-rouge">modulefiles</code>를 읽고 그 <code class="language-plaintext highlighter-rouge">modulefiles</code>를 읽어서 필요한 환경변수를 추가하거나 삭제하는 것.</li>
+  <li>modulefiles 디렉토리내의 서브 디렉토리는 <code class="language-plaintext highlighter-rouge">module list</code>에서 <code class="language-plaintext highlighter-rouge">/</code>로 처리된다. (i.e. <code class="language-plaintext highlighter-rouge">gcc/10.1/fftw3/3.3.8</code>은 <code class="language-plaintext highlighter-rouge">PREFIX/modulefiles/gcc/10.1/fftw3/3.3.8</code>라는 모듈 파일이 존재하는 것이다) 실제로 가보면 예제들이 몇개 있는데 대부분 참고용이니 다른디렉토리에 복사해두고 지웠다.</li>
+</ul>
+
+<h1 id="modulefile-생성하기">modulefile 생성하기</h1>
+
+<p>그럼 제일 중요한 modulefile은 어떻게 구성되어있냐 하면, <a href="https://modules.readthedocs.io/en/latest/modulefile.html">자체 문법</a>이 있다. 하지만 이걸 다 알고 쓸 필요는 없다. 일반적인 쉘 스크립트를 modulefiles로 자동으로 변환해주는 파이썬 스크립트가 패키지 안에 때문!</p>
+
+<p>예를 들어,</p>
+
+<ol>
+  <li>
+    <p>gcc 사용을 위해 환경변수 <code class="language-plaintext highlighter-rouge">PATH</code>와 <code class="language-plaintext highlighter-rouge">LD_LIBRARY_PATH</code>가 필요하다고 하자.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code> export PATH=/APP/gcc/10.1/bin:$PATH
+ export LD_LIBRARY_PATH=/APP/gcc/10.1/bin:$LD_LIBRARY_PATH
+</code></pre></div>    </div>
+
+    <p>가 필요하다고 하자. 이 부분만을 <code class="language-plaintext highlighter-rouge">_bashrc_gcc10</code>이라고 저장한다음에</p>
+  </li>
+  <li>
+    <p>이를 다음 명령어를 통해 modulefile로 출력한다.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code> PREFIX/bin/createmodule.sh _bashrc_gcc10 &gt; modules_gcc10
+</code></pre></div>    </div>
+
+    <p>이라고 하면 modulefile <code class="language-plaintext highlighter-rouge">modules_gcc10</code>이 만들어진다. python script도 있다.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code> python PREFIX/bin/createmodule.py _bashrc_gcc10 &gt; modules_gcc10
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>이렇게 만들어진 modulefile을 <code class="language-plaintext highlighter-rouge">modulefiles</code> 위치에 복사하면 끝. 구조적으로 관리가 필요하다면 modulefiles 디렉토리를 환경에 따라 디렉토리 구조로 바꿔주면 된다.</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code> cp modules_gcc10 PREFIX/modulefiles/gcc10
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>바로 <code class="language-plaintext highlighter-rouge">module avail</code>을 통해 확인할 수 있다. (reboot 불필요)</p>
+
+    <div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code> ---------------- PREFIX/modulefiles ----------------
+ gcc10
+</code></pre></div>    </div>
+  </li>
+  <li>
+    <p>삭제도 그냥 single <code class="language-plaintext highlighter-rouge">modulefile</code>이나 서브 디렉토리를 삭제하면 된다.</p>
+  </li>
+</ol>
+
+<p>참 쉽죠?</p>
+
+<h1 id="pros-and-cons">Pros and Cons</h1>
+
+<h2 id="pros">Pros</h2>
+<ul>
+  <li>사용자들이 위험하게 .bashrc나 .bash_profile을 건드릴 필요가 없다.</li>
+  <li>PATH등이 불필요하게 append돼서 duplicate될 일이 없다.</li>
+  <li>관리자 입장에서 module의 추가, 삭제 및 수정이 매우 쉽고 편리하다.</li>
+  <li>문서의 Cookbook section을 보면 알겠지만, 다양한 방식으로 사용자화가 가능하다.</li>
+  <li>제일 중요한것, <strong>유저들이 사용하기 편리하다.</strong></li>
+</ul>
+
+<h2 id="cons">Cons</h2>
+<ul>
+  <li>아직까지 단점을 모르겠다.</li>
+</ul>
+
+  </div>
+
+  <a class="u-url" href="/2020/10/12/Environment-Modules/" hidden></a>
+</article>
+
+      </div>
+    </main>
+
+    <script src='/assets/js/script.js'></script>
+  </body>
+</html>

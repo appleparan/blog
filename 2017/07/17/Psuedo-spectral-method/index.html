@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+  <head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name=description content="">
+  <meta name=author content="">
+
+  <title>
+     Navier Stokes Equation Solver for Homogeneous Isotropic Turbulence &middot; Jongsu Liam Kim | Blog 
+  </title>
+
+  
+  <link rel="canonical" href="/2017/07/17/Psuedo-spectral-method/" />
+  
+
+  <!-- Style sheet -->
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link rel="stylesheet" href="/css/styles.css " />
+
+  <!-- Syntax Highlight, highlight.js - 10.7.1 -->
+  <link rel="stylesheet"
+    href="/assets/css/dracula.css">
+  <script src="/assets/js/highlight.pack.js"></script>
+  <script>hljs.highlightAll();</script>
+
+  <!-- icons  -->
+  <link
+    rel="apple-touch-icon-precomposed"
+    sizes="144x144"
+    href="/assets/icons/apple-touch-icon-precomposed.png"
+  />
+  <link rel="shortcut icon" type="image/x-icon" href="/assets/favicon.ico" />
+
+  
+    <script type="text/x-mathjax-config">
+window.MathJax = {
+    tex: {
+      inlineMath: [              // start/end delimiter pairs for in-line math
+        ['\\(', '\\)']
+      ],
+      displayMath: [             // start/end delimiter pairs for display math
+        ['$$', '$$'],
+        ['\\[', '\\]']
+      ],
+      processEscapes: true,       // use \$ to produce a literal dollar sign
+      processEnvironments: true,  // process \begin{xxx}...\end{xxx} outside math mode
+      processRefs: true,          // process \ref{...} outside of math mode
+      maxMacros: 1000,           // maximum number of macro substitutions per expression
+      maxBuffer: 5 * 1024,       // maximum size for the internal TeX string (5K)
+      tags: 'ams',              // or 'ams' or 'all'
+      tagSide: 'right',          // side for \tag macros
+      tagIndent: '0.8em',        // amount to indent tags
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.0.5/es5/tex-svg-full.js"
+  integrity="sha512-68Ru9/UE+l1KhgM0zJjV8h8/81/NEC1l4DQx+zWA2YxzQsOM9WE+8rIqMW+P59PBCc1ngHJ6X7St/i6s0B6beg=="
+  crossorigin="anonymous"></script>
+
+  
+  <!-- <script type="text/x-mathjax-config">
+window.MathJax = {
+    tex: {
+      inlineMath: [              // start/end delimiter pairs for in-line math
+        ['\\(', '\\)']
+      ],
+      displayMath: [             // start/end delimiter pairs for display math
+        ['$$', '$$'],
+        ['\\[', '\\]']
+      ],
+      processEscapes: true,       // use \$ to produce a literal dollar sign
+      processEnvironments: true,  // process \begin{xxx}...\end{xxx} outside math mode
+      processRefs: true,          // process \ref{...} outside of math mode
+      maxMacros: 1000,           // maximum number of macro substitutions per expression
+      maxBuffer: 5 * 1024,       // maximum size for the internal TeX string (5K)
+      tags: 'ams',              // or 'ams' or 'all'
+      tagSide: 'right',          // side for \tag macros
+      tagIndent: '0.8em',        // amount to indent tags
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.0.5/es5/tex-svg-full.js"
+  integrity="sha512-68Ru9/UE+l1KhgM0zJjV8h8/81/NEC1l4DQx+zWA2YxzQsOM9WE+8rIqMW+P59PBCc1ngHJ6X7St/i6s0B6beg=="
+  crossorigin="anonymous"></script>
+ -->
+
+  <link
+    rel="alternate"
+    type="application/rss+xml"
+    title="RSS"
+    href="/atom.xml"
+  />
+</head>
+
+
+  <body>
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+          <article
+  class="post h-entry"
+  itemscope
+  itemtype="http://schema.org/BlogPosting"
+>
+  <head>
+    <title>Navier Stokes Equation Solver for Homogeneous Isotropic Turbulence</title>
+  </head>
+  <header class="post-header">
+    <div class="post-back">
+      <a class="black-link" href="https://blog.liam.kim">
+        ← Home
+      </a>
+    </div>
+
+    <h1 class="post-title p-name" itemprop="name headline">
+      Navier Stokes Equation Solver for Homogeneous Isotropic Turbulence
+    </h1>
+    <p class="post-meta">
+      <time
+        class="dt-published"
+        datetime="2017-07-17T00:00:00+00:00"
+        itemprop="datePublished"
+      >Jul 17, 2017
+      </time></p>
+  </header>
+
+  <div class="post-content e-content" itemprop="articleBody">
+    <p>(This content is originally written by ‪Kyongmin Yeo’s manual)</p>
+
+<h1 id="introduction">Introduction</h1>
+
+<p>The spectral method is solving certain differential equation by some “basis function”, typically sinusoids with Fourier method.
+With the Navier-Stokes equation, it can remove presssure term in N-S equation and solve viscous term analytically.</p>
+
+<p>Pros:</p>
+<ul>
+  <li>Removing pressure term is huge performance advantage</li>
+  <li>Accurate result because differential operator doesn’t depends on grid size</li>
+</ul>
+
+<p>Cons:</p>
+<ul>
+  <li>Only can be applied to periodic domain</li>
+</ul>
+
+<h1 id="governing-equation">Governing Equation</h1>
+
+<h2 id="navier-stokes-equation-to-rotational-form">Navier-Stokes equation to rotational form</h2>
+<p>Original Navier-Stokes equation in <strong>convection form</strong> is</p>
+
+<p>\begin{align}
+\dfrac{\partial u_i}{\partial t} &amp;= -\dfrac{\nabla p}{\rho} - (u \cdot \nabla) u + \nu \nabla^2 u \newline
+\nabla \cdot u &amp;= 0
+\end{align}</p>
+
+<p>Using following vector identity,</p>
+
+<p>\begin{align}
+\dfrac{1}{2} \nabla (A \cdot A) = (A \cdot \nabla) A + A \times (\nabla \times A)
+\end{align}</p>
+
+<p>The Navier-Stoke sequations in <strong>rotational form</strong> can be obatained.
+The reason is explained in the paper, <em>Numerical Simulation of Incompressible Flows Within Simple Boundaries. I. Galerkin (Spectral) Representations</em>.</p>
+
+<blockquote><p>The reason is that pseudospectral approximation to the rotation, rather than Reynolds stress, form of the nonlinear terms of the Navier~Stokes equations semiconserves (cf. <a class="citation" href="#Orszag1971">(Orszag, 1971)</a>, Numerical simulation of incompressible flows within simple boundaries: Accuracy, Section 3) energy so that aliasing errors, although present, can not directly cause unconditional nonlinear instability</p><cite><a class="citation" href="#Orszag1971a">(Orszag, 1971)</a></cite></blockquote>
+
+<p>\begin{align}
+\dfrac{\partial u_i}{\partial t} &amp;= -\dfrac{\partial P}{\partial x_i} + H_i + \nu \nabla^2 u \newline
+\dfrac{\partial u_i}{\partial x_i} &amp;= 0
+\end{align}</p>
+
+<p>where</p>
+
+<p>\begin{align}
+P &amp;= \dfrac{p}{\rho} + \dfrac{1}{2} u_j u_j \newline
+H_i &amp;= \epsilon_{i,j,k} u_j \omega_k = u \times (\nabla \times u)
+\end{align}</p>
+
+<h2 id="removing-pressure-term">Removing pressure term</h2>
+
+<p>The pressure Poisson equation can be obatained by taking divergence from Navier-Stokes equation in rotational form</p>
+
+<p>\begin{align}
+\nabla^2 P = \dfrac{\partial H_j}{\partial x_j}
+\end{align}</p>
+
+<p>Expanding N-S equation and Poisson equation to Fourier space gives</p>
+
+<p>\begin{align}
+\dfrac{d \hat{u}_i }{d t} &amp;= -i \kappa_i \hat{P} + \hat{H}_i - \nu \kappa^2 \hat{u}_i \newline
+-\kappa^2 \hat{P} &amp;= i \kappa_j \hat{H}_j
+\end{align}</p>
+
+<p>Combining two equation and then</p>
+
+<p>\begin{align}
+\dfrac{d \hat{u}_i }{d t} &amp;= -i \kappa_i \left( -i \dfrac{\kappa_j}{\kappa^2} \hat{H}_j \right ) + \hat{H}_i - \nu \kappa^2 \hat{u}_i \newline
+\dfrac{d \hat{u}_i }{d t} &amp;= -\dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i - \nu \kappa^2 \hat{u}_i
+\end{align}</p>
+
+<p>where \( \kappa \) is a wavenumber. Final Navier Stokes equation is obtained without pressure term</p>
+
+<p>\begin{align}
+\dfrac{d \hat{u}_i }{d t} &amp;= -\dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i - \nu \kappa^2 \hat{u}_i
+\end{align}</p>
+
+<h2 id="treating-viscous-term-analytically">Treating viscous term analytically</h2>
+
+<p>To treat a viscous terms analytically, multiply following formula to Navier Stokes equation w/o pressure form</p>
+
+<p>\begin{equation}
+f(t) = e^{\nu \kappa^2 t}
+\end{equation}</p>
+
+<p>Then the equation becomes..</p>
+
+<p>\begin{align}
+\left[ \dfrac{d \hat{u}}{dt} + \nu \kappa^2 \hat{u}_j \right] \times f(t) &amp;= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] \times f(t) \newline
+f(t) \dfrac{d \hat{u}}{dt} + (\nu \kappa^2 f(t))\hat{u}_j &amp;= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t) \newline
+f(t) \dfrac{d \hat{u}}{dt} + (\nu \kappa^2 e^{\nu \kappa^2 t})\hat{u}_j  &amp;= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t) \newline
+f(t) \dfrac{d \hat{u}}{dt} + (\dfrac{d e^{\nu \kappa^2 t}}{dt})\hat{u}_j  &amp;= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t) \newline
+\dfrac{d \hat{u}_i f(t)}{dt} &amp;= \left[ - \dfrac{\kappa_i \kappa_j}{\kappa^2} \hat{H}_j + \hat{H}_i \right ] f(t)
+\end{align}</p>
+
+<p>this can be more simpler by introducing new term \(\widehat{NL}\)</p>
+
+<p>\begin{equation}
+\dfrac{d \hat{u}_i e^{\nu \kappa^2 t}}{dt} = \widehat{NL} e^{\nu \kappa^2 t}
+\end{equation}</p>
+
+<h3 id="time-discretization-by-rk3-method">Time Discretization by RK3 method</h3>
+
+<p>For low-storage RK3 method (2-register, 3-stage, 3rd order), the coefficients are given by following table
+<a class="citation" href="#Lundbladh:1999vy">(Lundbladh et al., 1999)</a>, <a class="citation" href="#Yu1992">(Yu et al., 1992)</a>, <a class="citation" href="#Wray1990">(Wray, 1990)</a></p>
+
+<table>
+  <thead>
+    <tr>
+      <th>order</th>
+      <th>\(a_n\)</th>
+      <th>\(b_n\)</th>
+      <th>\(c_n\)</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1st</td>
+      <td>8/15</td>
+      <td>0</td>
+      <td>0</td>
+    </tr>
+    <tr>
+      <td>2nd</td>
+      <td>5/12</td>
+      <td>-17/60</td>
+      <td>8/15</td>
+    </tr>
+    <tr>
+      <td>3rd</td>
+      <td>3/4</td>
+      <td>-5/12</td>
+      <td>2/3</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>Assume equations are given by following form,</p>
+
+<p>\begin{equation}
+\dfrac{\partial Q}{\partial t} = R(Q)
+\end{equation}</p>
+
+<p>The low-storage RK3 method applied to the above equation using RK3 coefficients.</p>
+
+<p>\begin{align}
+Q^1 &amp;= Q^n + \Delta t \left( \dfrac{8}{15} R^n \right)  \newline
+Q^2 &amp;= Q^1 + \Delta t \left( \dfrac{5}{12} R^n  - \dfrac{17}{60} R^1\right) \newline
+Q^{n+1} &amp;= Q^2 + \Delta t \left( \dfrac{3}{4} R^n  - \dfrac{5}{12} R^2\right)
+\end{align}</p>
+
+<p>Before applying RK3 method to Navier-Stokes equation, apply low-storage RK3 method to reaction-diffusion equation</p>
+
+<p>\begin{align}
+\dfrac{\partial \psi}{\partial t} &amp;= G + L \psi \newline
+\psi^{n+1} &amp;= \psi^{n}  + a_n \Delta t G^n + b_n \Delta t G^{n-1} + (a_n + b_n) \Delta t \left(\dfrac{L \psi^{n+1} + L \psi^n}{2} \right)
+\end{align}</p>
+
+<p>Then the Navier Stokes equation w/o pressure term can be discretized by above method</p>
+
+<p>\[
+  \dfrac{d \hat{u} e^{\nu \kappa^2 t}}{dt} = \widehat{NL} e^{\nu \kappa^2 t}
+\]</p>
+
+<p>Discretization of LHS</p>
+
+<p>\begin{align}
+LHS = \dfrac{\hat{u}^{n+1}_i e^{\nu \kappa^2 (t+a_n \Delta t + b_n \Delta t)} - \hat{u}^{n}_i e^{\nu \kappa^2 t}} {\Delta t}
+\end{align}</p>
+
+<p>Discretization of RHS  (denoting RHS as \( G \))</p>
+
+<p>\begin{align}
+RHS &amp;= \widehat{NL}^n e^{\nu \kappa^2 t} \newline
+&amp;= a_n\widehat{NL}^n e^{\nu \kappa^2 t} \newline
+&amp;+ b_n\widehat{NL}^{n - 1} e^{\nu \kappa^2 (t - a_{n-1} \Delta t - b_{n-1} \Delta t)}
+\end{align}</p>
+
+<p>Compensating \( e^{\nu \kappa^2 t} \) on both sides</p>
+
+<p>\begin{align}
+\hat{u}^{n+1}_i e^{\nu \kappa^2 (a_n \Delta t + b_n \Delta t)} - \hat{u}^{n}_i &amp;= a_n \Delta t \widehat{NL}^n \newline \newline
+&amp;+ b_n \Delta t \widehat{NL}^{n - 1} e^{\nu \kappa^2 (- a_{n-1} \Delta t - b_{n-1} \Delta t)}
+\end{align}</p>
+
+<p>Finally</p>
+
+<p>\begin{align}
+\hat{u}^{n+1}_i &amp;= \left[ a_n \Delta t \widehat{NL}^n + \hat{u}^{n}_i \right ] e^{-\nu \kappa^2 (a_n + b_n) \Delta t} \newline
+&amp; + b_n \Delta t \widehat{NL}^{n - 1} e^{-\nu \kappa^2 (a_n + b_n + a_{n-1}+ b_{n-1}) \Delta t}
+\end{align}</p>
+
+<p>or</p>
+
+<p>\begin{align}
+\hat{u}^{n+1}_i &amp;= \left[ a_n \Delta t \widehat{NL}^n + \hat{u}^{n}_i \right ] e^{-\nu \kappa^2 (c_n - c_{n+1}) \Delta t} \newline
+&amp; + b_n \Delta t \widehat{NL}^{n - 1} e^{-\nu \kappa^2 (c_{n-1} - c_{n+1}) \Delta t}
+\end{align}</p>
+
+<h1 id="reference">Reference</h1>
+
+<ol class="bibliography"><li><span id="Lundbladh:1999vy">Lundbladh, A., Berlin, S., Skote, M., &amp; Hildings, C. (1999). An efficient spectral method for simulation of incompressible flow over a flat plate. <i>TRITA-MEK Technical {\Ldots}</i>.</span></li>
+<li><span id="Hussaini1988">Hussaini, M. Y., Zang, T. A., Canuto, C., &amp; Quarteroni, A. (1988). <i>Spectral Methods in Fluid Dynamics</i>. Springer Berlin Heidelberg. http://link.springer.com/10.1007/978-3-642-84108-8</span></li>
+<li><span id="Lundbladh2007">Lundbladh, M. C. P. S. A., &amp; Henningson, D. (2007). <i>Flows, SIMSON A Pseudo-Spectral Solver for Incompressible Boundary Layer</i>. 100. http://www.mech.kth.se/ mattias/simson-user-guide-v4.0.pdf</span></li>
+<li><span id="Wray1990">Wray, A. A. (1990). <i>Minimal storage time advancement schemes for spectral methods</i>.</span></li>
+<li><span id="Yu1992">Yu, S. T., Tsai, Y. L. P., &amp; Hsieh, K. C. (1992). Runge-Kutta methods combined with compact difference schemes for the unsteady Euler equations. <i>NASA Technical Memorandum</i>. http://ntrs.nasa.gov/archive/nasa/casi.ntrs.nasa.gov/19930006613.pdf</span></li>
+<li><span id="Orszag1971">Orszag, S. A. (1971). Numerical Simulation of Incompressible Flows Within Simple Boundaries. I. Galerkin (Spectral) Representations. <i>Studies in Applied Mathematics</i>, <i>50</i>(4), 293–327. https://doi.org/10.1002/sapm1971504293</span></li>
+<li><span id="Orszag1971a">Orszag, S. A. (1971). Numerical simulation of incompressible flows within simple boundaries: Accuracy. <i>Journal of Fluid Mechanics</i>, <i>49</i>(1), 75–112. https://doi.org/10.1017/S0022112071001940</span></li></ol>
+
+  </div>
+
+  <a class="u-url" href="/2017/07/17/Psuedo-spectral-method/" hidden></a>
+</article>
+
+      </div>
+    </main>
+
+    <script src='/assets/js/script.js'></script>
+  </body>
+</html>

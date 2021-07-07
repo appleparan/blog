@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+  <head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <meta name=description content="">
+  <meta name=author content="">
+
+  <title>
+     Jongsu Liam Kim | Blog &middot; 
+    
+  </title>
+
+  
+  <link rel="canonical" href="/" />
+  
+
+  <!-- Style sheet -->
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link rel="stylesheet" href="/css/styles.css " />
+
+  <!-- Syntax Highlight, highlight.js - 10.7.1 -->
+  <link rel="stylesheet"
+    href="/assets/css/dracula.css">
+  <script src="/assets/js/highlight.pack.js"></script>
+  <script>hljs.highlightAll();</script>
+
+  <!-- icons  -->
+  <link
+    rel="apple-touch-icon-precomposed"
+    sizes="144x144"
+    href="/assets/icons/apple-touch-icon-precomposed.png"
+  />
+  <link rel="shortcut icon" type="image/x-icon" href="/assets/favicon.ico" />
+
+  
+  <!-- <script type="text/x-mathjax-config">
+window.MathJax = {
+    tex: {
+      inlineMath: [              // start/end delimiter pairs for in-line math
+        ['\\(', '\\)']
+      ],
+      displayMath: [             // start/end delimiter pairs for display math
+        ['$$', '$$'],
+        ['\\[', '\\]']
+      ],
+      processEscapes: true,       // use \$ to produce a literal dollar sign
+      processEnvironments: true,  // process \begin{xxx}...\end{xxx} outside math mode
+      processRefs: true,          // process \ref{...} outside of math mode
+      maxMacros: 1000,           // maximum number of macro substitutions per expression
+      maxBuffer: 5 * 1024,       // maximum size for the internal TeX string (5K)
+      tags: 'ams',              // or 'ams' or 'all'
+      tagSide: 'right',          // side for \tag macros
+      tagIndent: '0.8em',        // amount to indent tags
+  },
+  svg: {
+    fontCache: 'global'
+  }
+};
+</script>
+<script type="text/javascript" id="MathJax-script" async
+  src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/3.0.5/es5/tex-svg-full.js"
+  integrity="sha512-68Ru9/UE+l1KhgM0zJjV8h8/81/NEC1l4DQx+zWA2YxzQsOM9WE+8rIqMW+P59PBCc1ngHJ6X7St/i6s0B6beg=="
+  crossorigin="anonymous"></script>
+ -->
+
+  <link
+    rel="alternate"
+    type="application/rss+xml"
+    title="RSS"
+    href="/atom.xml"
+  />
+</head>
+
+
+  <body>
+
+    <main class="page-content" aria-label="Content">
+      <div class="wrapper">
+          <div class="home-title">
+  <p class="home-heading">Jongsu Liam Kim | Blog</p>
+</div>
+
+<nav>
+  <ul>
+    <li><a class="link" href="/">Home</a></li>
+    <li><a class="link" href="/tags">Tags</a></li>
+    <li><a class="link" href="/archive">Archive</a></li>
+    <li><a class="link" href="/about">About</a></li>
+  </ul>
+</nav>
+
+<div class="posts">
+  
+  <div class="post">
+    <h1 class="post-title">
+      <a href="/2020/10/14/ANSYS-Journal-File-Batch-Execution/">
+        ANSYS Batch mode로 실행하기
+      </a>
+    </h1>
+    
+    <span class="post-date">14 Oct 2020</span>
+    <p>내가 담당하는 일은 아니지만, 연구실에서 2년전부터 ANSYS(정확히는 ANSYS Fluent)를 사용하고 있다. 그동안의 사용방식은 GUI로 바로 실행하는 형태였는데, 효율적 HPC 자원 관리를 위해 잡스케줄러를 사용해서 batch mode로 전환하고자 한다.</p> <p>ANSYS는 프로그램의 사이즈 치고는 공개된 문서가 찾기 힘들고 리셀러 홈페이지에서 문서보기도 좀 복잡하기도 해서 batch mode로 어떻게 실행하는지 알기가 힘들었다. 게다가 난 내 일도 아니라서 ANSYS를 잘 쓸 줄 몰라서 더더욱 알기 힘들었다. 우리 연구실은 SGE를 주로 쓰는데 ANSYS에서 GUI형태로 SGE Job submission을 지원하기는 하지만 queue나 parallel environment설정을 어떻게 하는지 몰라서 포기했기에 어쩔 수 없이 아래와 같은 텍스트 방식을 고집할 수 밖에 없었다.</p> <p>참고로 이번에도 역시 나의 구세주 <a href="https://www.ksc.re.kr/gsjw/jcs/sft#docout-7">KISTI 매뉴얼</a>과 <a...
+  </div>
+  
+  <div class="post">
+    <h1 class="post-title">
+      <a href="/2020/10/12/Environment-Modules/">
+        Environment Modules 사용하기
+      </a>
+    </h1>
+    
+    <span class="post-date">12 Oct 2020</span>
+    <p>오랫동안 연구실에서 서버관리를 담당해왔다. 처음에는 단순 서버 on/off 정도만 하는 일이었는데, 별것도 아닌걸로 업체 통하면 시간도 오래걸리고 설명하기도 복잡하다보니 내가 처리하게 되었다. 그러다보니 점점 일이 늘어나서 서버 구축포함 대부분의 이슈를 내 선에서 해결하고자 노력하고 있다.</p> <p>그런데 처음에는 다들 Fortran만 써서 상관없었지만 연구주제가 다양해지면서 다양한 환경을 구축할 필요가 생겼다. 다른 컴파일러, 다른 언어, 다른 서버 등등. 당연히 환경변수를 건드려야할 일이 많았다. 하지만, 유저들 대부분 환경변수가 뭔지도 모르는 사람들이다. 그래서 그동안 사용한 방법은 curl을 통해 미리 작성된 .bashrc를 받게 하는 것이었다. 디폴트 bashrc를 변경할 수도 있었겠지만, 상황에 따라 각자의 bashrc를 업데이트해야하는 경우도 생겨서 좀 더 안전하게 가려고 했다. 이 방법은 유연하게 대처하기...
+  </div>
+  
+  <div class="post">
+    <h1 class="post-title">
+      <a href="/2020/10/05/Developer-Tools-for-Everyone/">
+        비개발자들에게도 권하는 개발자 도구들
+      </a>
+    </h1>
+    
+    <span class="post-date">05 Oct 2020</span>
+    <p>생각외로 많은 이공계 학생들이 프로그래밍을 못한다. CS가 아니면 대부분.. 특히 시뮬레이션 위주의 과학계산 연구를 하는 사람들도 알고리즘 자체는 복잡하지만 코드 아키텍처는 간단한 프로그래밍을 주로 한다. OOP니 FP니 없어도 Init - Read - Compute - Write 구조의 코드로 수십년동안 시뮬레이션 하는 경우도 있다. 오랫동안 대학원 생활을 하면서 이런 비 CS출신 이공계학생들을 보니 다음과 같은 특징이 있다는 걸 알게 되었다.</p> <ul> <li>그 전에는 코딩경험이 전무하거나, C/Fortran, 혹은 Matlab 문법 정도만을 안다.</li> <li>리눅스는 물론이고 CLI환경에 대해 익숙하지 않다.</li> <li>대부분 개발자 툴에 대해 모르거나 필요성을 느끼지 못한다.</li> <li>그렇다고 새로운 툴을 적극적으로 배우려고 하지 않는데, 그 이유는 지금쓰고 있는 정도로도 결과가 잘 나오기 때문이다. 즉,...
+  </div>
+  
+  <div class="post">
+    <h1 class="post-title">
+      <a href="/2020/08/25/External-Forcing-Turbulence/">
+        (Draft) External Forcing of Homogeneous Isotropic Turbulence
+      </a>
+    </h1>
+    
+    <span class="post-date">25 Aug 2020</span>
+    <p>(This content is originally written by ‪Kyongmin Yeo’s manual)</p> <h1 id="introduction">Introduction</h1> <p>To maintain stationary turbulence, external force term is added to Navier-Stokes equation \[ \dfrac{d \hat{u}_i}{dt} = - i \kappa_{i} \hat{P} + \hat{H}_i - \nu \kappa^2 \hat{u}_i + \hat{f}_i \]</p> <p>where \(\hat{f}_i\) is a external forcing term.</p> <p>\(\hat{f}_i\) is defined as the projection of a vector \(\hat{\mathbf{b}}\) onto the plane normal to the wavenumber vector \(\mathbf{\kappa}\) to ensure divergence-free condition.</p> <p>\[ \hat{f}_{i} = \hat{b}_{i} - \dfrac{\kappa_i}{\kappa^2} \kappa_j \hat{b}_{j} \]</p> <p>So, how we define vector \(\hat{\mathbf{b}}\)? Eswaran &amp; Pope suggested stochastic forcing. They define 3D complex vector \(\hat{\mathbf{b}}\) which is non-zero...
+  </div>
+  
+  <div class="post">
+    <h1 class="post-title">
+      <a href="/2018/07/14/Tox-Workflow/">
+        (Note) Tox workflow
+      </a>
+    </h1>
+    
+    <span class="post-date">14 Jul 2018</span>
+    <h1 id="what-do-i-need-to-install">What do I need to install</h1> <ul> <li><code class="language-plaintext highlighter-rouge">tox</code> : virtualenv for testing</li> <li><code class="language-plaintext highlighter-rouge">tox-pyenv</code> : <code class="language-plaintext highlighter-rouge">pyenv</code> plugin for <code class="language-plaintext highlighter-rouge">tox</code></li> <li><code class="language-plaintext highlighter-rouge">pytest</code> : testing framework</li> <li><code class="language-plaintext highlighter-rouge">pipreqs</code> : generates <code class="language-plaintext highlighter-rouge">requirements.txt</code></li> </ul> <h1 id="what-do-i-need-to-do">What do I need to do</h1> <ol> <li> <p>Checkout <a href="https://github.com/audreyr/cookiecutter"><code class="language-plaintext highlighter-rouge">cookiecutter</code></a></p> </li> <li> <p>create virtualenv using pyenv</p> </li> </ol> <div class="language-shell highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="nv">$ </span>pyenv <span class="nb">install</span> <span class="s2">"some versions"</span> <span class="nv">$ </span>pip <span class="nb">install </span>tox tox-pyenv <span class="nv">$ </span>pyenv <span class="nb">local</span> <span class="s2">"my_env"</span> <span class="s2">"some versions"</span> </code></pre></div></div> <ol> <li> <p>create <code class="language-plaintext highlighter-rouge">src</code>...
+  </div>
+  
+</div>
+
+<div class="pagination">
+  
+  <a class="pagination-item older" href="/blog/2">Older</a>
+  
+  
+  <span class="pagination-item newer">Newer</span>
+  
+</div>
+
+      </div>
+    </main>
+
+    <script src='/assets/js/script.js'></script>
+  </body>
+</html>
