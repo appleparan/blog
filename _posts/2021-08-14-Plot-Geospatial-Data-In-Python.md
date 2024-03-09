@@ -3,7 +3,7 @@ layout: post
 title: Plot Geospatial Points in Python
 author: jongsukim
 date: 2021-08-14 12:00:00 +0900
-categories: [Programming]
+categories: [Programming, Python]
 tags:
   - GeoPandas
   - Matplotlib
