@@ -3,7 +3,7 @@ layout: post
 title: (Note) Tox workflow
 author: jongsukim
 date: 2017-07-17 12:00:00 +0900
-categories: [Programming]
+categories: [Programming, Python]
 tags:
   - python
   - tox
