@@ -1,6 +1,9 @@
 ---
 layout: post
 title: Maximal Overlap Discrete Wavelet Transform
+author: jongsukim
+date: 2021-09-10 12:00:00 +0900
+categories: [Science]
 tags:
   - Wavelet
   - MODWT

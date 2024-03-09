@@ -1,12 +1,15 @@
 ---
 layout: post
 title: Environment Modules 사용하기
+author: jongsukim
+date: 2020-10-12 12:00:00 +0900
+categories: [Programming]
 tags:
   - Modules
   - Environments
   - Server Engineering
   - HPC
-use_math: false
+math: false
 ---
 
 오랫동안 연구실에서 서버관리를 담당해왔다. 처음에는 단순 서버 on/off 정도만 하는 일이었는데, 별것도 아닌걸로 업체 통하면 시간도 오래걸리고 설명하기도 복잡하다보니 내가 처리하게 되었다. 그러다보니 점점 일이 늘어나서 서버 구축포함 대부분의 이슈를 내 선에서 해결하고자 노력하고 있다.

@@ -1,6 +1,9 @@
 ---
 layout: post
 title: Multiple Plots with Map in Python
+author: jongsukim
+date: 2021-08-15 12:00:00 +0900
+categories: [Programming]
 tags:
   - GeoPandas
   - Matplotlib

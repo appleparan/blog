@@ -1,12 +1,15 @@
 ---
 layout: post
 title: Plot Geospatial Points in Python
+author: jongsukim
+date: 2021-08-14 12:00:00 +0900
+categories: [Programming]
 tags:
   - GeoPandas
   - Matplotlib
   - Geospatial Data
   - Data Visualization
-use_math: false
+math: false
 ---
 
 학위 논문 심사 발표 준비를 하면서 introduction용으로 지도에 point를 찍어서 표현할 필요가 있었다. 그것도 한중일 지도와 서울 지도를 같이 보여줘야 했기에 두 지도를 동시에 보여줄 필요가 있었다. 즉 다음 조건을 만족하는 그림을 그리고자 했다.

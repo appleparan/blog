@@ -1,6 +1,9 @@
 ---
 layout: post
 title: External Forcing of Homogeneous Isotropic Turbulence
+author: jongsukim
+date: 2020-08-25 12:00:00 +0900
+categories: [Science]
 tags:
   - turbulence
   - pseudo-spectral method

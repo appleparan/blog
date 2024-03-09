@@ -1,10 +1,13 @@
 ---
 layout: post
 title: (Note) Tox workflow
+author: jongsukim
+date: 2017-07-17 12:00:00 +0900
+categories: [Programming]
 tags:
   - python
   - tox
-use_math: false
+math: false
 ---
 
 # What do I need to install

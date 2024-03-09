@@ -116,7 +116,6 @@ exclude:
   - purgecss.js
   - rollup.config.js
   - "package*.json"
-
 theme: jekyll-theme-chirpy
 # remote_theme:        huangyz0918/moving
 
