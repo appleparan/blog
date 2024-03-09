@@ -1,6 +1,9 @@
 ---
 layout: post
 title: Recent Lenovo Thinkbook (2022) issues in Linux
+author: jongsukim
+date: 2022-07-23 12:00:00 +0900
+categories: [Programming]
 tags:
   - AMD Ryzen CPU
   - Linux
@@ -9,7 +12,7 @@ tags:
   - Kernel
   - 6000 series
   - Rembrandt
-use_math: false
+math: false
 ---
 
 최근 [Lenovo Thinkbook 16 G4+ ARA](https://psref.lenovo.com/Product/ThinkBook/ThinkBook_16_G4plus_ARA)를 샀고

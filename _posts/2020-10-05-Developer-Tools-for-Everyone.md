@@ -1,10 +1,14 @@
 ---
 layout: post
 title: 비개발자들에게도 권하는 개발자 도구들
+title: External Forcing of Homogeneous Isotropic Turbulence
+author: jongsukim
+date: 2020-10-05 12:00:00 +0900
+categories: [Programming]
 tags:
   - developer tools
   - programming
-use_math: false
+math: false
 ---
 
 생각외로 많은 이공계 학생들이 프로그래밍을 못한다. CS가 아니면 대부분.. 특히 시뮬레이션 위주의 과학계산 연구를 하는 사람들도 알고리즘 자체는 복잡하지만 코드 아키텍처는 간단한 프로그래밍을 주로 한다. OOP니 FP니 없어도 Init - Read - Compute - Write 구조의 코드로 수십년동안 시뮬레이션 하는 경우도 있다. 오랫동안 대학원 생활을 하면서 이런 비 CS출신 이공계학생들을 보니 다음과 같은 특징이 있다는 걸 알게 되었다.

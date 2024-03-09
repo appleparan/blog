@@ -1,6 +1,9 @@
 ---
 layout: post
 title: Topology Overlap Matrix
+author: jongsukim
+date: 2021-08-13 12:00:00 +0900
+categories: [Science]
 tags:
   - Topology Overlap Matrix
   - WGCNA

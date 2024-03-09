@@ -1,11 +1,11 @@
 # Change to your timezone › https://kevinnovak.github.io/Time-Zone-Picker
 timezone: Asia/Seoul
 
-title:               'Jongsu Liam Kim | Blog'
-tagline:             'Just a blog'
-description:         ''
-url:                 https://blog.liam.kim
-baseurl:             ''
+title: "Jongsu Liam Kim | Blog"
+tagline: "Just a blog"
+description: ""
+url: https://blog.liam.kim
+baseurl: ""
 
 github:
   username: appleparan # change to your github username
@@ -32,20 +32,28 @@ avatar: "/assets/commons/avatar.jpg"
 # It can be overridden by a customized `page.image` in front matter.
 social_preview_image: # string, local or CORS resources
 
-markdown:            kramdown
-highlighter:         rouge
-lsi:                 false
-excerpt_separator:   "\n\n"
-incremental:         false
+markdown: kramdown
+highlighter: rouge
+lsi: false
+excerpt_separator: "\n\n"
+incremental: false
 
-exclude:             ['*.sublime-*', 'README.md', 'LICENSE', 'Gemfile', 'Gemfile.lock', 'vendor/bundle']
+exclude:
+  [
+    "*.sublime-*",
+    "README.md",
+    "LICENSE",
+    "Gemfile",
+    "Gemfile.lock",
+    "vendor/bundle"
+  ]
 
-theme:                jekyll-theme-chirpy
+theme: jekyll-theme-chirpy
 # remote_theme:        huangyz0918/moving
 
 jekyll_get:
   - data: github
-    json: 'https://api.github.com/users/appleparan/repos'
+    json: "https://api.github.com/users/appleparan/repos"
     cache: false
 
 plugins_dir: ./_plugins
@@ -72,7 +80,7 @@ quote:
   die_on_quote_error: false
 
 sass:
-  style:             :compressed
+  style: :compressed
 
 blog:
   truncated_preview: false
@@ -83,7 +91,6 @@ scholar:
 
 # Example for jekyll-paginate-v2
 pagination:
-
   # Site-wide kill switch, disabled here it doesn't run at all
   enabled: true
 
@@ -91,7 +98,7 @@ pagination:
   debug: false
 
   # The default document collection to paginate if nothing is specified ('posts' is default)
-  collection: 'posts'
+  collection: "posts"
 
   # How many objects per paginated page, used to be `paginate` (default: 0, means all)
   per_page: 10
@@ -99,32 +106,32 @@ pagination:
   # The permalink structure for the paginated pages (this can be any level deep)
   # permalink: '/page/:num/' # Pages are index.html inside this folder (default)
   #permalink: '/page/:num.html' # Pages are simple html files
-  permalink: '/page/:num' # Pages are html files, linked jekyll extensionless permalink style.
+  permalink: "/page/:num" # Pages are html files, linked jekyll extensionless permalink style.
 
   # Optional the title format for the paginated pages (supports :title for original page title, :num for pagination page number, :max for total number of pages)
-  title: ':title - page :num'
+  title: ":title - page :num"
 
   # Limit how many pagenated pages to create (default: 0, means all)
   limit: 0
 
   # Optional, defines the field that the posts should be sorted on (omit to default to 'date')
-  sort_field: 'date'
+  sort_field: "date"
 
   # Optional, sorts the posts in reverse order (omit to default decending or sort_reverse: true)
   sort_reverse: true
 
   # Optional, the default category to use, omit or just leave this as 'posts' to get a backwards-compatible behavior (all posts)
-  category: 'posts'
+  category: "posts"
 
   # Optional, the default tag to use, omit to disable
-  tag: ''
+  tag: ""
 
   # Optional, the default locale to use, omit to disable (depends on a field 'locale' to be specified in the posts,
   # in reality this can be any value, suggested are the Microsoft locale-codes (e.g. en_US, en_GB) or simply the ISO-639 language code )
-  locale: ''
+  locale: ""
 
- # Optional,omit or set both before and after to zero to disable.
- # Controls how the pagination trail for the paginated pages look like.
+  # Optional,omit or set both before and after to zero to disable.
+  # Controls how the pagination trail for the paginated pages look like.
   trail:
     before: 2
     after: 2
@@ -135,7 +142,7 @@ pagination:
 
   # Optional, the default name of the index file for generated pages (e.g. 'index.html')
   # Without file extension
-  indexpage: 'index'
+  indexpage: "index"
 
 kramdown:
   syntax_highlighter: rouge

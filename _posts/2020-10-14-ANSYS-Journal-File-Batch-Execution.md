@@ -1,12 +1,15 @@
 ---
 layout: post
 title: ANSYS Fluent Batch mode로 실행하기
+author: jongsukim
+date: 2020-10-14 12:00:00 +0900
+categories: [Programming]
 tags:
   - ANSYS
   - Batch mode
   - Journal Files
   - HPC
-use_math: false
+math: false
 ---
 
 내가 담당하는 일은 아니지만, 연구실에서 2년전부터 ANSYS Fluent를 사용하고 있다. 그동안의 사용방식은 GUI로 바로 실행하는 형태였는데, 효율적 HPC 자원 관리를 위해 잡스케줄러를 사용해서 batch mode로 전환하고자 한다.

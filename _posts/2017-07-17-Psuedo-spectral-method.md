@@ -1,6 +1,9 @@
 ---
 layout: post
 title: Navier Stokes Equation Solver for Homogeneous Isotropic Turbulence
+author: jongsukim
+date: 2017-07-17 12:00:00 +0900
+categories: [Science]
 tags:
   - turbulence
   - pseudo-spectral method
