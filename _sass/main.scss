@@ -7,3 +7,9 @@ figure figcaption {
   font-size: 0.7rem;
   text-align: center;
 }
+
+.imgWrapper.imgFlex {
+  display: flex;
+  justify-content: center; /* Horizontally center the children */
+  align-items: center; /* Vertically center the children (if needed) */
+}
