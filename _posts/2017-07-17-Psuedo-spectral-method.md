@@ -10,7 +10,7 @@ tags:
 math: true
 ---
 
-(This content is originally written by ‪Kyongmin Yeo's manual)
+(This content is originally written by [Kyongmin Yeo](https://scholar.google.com/citations?user=8fMRupoAAAAJ&hl)'s manual)
 
 # Introduction
 
