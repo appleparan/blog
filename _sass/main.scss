@@ -2,3 +2,8 @@
 @forward 'components';
 @forward 'layout';
 @forward 'pages';
+
+figure figcaption {
+  font-size: 0.7rem;
+  text-align: center;
+}
