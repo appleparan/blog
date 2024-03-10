@@ -23,6 +23,7 @@ group :jekyll_plugins do
     gem "jekyll-scholar"
     gem "jekyll-sitemap"
     gem "jekyll-timeago"
+    gem 'jekyll-toc'
     gem "jekyll-youtube"
 end
 
