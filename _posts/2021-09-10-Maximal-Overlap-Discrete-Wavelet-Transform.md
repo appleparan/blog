@@ -10,7 +10,7 @@ tags:
 math: true
 ---
 
-# Introduction
+## Introduction
 주파수 영역(frequency domain)은 어떤 신호(signal)의 숨겨진 특성을 드러낼 때 유용한 도구이다.
 푸리에 변환(Fourier Transform)을 사용하면 시간 영역(time domain)과 주파수 영역(frequency domain)을 서로 변환할 수 있다.
 그러나 이런 푸리에 변환에도 몇 가지 단점이 있다.
@@ -32,7 +32,7 @@ math: true
 {% cite strangWaveletTransformsFourier1993 --file 2021-09-10-MODWT %}
 
 
-# Haar wavelet
+## Haar wavelet
 
 웨이블릿 변환(Wavelet transform)에서 가장 기본적으로 쓰이는 wavelet은 Haar wavelet이다. Haar wavelet은 sine과 cosine 함수를 basis 로 사용하는 푸리에 변환과는 달리 심플한 사각 함수를 basis로 사용한다.
 
@@ -74,7 +74,7 @@ $$
 
 {% cite roweDaubechiesWaveletsMathematica1995 --file 2021-09-10-MODWT %}
 
-# Daubechies wavelet transform
+## Daubechies wavelet transform
 
 Daubechies wavelet transform은 [Haar wavelet transform](
 https://en.wikipedia.org/wiki/Haar_wavelet#Haar_transform)처럼 orthonormal한 basis를 유지하지만, dillation equation을 통해 scaling function과 wavelet function을 정의한다.
@@ -120,7 +120,7 @@ $$
 {% cite roweDaubechiesWaveletsMathematica1995 --file 2021-09-10-MODWT %}.
 {% cite whitcherWaveletAnalysisCovariance2000 --file 2021-09-10-MODWT %}.
 
-# MODWT and Conclusion
+## MODWT and Conclusion
 
 DWT(Discrete Wavelet Transform)는 DFT와 같이 Wavelet Transform의 discrete한 버전이다. MODWT는 DWT와는 달리
 orthonormal하지 않고, 모든 샘플링 사이즈에 대해 정의할 수 있으며, circular shift를 하더라도 power spectrum이 변하지 않는다. 그리고, 다차원 분석(MRA, multiresolution analysis)을 진행하는 경우 DWT에 비해 MODWT가 shift에 대해 추가적인 정보를 제공한다.
@@ -131,6 +131,6 @@ orthonormal하지 않고, 모든 샘플링 사이즈에 대해 정의할 수 있
 
 {% cite percivalAnalysisSubtidalCoastal1997 --file 2021-09-10-MODWT %}.
 
-# Reference
+## Reference
 
 {% bibliography --cited --file 2021-09-10-MODWT %}

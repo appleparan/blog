@@ -28,7 +28,7 @@ ANSYS를 batch 모드로 실행하는 과정은 간략하게 다음과 같다.
 
 애니웨이, ANSYS Fluent를 돌릴 때 크게 두 가지 케이스가 있는데 하나는 stationary simulation일 때고, 하나는 traisient simulation이다. 명령어가 살짝 다르기 때문에 각각의 journal file을 작성하고 이를 jobscript에서 fluent 실행할 때 넣어주는 방식을 취하기로 했다.
 
-# ANSYS batch mode 방식 (자세하게), ANSYS 2020 R1 기준
+## ANSYS batch mode 방식 (자세하게), ANSYS 2020 R1 기준
 
 1. ANSYS Fluent를 GUI로 실행한다.
 2. 시뮬레이션에 필요한 Mesh 설정 및 각종 파라미터를 설정한다. TUI로 이 과정을 할 수도 있지만, 명령어를 다 알기도 힘들고, 최대한 journal file을 간단하게 만들고자 했다.
@@ -202,7 +202,7 @@ ANSYS를 batch 모드로 실행하는 과정은 간략하게 다음과 같다.
 이게 다이다.
 복잡하지만, Journal file을 잘 만들면 GUI로 안해도 Text로 어느정도 대체할 수 있고 이를 fluent 실행시 input으로 넣어주면 된다. 사실 **계속 수정중이고, 테스트도 계속하고 있어서 완벽하다 할 수는 없다**. 그래서 보통은 내부 매뉴얼로 만들고 마는 문서인데, 너무나 문서를 찾기가 힘들어서 필요로 하시는 분들도 있을 것 같고, 정리도 할 겸 적어보았다.
 
-# Reference
+## Reference
   * [KISTI Manual](https://www.ksc.re.kr/gsjw/jcs/sft#docout-7) : 국가슈퍼컴퓨팅센터 -> 기술지원 -> 소프트웨어
   * [Rescale 문서](https://docs.rescale.com/articles/ansys-start-here/) : FAQ에 Residual plot 내용이 있었다.
   * [ANSYS Fluent Getting Start guide](http://blog.ksc.re.kr/attachment/cfile9.uf@99D2954E5C0F6D9916BDE4.pdf)

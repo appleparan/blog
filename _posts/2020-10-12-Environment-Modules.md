@@ -26,7 +26,7 @@ math: false
 
 어차피 현재까지 연구실 서버에서 쓰는 환경이 compiler 버전 변경, `Python` 사용시 `.pyenv` or `Anaconda` 방식 변경, `CUDA` 사용 여부, `ANSYS` 사용여부 정도라서 `PATH`와 `LD_LIBRARY_PATH` 정도만 append 하는 정도라 복잡한 기능을 쓸 필요는 없었다. 그래서 단순하게 사용법만을 소개해둔다.
 
-# 사용법
+## 사용법
 
 `module`의 사용법은 쉽다. 유저들에겐 아래 명령어들만 숙지시키면 된다.
 
@@ -44,20 +44,20 @@ Job scheduler 사용시 `module purge` 시키고, 다음 예시와 같이 필요
   module load gcc/10.1/fftw3/3.3.8
   ```
 
-# 설치
+## 설치
 
 1. [modules의 INSTALL 문서](https://modules.readthedocs.io/en/latest/INSTALL.html#installation-instructions) 를 참고해서 모듈을 설치한다. 일반적인 소스컴파일 과정인 `./configure`, `make`, `make install`을 따른다. CentOS의 경우 심플하게 `yum install environment-modules` 써도 된다.
 2. Configuration section을 따라 initialization을 실행한다. 나는 유저들의 bashrc에 `source PREFIX/init/bash` 를 넣는걸 선호했다. (`bash` 사용시) `PREFIX`는 default가 `/usr/local/Modules` (소스 컴파일 default 값)이거나 `/usr/share/Modules`(`yum 설치시`)로 잡힌다.
 3. Configuration에서 default로 불러들일 `module path`와 `modulefiles`를 지정하는 파트가 있는데 사용자들이 어떤걸 쓸지 어떻게 알고 정하나 싶어서 나는 지정하지 않았다.
 
-# How it works
+## How it works
 
 `Modules`의 원리는 다음과 같다. 
 
 * 지정된 위치 (디폴트는 `/usr/local/Modules/modulefiles`)의 `modulefiles`를 읽고 그 `modulefiles`를 읽어서 필요한 환경변수를 추가하거나 삭제하는 것.
 * modulefiles 디렉토리내의 서브 디렉토리는 `module list`에서 `/`로 처리된다. (i.e. `gcc/10.1/fftw3/3.3.8`은 `PREFIX/modulefiles/gcc/10.1/fftw3/3.3.8`라는 모듈 파일이 존재하는 것이다) 실제로 가보면 예제들이 몇개 있는데 대부분 참고용이니 다른디렉토리에 복사해두고 지웠다.
 
-# modulefile 생성하기
+## modulefile 생성하기
 
 그럼 제일 중요한 modulefile은 어떻게 구성되어있냐 하면, [자체 문법](https://modules.readthedocs.io/en/latest/modulefile.html)이 있다. 하지만 이걸 다 알고 쓸 필요는 없다. 일반적인 쉘 스크립트를 modulefiles로 자동으로 변환해주는 파이썬 스크립트가 패키지 안에 때문!
 
@@ -101,14 +101,14 @@ Job scheduler 사용시 `module purge` 시키고, 다음 예시와 같이 필요
 
 참 쉽죠?
 
-# Pros and Cons
+## Pros and Cons
 
-## Pros
+### Pros
 * 사용자들이 위험하게 .bashrc나 .bash_profile을 건드릴 필요가 없다.
 * PATH등이 불필요하게 append돼서 duplicate될 일이 없다.
 * 관리자 입장에서 module의 추가, 삭제 및 수정이 매우 쉽고 편리하다.
 * 문서의 Cookbook section을 보면 알겠지만, 다양한 방식으로 사용자화가 가능하다.
 * 제일 중요한것, **유저들이 사용하기 편리하다.**
 
-## Cons
+### Cons
 * 아직까지 단점을 모르겠다.

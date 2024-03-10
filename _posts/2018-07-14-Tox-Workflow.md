@@ -10,14 +10,14 @@ tags:
 math: false
 ---
 
-# What do I need to install
+## What do I need to install
 
 * `tox` : virtualenv for testing
 * `tox-pyenv` : `pyenv` plugin for `tox`
 * `pytest` : testing framework
 * `pipreqs` : generates `requirements.txt`
 
-# What do I need to do
+## What do I need to do
 
 1. Checkout [`cookiecutter`](https://github.com/audreyr/cookiecutter)
 
@@ -37,7 +37,7 @@ $ pyenv local "my_env" "some versions"
 1. As the post says, modify `setup.py`
 
 
-# Example of executing tox
+## Example of executing tox
 
 ```shell
 $ pyenv install 3.8.2
