@@ -1,7 +1,6 @@
 ---
 layout: post
 title: 비개발자들에게도 권하는 개발자 도구들
-title: External Forcing of Homogeneous Isotropic Turbulence
 author: jongsukim
 date: 2020-10-05 12:00:00 +0900
 categories: [Programming]
