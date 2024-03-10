@@ -89,7 +89,6 @@ theme_mode: # [light | dark]
 #
 # e.g. 'https://cdn.com'
 # cdn: "https://chirpy-img.netlify.app"
-
 # theme_mode: # [light | dark]
 
 # the avatar on sidebar, support local or CORS resources
@@ -147,7 +146,6 @@ comments:
     input_position: # optional, default to 'bottom'
     lang: # optional, default to the value of `site.lang`
     reactions_enabled: # optional, default to the value of `1`
-
 # Self-hosted static assets, optional › https://github.com/cotes2020/chirpy-static-assets
 assets:
   self_host:
@@ -295,6 +293,10 @@ defaults:
     values:
       layout: page
       permalink: /:title/
+  - scope:
+      path: assets/js/dist
+    values:
+      swcache: true
 
 compress_html:
   clippings: all
