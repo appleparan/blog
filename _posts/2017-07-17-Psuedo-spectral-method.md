@@ -12,7 +12,7 @@ math: true
 
 (This content is originally written by [Kyongmin Yeo](https://scholar.google.com/citations?user=8fMRupoAAAAJ&hl)'s manual)
 
-# Introduction
+## Introduction
 
 The spectral method is solving certain differential equation by some "basis function", typically sinusoids with Fourier method.
 With the Navier-Stokes equation, it can remove presssure term in N-S equation and solve viscous term analytically.
@@ -24,9 +24,9 @@ Pros:
 Cons:
   * Only can be applied to periodic domain
 
-# Governing Equation
+## Governing Equation
 
-## Navier-Stokes equation to rotational form
+### Navier-Stokes equation to rotational form
 Original Navier-Stokes equation in **convection form** is
 
 $$
@@ -67,7 +67,7 @@ H_i &= \epsilon_{i,j,k} u_j \omega_k = u \times (\nabla \times u)
 \end{align}
 $$
 
-## Removing pressure term
+### Removing pressure term
 
 The pressure Poisson equation can be obatained by taking divergence from Navier-Stokes equation in rotational form
 
@@ -103,7 +103,7 @@ $$
 \end{align}
 $$
 
-## Treating viscous term analytically
+### Treating viscous term analytically
 
 To treat a viscous terms analytically, multiply following formula to Navier Stokes equation w/o pressure form
 
@@ -228,6 +228,6 @@ $$
 \end{align}
 $$
 
-# Reference
+## Reference
 
 {% bibliography --cited --file 2017-07-17-Psuedo-spectral-method %}

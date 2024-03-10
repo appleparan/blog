@@ -11,12 +11,12 @@ tags:
 math: true
 ---
 
-# Introduction
+## Introduction
 
 WGCNA(WeiGhted Correlation Network Analysis) 논문을 보다가 Topology Overlap Matrix의 이해를 돕고자 간단하게 메모하면서 정리하는 글이다. 다음 논문들을 참고하였고, 실제 내용은 {% cite zhang_general_2005 --file 2021-08-13-Topological-Overlap-Matrix %}의 2.4절을 정리한 것이다.
 {% cite langfelder_wgcna_2008 zhang_general_2005 --file 2021-08-13-Topological-Overlap-Matrix %}
 
-# Measure of Node Dissimilarity
+## Measure of Node Dissimilarity
 
 논문에 나온대로 Co-expression network analysis의 목적은 node이 tightly connected이 되었는지 감지하여 clustering하는 것이라고 할 수 있다. {% cite zhang_general_2005 --file 2021-08-13-Topological-Overlap-Matrix %}.
 이를 위해 clustering method와 함께 node dissimilarity measure를 사용한다.
@@ -28,7 +28,7 @@ WGCNA에서는 dissimlarity measure를 사용한다. 이는 simliarity measure�
 
 The topological overlap matrix (TOM), \\(\Omega = [\omega_{ij}]\\) 는 다음과 같이 정의한다.
 
-# The Topological Overlap Matrix (TOM) in Ravasz Algorithm
+## The Topological Overlap Matrix (TOM) in Ravasz Algorithm
 
 Node simliarity는 어떻게 정의될 수 있을까?
 위 식이 어떻게 정의가 되게 되었는지 이해가 안돼서 이 글을 쓰게 되었고, Ravasz algorithm을 찾아보았다 {% cite ravasz_hierarchical_2002 --file 2021-08-13-Topological-Overlap-Matrix %}.
@@ -45,7 +45,7 @@ TOM은 neighbor의 개수를 connectivity로 나누어주어야 한다. 이게 R
     \\(J_{ij}\\)는 노드 \\(i\\)와 \\(j\\)가 공유하는 neighbor의 개수,
     \\(k_i\\) 는 \\(i\\) 노드에서 다른 노드로의 direct connection의 개수라고 할 수 있다 (node connectivity).
 
-# The Topological Overlap Matrix (TOM) in WGCNA
+## The Topological Overlap Matrix (TOM) in WGCNA
 
 WGCNA에서는 위에서 정의한 TOM을 확장하여 다음과 같이 정의한다.
 
@@ -55,7 +55,7 @@ $$
 
 \\(l_{ij}=\sum_u a_{iu} a_{uj}\\)이며 \\(k_i = \sum_{u} a_{iu}\\)는 node connectivity를 나타낸다. \\(l_{ij}\\)는 Ravasz algorithm에서의 neighbor의 수, 즉 \\(J_{ij}\\)에 해당함을 알 수 있다. \\(a_{ij}\\)는 adjacency matrix의 weight이다. shared되는 neighbor수에 weight를 주고싶다면 \\(0<a_{ij}<1\\)의 값을 주면 되는 것이고, 그렇지 않다면 0 혹은 1을 주면 된다.
 
-## Extreme of \\(\omega_{ij}\\)
+### Extreme of \\(\omega_{ij}\\)
 
 unweighted network라고 할 때 \\(\omega_{ij}\\)의 극단적인 케이스는 논문에 나온 것처럼 다음과 같다.
 
@@ -66,7 +66,7 @@ unweighted network라고 할 때 \\(\omega_{ij}\\)의 극단적인 케이스는 
 * \\(\omega_{ij}=0\\)
   * 노드 \\(i, j\\)는 서로 연결되어 있지 않다.
 
-## Range of \\(\omega_{ij}\\)
+### Range of \\(\omega_{ij}\\)
 
 \\(0 \leq \omega_{ij} \leq 1\\)인가? 그렇다.
 
@@ -74,7 +74,7 @@ Proof.
 1. \\(l_{ij} \leq \min{\\{\sum_{u \neq j} a_{iu}, \sum_{u \neq i} a_{uj}\\}}\\) 이므로, \\(l_{ij} \leq \min{\\{k_i, k_j\\}} - a_{ij}\\) 이다. \\(l_{ij}\\)는 neighbor의 수이므로, 당연히 connectivity보다는 작을 수 밖에 없다.
 2. 따라서 \\(0 \leq a_{ij} \leq 1\\)이므로 \\(0 \leq \omega_{ij} \leq 1\\)이다.  1.에서 \\(\\)\\(l_{ij} \leq \min{\\{k_i, k_j\\}} - a_{ij}\\)의 양변을 \\(\min{\\{k_i, k_j\\}}\\)로 나누면 자명하다.
 
-# Dissimilarity measure
+## Dissimilarity measure
 
 결론적으로 심플하게 Similarity measure를 opposite하게 만들면 된다.
 
@@ -82,6 +82,6 @@ $$
 d_{ij}^\omega = 1 - \omega_{ij}
 $$
 
-# Reference
+## Reference
 
 {% bibliography --cited --file 2021-08-13-Topological-Overlap-Matrix %}

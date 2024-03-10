@@ -20,7 +20,7 @@ math: false
 Python으로 그린 그 과정을 정리한 글이다. 아래의 모든 코드는 [Google Colab](https://colab.research.google.com/drive/1piFRokmhxutjR1H4ZzkldFCrveYEo-xg?usp=sharing)에서 확인할 수 있다.
 변수 네이밍이 좀 많이 구린데 (0, 1 인덱스의 오용 등등) 당시 급하게 짰던거라 양해바란다.
 
-# Data
+## Data
 
 당연히 데이터가 필요하다. 그리고 패키지가 필요하다. 여러개 찾아봤는데 러닝커브 짧고 (빨리 만들어야해서 금방 가져다 쓸수 있는게 필요했다), 문서화 잘 되어있던 걸 찾다가 [GeoPandas](https://geopandas.org/index.html)를 고르게 되었다. 포맷 적당하고, matplotlib랑 호환도 잘 돼서 내가 쓰기 편했다. 또 NUMFOCUS에서 지원받으니 어느정도 maintain되는 패키지이지 않을까 생각했다.
 
@@ -28,7 +28,7 @@ Python으로 그린 그 과정을 정리한 글이다. 아래의 모든 코드�
 
 한중일(CJK) 데이터는 [DataHub](https://datahub.io/core/geo-countries)라는 곳에서, 서울시 데이터는 [seoul-maps](https://github.com/southkorea/seoul-maps/)에서 구했다. 한중일만 따로 있는게 아니고, 전세계의 지도 데이터이기 때문에 실질적으로 사용할 때는 위도와 경도의 범위 제한을 통해서 한중일만 plot하면 된다.
 
-# Load Data
+## Load Data
 
 심플하다. 그냥 [`read_file`](https://geopandas.org/docs/reference/api/geopandas.read_file.html)에 url이든 파일 이름이든 넣으면 알아서 파싱해서 가져온다.
 
@@ -44,7 +44,7 @@ seoul_url = 'https://github.com/southkorea/seoul-maps/raw/master/kostat/2013/jso
 seoul_df = gpd.read_file(seoul_url)
 ```
 
-# Plot CJK Map
+## Plot CJK Map
 GeoPandas 자체적으로 [plot](https://geopandas.org/docs/reference/api/geopandas.GeoDataFrame.plot.html)함수를 지원하기 때문에 plot해주면 된다.
 API 문서를 보면 나오듯이, matplotlib axes instance로 return이 되기 때문에 한번 그리고 나면 나머지는 matplotlib만 생각하면 된다.
 
@@ -70,7 +70,7 @@ ax.set_aspect(1.0)
 
 ![China-Korea-Japan Image](/assets/images/post/2021-08-14-Geospatial/CJK.png)
 
-# Plot Seoul Map
+## Plot Seoul Map
 
 요동 반도 근처에 박스를 그려서 그 안에 서울 지도를 넣으려고 한다. 다음과 같은 프로세스를 밟는다.
 
@@ -104,7 +104,7 @@ seoul_df.plot(ax=axin_seoul, color='none',
                 edgecolor='#333', facecolor='none', alpha=0.3, zorder=6)
 ```
 
-## Small Box
+### Small Box
 
 서울의 실제 위치를 그리는 작은 박스를 그릴 것이다.
 `Rectangle`의 첫번째 전달인자로는 `anchor point`를 지정한다.
@@ -113,7 +113,7 @@ seoul_df.plot(ax=axin_seoul, color='none',
 경도와 위도의 크기로 0.3도 정도의 박스를 그린다고 가정하고 이를
 `sbox_size`라는 변수로 지정하였다. 즉 경도상으로는 126.83°부터 127.13°까지, 위도상으로는 37.5°부터 37.8°까지를 그린다.
 
-## Large Box
+### Large Box
 
 이제 실제 서울 지도를 지도에 표시할 차례이다. 요동반도 근처 적당한 크기 (6도)의 박스를 그릴 예정이고,
 위치를 `seoul_lbox` 변수, 그리고 크기를 `lbox_size`라는 변수에 대입하였다.
@@ -124,7 +124,7 @@ seoul_df.plot(ax=axin_seoul, color='none',
 
 ![China-Korea-Japan and Seoul Image](/assets/images/post/2021-08-14-Geospatial/CJK-Seoul.png)
 
-## Draw Lines between Small Box and Large Box
+### Draw Lines between Small Box and Large Box
 
 위의 그림으로 끝내면 작은 박스(`Rectangle`)와 큰 박스(`inset`)의 관계를 알기가 어렵다. 따라서 둘을 직선으로 이어서 작은 박스를 확대한 것이 큰 박스임을 나타내고자 한다.
 이는 다음과 같은 코드로 그릴 수 있다.
@@ -210,7 +210,7 @@ for station, loc in stations_latlon.items():
 
 ![China-Korea-Japan and Seoul Image with points](/assets/images/post/2021-08-14-Geospatial/CJK-Seoul-points.png)
 
-# Hide Axis
+## Hide Axis
 
 위도, 경도가 꼭 표시되어야 할 필요가 없는 정보였기 때문에 axis자체를 숨기기로 하였다.
 
@@ -226,7 +226,7 @@ plt.tight_layout()
 
 ![China-Korea-Japan and Seoul Final Image](/assets/images/post/2021-08-14-Geospatial/CJK-Seoul-final.png)
 
-# Conclusion
+## Conclusion
 
 위 방법의 핵심은 다음과 같다.
 

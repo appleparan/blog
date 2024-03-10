@@ -13,7 +13,7 @@ math: true
 
 (This content is originally written by [Kyongmin Yeo](https://scholar.google.com/citations?user=8fMRupoAAAAJ&hl=ko)'s manual)
 
-# Introduction
+## Introduction
 
 The small scale statistics of turbulence are important research topic. 
 
@@ -57,7 +57,7 @@ $$
   \hat{\mathbf{b}} = \begin{bmatrix} UO1 \\ UO3 \\ UO5 \\ \end{bmatrix} + i \begin{bmatrix} UO2 \\ UO4 \\ UO6 \\ \end{bmatrix}
 $$
 
-# Solving Uhlenbeck-Ornstein process
+## Solving Uhlenbeck-Ornstein process
 
 Each stochastic process, \\(UO1 \\) ~ \\( UO6\\), is chosen so as to satisfy the [Langevin equation](https://en.wikipedia.org/wiki/Langevin_equation) with a time scale \\(T^f_L\\) and stadnard deviation \\(\sigma_f\\). 
 
@@ -108,9 +108,9 @@ $$
 
 This is the extension of [Euler-Maruyama method](https://en.wikipedia.org/wiki/Euler%E2%80%93Maruyama_method).
 
-# Estimating Reynolds Number
+## Estimating Reynolds Number
 
-## Input parameters
+### Input parameters
 
 The input parameters are \\( \kappa_0 \\) (the lowest wavenumber), \\( \kappa_\textrm{max} \\) (the highest wavenumber), \\( K_F \\) (the maximum wavenumber of the forced modes), \\( \nu \\) (the kinematic viscosity), \\( T_L \\) (the forcing time scale, time scale in UO process), and \\( \epsilon^* = \sigma^2 T_L \\).
 
@@ -123,7 +123,7 @@ T^*_L &\equiv T_L {\epsilon^{*}}^{1/3} \kappa_0^{2/3}
 \end{align}
 $$
 
-## Given parameters
+### Given parameters
 * \\( \nu \\) : Fluid viscosity
 * \\( \beta \\) : constant (\\( \beta=0.8 \\))
 * \\( \kappa_0 \\) : smallest wavenumber
@@ -131,13 +131,13 @@ $$
 * \\( T_L \\) : Forcing time scale
 * \\( \epsilon^* \equiv \sigma^2 T_L \\) where \\( \sigma \\) is a forcing amplitude, usually just given by constant
 
-## Assumptions
+### Assumptions
 * \\( \\epsilon \propto N_f \epsilon^* \\) 
 * \\( T_e \approx \dfrac{\beta}{(N_f \epsilon^* \kappa^{2}_0)^{1/3}}\\) (posteriori assumption)
 * \\( \kappa^{-1}_{0}\\) : Integral length scales
 
 
-## Computed parameters
+### Computed parameters
 
 * \\( N_f \\) : The number of forced modes, \\( \kappa < \kappa_f \\), counted manually
 * Predicted energy dissipation, 
@@ -157,7 +157,7 @@ $$
   \eta_{T} \equiv (\nu^3 / \epsilon^*_T)
   $$
 
-## Predicted \\( Re \\)
+### Predicted \\( Re \\)
 Using above parameters Taylor Reynolds number is estimated by 
 
 $$

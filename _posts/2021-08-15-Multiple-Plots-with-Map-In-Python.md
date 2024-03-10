@@ -11,7 +11,7 @@ tags:
 math: true
 ---
 
-# Introduction
+## Introduction
 
 [이전 포스트](https://blog.liam.kim/2021/08/14/Plot-Geospatial-Data-In-Python/)에서는
 두 지도를 한 Figure에 그리는 것을 설명했는데, 이번에는 한 지도에서 특정 포인트마다 여러 개의 Plot을 어떻게 그리는지 설명하고자 한다.
@@ -38,7 +38,7 @@ Plot의 조건은 다음과 같다.
 
 여기에 나오는 코드는 이전과 마찬가지로 [Colab](https://colab.research.google.com/drive/1Xx2LIHmQ4TxkZ3yhjitsC_O6eobv8xPw?usp=sharing)에 공개한다.
 
-# Draw Simple Seoul Map
+## Draw Simple Seoul Map
 
 [이전 포스트](https://blog.liam.kim/2021/08/14/Plot-Geospatial-Data-In-Python/)에서 썼던 서울의 지도 데이터를 이용하여 그림을 그린다.
 
@@ -53,8 +53,9 @@ fig = plt.gcf()
 
 ![Seoul Map](/assets/images/post/2021-08-15-Multiple-Plots-in-Map/Seoul-station.svg)
 
-# Draw Circle in Station Location
-## Station Information
+## Draw Circle in Station Location
+
+### Station Information
 
 각각의 station 정보를 따로 저장한다. 각 station의 이름을 key로 하는 dictionary로 조금이나마 중복된 코드를 줄이고자 하였다. 각 파라미터는 try-and-error로 정해진 하드 코딩되는 값이다.
 
@@ -108,7 +109,7 @@ stations_map = {
 }
 ```
 
-## Plot Circle for Stations
+### Plot Circle for Stations
 
 각각의 station의 위치를 표시하는 원을 그린다.
 
@@ -220,7 +221,7 @@ for station_name in stations_map.keys():
 
 ![Station Circles, Rectangles, and Lines in Seoul Map](/assets/images/post/2021-08-15-Multiple-Plots-in-Map/Seoul-station-line.svg)
 
-# Plot in Insets
+## Plot in Insets
 
 여러 개의 plot을 한 figure 안에 그려야하므로, 이번에도 inset을 사용한다. 여기가 이제 상당히 고통스러운 부분이다. 위에서 언급한 `w_pad`와 `h_pad`, 그리고 axis label와 ticklabel을 고려한 `w_offset`과 `h_offset`을 잘 조정해서 가장 적절한 여백값을 찾아야한다. tick의 숫자의 크기, 폰트의 크기 등에 따라 달라질 수 있으며 이는 plot를 같이 그려야 체크할 수 있기에 plot 또한 같이 그린다.
 
@@ -311,7 +312,7 @@ for station_name in stations_map.keys():
 
 ![Multiple Plots per Station in Seoul Map](/assets/images/post/2021-08-15-Multiple-Plots-in-Map/Seoul-station-plot.svg)
 
-# Annotation
+## Annotation
 
 Plot이 많은 경우에는 이를 인용하기 위해 Annotation이 필요하다. 각 Circle (station)에 대한 annotation, 그리고 각 plot의 유형(A, B, C)에 대한 annotation을 다음과 같은 코드로 구현한다.
 
@@ -340,6 +341,6 @@ fig.tight_layout(pad=0.15)
 
 ![Multiple Plots per Station in Seoul Map](/assets/images/post/2021-08-15-Multiple-Plots-in-Map/Seoul-station-annot.svg)
 
-# Conclusion
+## Conclusion
 
 이걸 그리던 2021년 2월 당시에 상당히 고민해서 그린 거였는데, `Rectangle`과 `inset`을 계층적인 구조로 그리려고 시도했던게 복잡성을 키운 셈이 되어버려서 잘 그려지지 않았다. 따로따로 생각하고 약간의 try-and-error를 첨가하니 오히려 더 쉽게 그려져서 허망했던 기억이 난다. 다만, 6개월 사이에 [`subplot`](https://matplotlib.org/stable/api/_as_gen/matplotlib.pyplot.subplot.html)이라는게 생겼기 때문에 좀 더 쉽게 그릴 방법이 있지 않을까 생각한다.
