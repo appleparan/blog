@@ -16,13 +16,13 @@ mermaid: false
 ---
 
 ## Introduction
-{% cite yang2022tensor --file 2024-04-10-Tneosr-Program-2 %}와 {% cite yang2023spectral --file 2024-04-10-Tneosr-Program-2 %}를 
-리뷰하기에 앞서 {% cite yang2020tensor --file 2024-04-10-Tneosr-Program-2 %}를 살펴보기로 하겠다.
+{% cite yang2022tensor --file 2024-04-10-Tensor-Program-2 %}와 {% cite yang2023spectral --file 2024-04-10-Tensor-Program-2 %}를 
+리뷰하기에 앞서 {% cite yang2020tensor --file 2024-04-10-Tensor-Program-2 %}를 살펴보기로 하겠다.
 
 이 논문의 핵심은 NTK를 확장하여 MLP뿐만 아니라 다른 어떤 아키텍처에서도 동일한 이론을 적용할 수 있음을 보인다.
 NTK가 중요하다는 것은 알고있었지만, 너무 이상적인 이론이라고 생각하고 있었는데, 이 논문을 통해서 많은 궁금증이 풀린 경험이 있기에 소개한다.
 
-{% cite yang2019wide --file 2024-04-10-Tneosr-Program-2 %} 논문도 같이 보는게 맞으나, 다음 버전에서 잘 요약해주기도 했다고 생각하기도 하고, 무엇보다 양이 너무 많아서 생략한다.
+{% cite yang2019wide --file 2024-04-10-Tensor-Program-2 %} 논문도 같이 보는게 맞으나, 다음 버전에서 잘 요약해주기도 했다고 생각하기도 하고, 무엇보다 양이 너무 많아서 생략한다.
 
 ### Neural Tangent Kernel (NTK)
 
@@ -31,13 +31,13 @@ NTK가 중요하다는 것은 알고있었지만, 너무 이상적인 이론이�
 NTK는 이름 그대로 커널(Kernel)이지만, 딥러닝을 이해하는데 있어 중요한 개념이다.
 머신러닝에서의 커널이란 고차원의 특성 공간(feature space)로 데이터를 변환하는 함수를 뜻한다. 아래의 그림처럼 2차원에서 linear함수로 분류가 되지 않는 데이터도 3차원으로 변환하면 hyperplane에 의해 분류가 될 수 있음을 알 수 있다. 또한 커널을 이용하면 고차원으로 매핑하지 않고도 내적(inner product)을 간단하게 계산할 수 있는 커널 트릭(kernel trick)을 사용할 수 있게 해준다.
 
-{% img align="center" style='background-color: #fff' caption='<a href="https://medium.com/@zxr.nju/what-is-the-kernel-trick-why-is-it-important-98a98db0961d">What is the kernel trick? Why is it important?t</a>' src='/assets/images/post/2024-04-10-Tneosr-Program-2/02-kernel.webp' %}
+{% img align="center" style='background-color: #fff' caption='<a href="https://medium.com/@zxr.nju/what-is-the-kernel-trick-why-is-it-important-98a98db0961d">What is the kernel trick? Why is it important?t</a>' src='/assets/images/post/2024-04-10-Tensor-Program-2/01-kernel.webp' %}
 
-NTK는 테일러 전개(taylor expansion)를 통해 무한한 너비(infinite width)를 가지는 simple 2-hidden layer를 랜덤 초기값(initialization)이어도 결정론적(deterministic)인 선형 함수(linear function)로 변환해주는 역할을 수행하는 이론적인 틀이라고 요약할 수 있다. {% cite jacot2018neural --file 2024-04-10-Tneosr-Program-2 %}
+NTK는 테일러 전개(taylor expansion)를 통해 무한한 너비(infinite width)를 가지는 simple 2-hidden layer를 랜덤 초기값(initialization)이어도 결정론적(deterministic)인 선형 함수(linear function)로 변환해주는 역할을 수행하는 이론적인 틀이라고 요약할 수 있다. {% cite jacot2018neural --file 2024-04-10-Tensor-Program-2 %}
 
 #### NTK: Beyond Intuition
 
-{% cite yang2020tensor --file 2024-04-10-Tneosr-Program-2 %}의 표현에 따르면 NTK는 수학적으로는 다음과 같이 표현한다.
+{% cite yang2020tensor --file 2024-04-10-Tensor-Program-2 %}의 표현에 따르면 NTK는 수학적으로는 다음과 같이 표현한다.
 어떤 parameter $\theta$에 의존하는 함수 $f$ (추후에 모델이 되는 함수)에 대해서, 초기 파라미터 $\theta_0$ 기준으로 $f$를 $\theta$과 입력값 $x$ 대해 다음과 같이 확장할 수 있다.
 이 때, $\langle , \rangle$은 내적이며, 우변은 선형 모델(linear model)처럼 작동한다.
 
@@ -66,7 +66,7 @@ width가 클 수록 즉 무한 너비(infinite-width) 네트워크에서 $\theta
 
 내가 느끼기엔 이 가정은 수치해석에서의 [Euler Method](https://en.wikipedia.org/wiki/Euler_method)의 가정과 별로 차이가 없어보인다. Unstable하지만 않는다면 복잡한 식이어도 매우 작은 time step을 가정한다면 (비효율적이지만) linear하게 근사해서 풀 수 있기 때문이다.
 
-NTK 논문 {% cite jacot2018neural --file 2024-04-10-Tneosr-Program-2 %}은 이 직관을 infinite width 모델이기만 하면 어떤 데이터든간에 적용할 수 있음을 보였다. 이를 통해, 비선형 모델도 선형처럼 해석이 가능해지고, 이는 training dynamics를 해석할 수 있게 만들어준다.
+NTK 논문 {% cite jacot2018neural --file 2024-04-10-Tensor-Program-2 %}은 이 직관을 infinite width 모델이기만 하면 어떤 데이터든간에 적용할 수 있음을 보였다. 이를 통해, 비선형 모델도 선형처럼 해석이 가능해지고, 이는 training dynamics를 해석할 수 있게 만들어준다.
 
 #### NTK: Gradient Flow
 
@@ -105,11 +105,11 @@ $$
 
 여기서 나온 $$\nabla_\theta f(\theta)^\mathsf{T} \nabla_\theta$$를 **NTK(Neural Tangent Kernel)**이라고 정의한다.
 
-좀 더 자세한 내용은 원 논문과 {% cite jacot2018neural --file 2024-04-10-Tneosr-Program-2 %} [이 블로그](https://rajatvd.github.io/NTK/)에 정리가 잘 되어있다. 개인적으로는 논문은 어려워서 이해가 잘 안됐지만, 해당 블로그가 정말 쉽게 잘 설명되어 있어서 읽기 좋았다.
+좀 더 자세한 내용은 원 논문과 {% cite jacot2018neural --file 2024-04-10-Tensor-Program-2 %} [이 블로그](https://rajatvd.github.io/NTK/)에 정리가 잘 되어있다. 개인적으로는 논문은 어려워서 이해가 잘 안됐지만, 해당 블로그가 정말 쉽게 잘 설명되어 있어서 읽기 좋았다.
 
 #### NTK: NTK INIT
 
-위의 {% cite yang2020tensor --file 2024-04-10-Tneosr-Program-2 %}의 표현으로 다시 바꾸고 정리하면 다음과 같다. $f(x; \theta)$를 파라미터 $\theta$와 input $x$에 대한 신경망이라고 할 때, $\mathcal{L}$을 Loss, $y$를 label라고 하자. 서로 다른 input $x$와 $\bar{x}$에 대해서 NTK $\Theta$를 다음과 같이 정의할 수 있다.
+위의 {% cite yang2020tensor --file 2024-04-10-Tensor-Program-2 %}의 표현으로 다시 바꾸고 정리하면 다음과 같다. $f(x; \theta)$를 파라미터 $\theta$와 input $x$에 대한 신경망이라고 할 때, $\mathcal{L}$을 Loss, $y$를 label라고 하자. 서로 다른 input $x$와 $\bar{x}$에 대해서 NTK $\Theta$를 다음과 같이 정의할 수 있다.
 
 $$
 \begin{align}
@@ -118,7 +118,7 @@ f_t - f_{t-1} &\approx -\eta \mathcal{\Theta} \mathcal{L}' (f_t, y) \\
 \end{align}
 $$
 
-또한 {% cite jacot2018neural --file 2024-04-10-Tneosr-Program-2 %}에서 보여줬듯이 $\theta$가 랜덤하게 잘 intialized되었고, $f$의 width가 충분히 크다면 (infinite-width), $\Theta$는 deterministic한 $\mathring{\Theta}$로 수렴한다.
+또한 {% cite jacot2018neural --file 2024-04-10-Tensor-Program-2 %}에서 보여줬듯이 $\theta$가 랜덤하게 잘 intialized되었고, $f$의 width가 충분히 크다면 (infinite-width), $\Theta$는 deterministic한 $\mathring{\Theta}$로 수렴한다.
 
 이를 수학적으로 표현하면, $L$개의 hidden layer를 가지며, layer $l$의 width를 $n^l$이라고 할 때, NTK $\Theta (x, \bar{x})$는 $\theta$가 랜덤이어도 deterministic한 kernel $\mathring{\Theta} (x, \bar{x})$으로 수렴한다.
 
@@ -150,7 +150,7 @@ $$
 
 ## NTK Decomposition
 
-MLP용 NTK를 다른 모델(RNN, transformer 등)에 확장하기 위해서는 기존 MLP 표현법에 조금 변화가 필요하다. 왜냐하면, {% cite jacot2018neural --file 2024-04-10-Tneosr-Program-2 %} 원 논문의 방법으로는 MLP가 귀납적(inductive)으로 표현되어 있어서 확장하기가 어렵기 때문이다. 이렇게 변형된 표현의 의미를 이해하는 것이 {% cite yang2020tensor --file 2024-04-10-Tneosr-Program-2 %}의 핵심적인 내용이다.
+MLP용 NTK를 다른 모델(RNN, transformer 등)에 확장하기 위해서는 기존 MLP 표현법에 조금 변화가 필요하다. 왜냐하면, {% cite jacot2018neural --file 2024-04-10-Tensor-Program-2 %} 원 논문의 방법으로는 MLP가 귀납적(inductive)으로 표현되어 있어서 확장하기가 어렵기 때문이다. 이렇게 변형된 표현의 의미를 이해하는 것이 {% cite yang2020tensor --file 2024-04-10-Tensor-Program-2 %}의 핵심적인 내용이다.
 
 원래의 방식을 NTK parameterization이라고 하는데 다음과 같이 정의한다.
 
@@ -164,11 +164,11 @@ h^1(\xi) &= W^1 \xi + b^1 \in \mathbb{R}^{n^1}
 \end{align}
 $$
 
-{% img align="center" style='background-color: #fff' caption='NTK Parameterization' src='/assets/images/post/2024-04-10-Tensor-Program-2/01-NTK-parameterization.png' %}
+{% img align="center" style='background-color: #fff' caption='NTK Parameterization' src='/assets/images/post/2024-04-10-Tensor-Program-2/02-NTK-parameterization.png' %}
 
-MLP Parameter는 $$\theta = \{ w^l \in \mathbb{R}^{n^l \times n^{l-1}}\}_{l=1}^{L+1} \cup \{ b^l \in \mathbb{R}^{n^l }\}_{l=1}^{L}$$로 정의되고, $W^l$은 $w^l$을 $$\sqrt{n^{l-1}}$$로 나눠준 값으로 정의한다. $$W^l= \dfrac{1}{\sqrt{n^{l-1}}} w^l$$ 여기서 $\phi$는 activation function이라고 생각하면 된다.
+MLP Parameter는 $$\theta = \{ w^l \in \mathbb{R}^{n^l \times n^{l-1}}\}_{l=1}^{L+1} \cup \{ b^l \in \mathbb{R}^{n^l }\}_{l=1}^{L}$$로 정의되고, $W^l$은 $w^l$을 $$\sqrt{n^{l-1}}$$로 나눠준 값으로 정의한다. $$W^l= \dfrac{1}{\sqrt{n^{l-1}}} w^l$$ 여기서 $\phi$는 activation function이다. 이는 {% cite poole2016exponential --file 2024-04-10-Tensor-Program-2 %}로부터 내려오는 유구한 notation이다.
 
-이제 NTK parameterization을 NTK의 정의에 결합시켜좌.
+이제 NTK parameterization을 NTK의 정의에 결합시킨다.
 
 $$
 \begin{align}
@@ -208,29 +208,41 @@ $$
 
 
 $$
-\begin{align}
+\begin{align*}
 \langle \nabla_{w^{l}} f(\xi),\nabla_{w^{l}} f(\bar{\xi}) \rangle &= \dfrac{1}{n^{l} n^{l-1}} \langle dh^l x^{l-1 \mathsf{T}}, d\bar{h}^l \bar{x}^{l-1 \mathsf{T}} \rangle \\
 &=\dfrac{1}{n^{l} n^{l-1}} Tr\left( \left(dh^l x^{l-1 \mathsf{T}} \right)^\mathsf{T} d\bar{h}^l \bar{x}^{l-1 \mathsf{T}} \right) \\
 &=\dfrac{1}{n^{l} n^{l-1}} Tr\left( x^{l-1} dh^{l \mathsf{T}} d\bar{h}^l \bar{x}^{l-1 \mathsf{T}} \right) \\
 &=\dfrac{1}{n^{l} n^{l-1}} Tr\left( x^{l-1} \left(dh^{l \mathsf{T}} d\bar{h}^l \right) \bar{x}^{l-1 \mathsf{T}} \right) \\
 &=\dfrac{1}{n^{l} n^{l-1}} Tr\left( \left(dh^{l \mathsf{T}} d\bar{h}^l \right) \bar{x}^{l-1 \mathsf{T}} x^{l-1}  \right) \\
-&=\dfrac{1}{n^{l} n^{l-1}} Tr\left( \left(dh^{l \mathsf{T}} d\bar{h}^l \right) \left( \bar{x}^{l-1} x^{l-1  \mathsf{T}} \right)^\mathsf{T} \right) \\
-&=\dfrac{1}{n^{l} n^{l-1}} Tr\left( \left(dh^{l \mathsf{T}} d\bar{h}^l \right) \left( \bar{x}^{l-1} x^{l-1  \mathsf{T}} \right)^\mathsf{T} \right) \left( \dfrac{1}{n^{l} n^{l-1}} \right)\\
+&=\left(\dfrac{dh^{l \mathsf{T}} d\bar{h}^l}{n^{l}} \right)  \left( \dfrac{\bar{x}^{l-1 \mathsf{T}} x^{l-1}}{n^{l-1}} \right)\\
+\end{align*}
+$$
+
+마지막에 $Tr$이 사라지는 것은 $dh^{l \mathsf{T}} \in \mathbb{R}^{1\times n^l}, d\bar{h}^l \in \mathbb{R}^{n^l \times 1}$이고, $\bar{x}^{l-1 \mathsf{T}} \in \mathbb{R}^{1\times n^{l-1}}, x^{l-1} \in  \mathbb{R}^{n^{l-1} \times 1}$이라서 각각 scalar 값이 나오기 때문이다.
+
+### Mean Field Theory in Deep Neural Networks
+$\bar{x}^{l-1 \mathsf{T}} x^{l-1}$에 대한 이야기를 하기 전에, Mean field theory에 대한 이야기를 하지 않을 수 없다. {% cite poole2016exponential --file 2024-04-10-Tensor-Program-2 %}, {% cite schoenholz2016deep --file 2024-04-10-Tensor-Program-2 %}, {% cite roberts2022principles --file 2024-04-10-Tensor-Program-2 %}
+
+특히 {% cite poole2016exponential --file 2024-04-10-Tensor-Program-2 %}의 경우에는 다음 영상에서 자세하게 리뷰되고 있다. 
+
+{% youtube "https://www.youtube.com/watch?v=FlR8CvyaE4I" %}
+
+Mean Field Theory는 원래 통계물리학에서 각 개별입자가 전체 시스템의 평균적 효과에 의해 영향을 받는다고 가정하여 계의 거동을 설명하는 이론이다. 물리학에서의 복잡계를 딥러닝이라고 생각하면, 각 뉴런을 입자에 대응시킬 수 있고, 입자의 상호작용을 평균적인 필드로 계산하게 된다.
+
+수학적으로 각 layer $l$의 input vector의 the normalized squared length를 다음과 같이 정의할 수 있다.
+
+$$
+\begin{align}
+q^l = \dfrac{1}{N_l} \sum_{i=1}^{N_l} (\mathbf{h}^_i)^2
 \end{align}
 $$
 
+이 길이는 layer $l$의 $N_l$개의 모든 neruon에 대해서 input $\mathbf{h}^_i$의 empirical distribution의 second moments(variance)이다.
+$N_l$이 충분히 크다면, $$h_{i}^l = \sum_{j} \mathbf{W}_{ij}^l \phi(\mathbf{h}_j^{l-1} + \mathbf{b}_i^l$$은 $\mathbf{W}_{ij}^l$와 $\mathbf{b}_i^l$의 weighted sum이다. 이 둘(weight $\mathbf{W}_{ij}^l$와 bias $\mathbf{b}_i^l$)은 이전 레이어와 독립적이므로 zero mean Gaussian이다.
 
-(nlx1).(1x(nl-1)) (nlx1).(1x(nl-1)) 
-
-((nlx1).(1x(nl-1)))^T (nlx1).(1x(nl-1)) 
-
-((nl-1)x1).(1xnl) (nlx1).(1x(nl-1)) 
-
-((nl-1)x1) (1xnl nlx1) (1x(nl-1))
-
-(1xnl nlx1) (1x(nl-1)) ((nl-1)x1)
+### Forward Quantities $\bar{x}^{l-1 \mathsf{T}} x^{l-1}$ 분석
 
 ## Reference
 
-{% bibliography --cited --file 2024-04-10-Tneosr-Program-2 %}
+{% bibliography --cited --file 2024-04-10-Tensor-Program-2 %}
 
