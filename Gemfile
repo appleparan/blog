@@ -11,14 +11,15 @@ gem "kramdown-parser-gfm"
 
 group :jekyll_plugins do
     gem "emoji_for_jekyll"
+    gem 'jekyll_plugin_support', '>= 0.8.0'
     gem "jekyll-archives"
     gem "jekyll-feed"
     gem 'jekyll-figure'
     gem "jekyll-gist"
-    gem 'jekyll_img'
+    gem 'jekyll_img', '< 0.2.3'
     gem "jekyll-paginate-v2"
     gem "jekyll_picture_tag"
-    gem 'jekyll_quote'
+    gem 'jekyll_quote', '< 0.4.2'
     gem "jekyll-sass-converter"
     gem "jekyll-scholar"
     gem "jekyll-sitemap"

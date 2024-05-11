@@ -73,6 +73,7 @@ plugins_dir: ./_plugins
 
 plugins:
   - emoji_for_jekyll
+  - jekyll_plugin_support
   - jekyll-feed
   - jekyll-figure
   - jekyll-gist
