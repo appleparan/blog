@@ -1,9 +1,9 @@
 ---
 layout: post
-title: Tensor Program II (WIP)
+title: Tensor Program II
 author: jongsukim
 date: 2024-04-10 09:00:00 +0900
-categories: [Deep Learning, LLM]
+categories: [Deep Learning, LLM, Tensor Program]
 tags:
   - Large Deep Learning Model
   - Greg Yang
@@ -134,7 +134,7 @@ $$
 
 $$
 \begin{align}
-f_t &\rightarrow \mathring{f}_t \textrm{ for all } t < T, \mathrm{ where } f_0 \rightarrow \mathring{f}_0 \\
+f_t &\rightarrow \mathring{f}_t \textrm{ for all } t < T, \textrm{ where } f_0 \rightarrow \mathring{f}_0 \\
 \partial_t \mathring{f}_t &= -\eta \mathring{\Theta} \cdot \nabla_f \mathcal{L}(\mathring{f}_t)
 \end{align}
 $$
@@ -214,12 +214,13 @@ $$
 &=\dfrac{1}{n^{l} n^{l-1}} Tr\left( x^{l-1} \left(dh^{l \mathsf{T}} d\bar{h}^l \right) \bar{x}^{l-1 \mathsf{T}} \right) \\
 &=\dfrac{1}{n^{l} n^{l-1}} Tr\left( \left(dh^{l \mathsf{T}} d\bar{h}^l \right) \bar{x}^{l-1 \mathsf{T}} x^{l-1}  \right) \\
 &=\left(\dfrac{dh^{l \mathsf{T}} d\bar{h}^l}{n^{l}} \right)  \left( \dfrac{\bar{x}^{l-1 \mathsf{T}} x^{l-1}}{n^{l-1}} \right)\\
+&=\left(\dfrac{dh^{l \mathsf{T}} d\bar{h}^l}{n^{l}} \right)  \left( \dfrac{x^{l-1 \mathsf{T}} \bar{x}^{l-1}}{n^{l-1}} \right)\\
 \end{align*}
 $$
 
-마지막에 $Tr$이 사라지는 것은 $dh^{l \mathsf{T}} \in \mathbb{R}^{1\times n^l}, d\bar{h}^l \in \mathbb{R}^{n^l \times 1}$이고, $\bar{x}^{l-1 \mathsf{T}} \in \mathbb{R}^{1\times n^{l-1}}, x^{l-1} \in  \mathbb{R}^{n^{l-1} \times 1}$이라서 각각 scalar 값이 나오기 때문이다.
+마지막에 $Tr$이 사라지는 것은 $dh^{l \mathsf{T}} \in \mathbb{R}^{1\times n^l}, d\bar{h}^l \in \mathbb{R}^{n^l \times 1}$이고, $\bar{x}^{l-1 \mathsf{T}} \in \mathbb{R}^{1\times n^{l-1}}, x^{l-1} \in  \mathbb{R}^{n^{l-1} \times 1}$이라서 각각 scalar 값이 나오기 때문이다. 그러기에 맨 마지막 식에서 $$\bar{x}^{l-1 \mathsf{T}} x^{l-1}$$이 $$x^{l-1 \mathsf{T}} \bar{x}^{l-1}$$로 변환될 수 있다.
 
-결론적으로 NTK를 두 입력 $\xi, \bar{\xi}$에 대해 decompose하면 $$\bar{x}^{l-1 \mathsf{T}} x^{l-1}$$와 $$dh^{l \mathsf{T}} d\bar{h}^{l \mathsf{T}} / n^l$$의 곱으로 표현할 수 있고, 이는 각각 forward와 backward quantity라고 간주할 수 있다. 다음 두 섹션은 각 quantity에 대해 자세하게 분석해볼 예정이다.
+결론적으로 NTK를 두 입력 $\xi, \bar{\xi}$에 대해 decompose하면 $$x^{l-1 \mathsf{T}} \bar{x}^{l-1}$$와 $$dh^{l \mathsf{T}} d\bar{h}^{l \mathsf{T}} / n^l$$의 곱으로 표현할 수 있고, 이는 각각 forward와 backward quantity라고 간주할 수 있다. 다음 두 섹션은 각 quantity가 어떤 값으로 수렴하는지에 대한 논의를 진행하고자 한다.
 
 ### Limits of Forward Quantities $x^{l \mathsf{T}} \bar{x}^{l} / n^l$
 
@@ -229,7 +230,46 @@ $$
 
 {% youtube "https://www.youtube.com/watch?v=FlR8CvyaE4I" %}
 
-여튼, 여기서 중요한 것은 mean field theory를 적용할때는 각 요소는 독립적으로 행동한다고 가정하기 때문에, weight와 bias는 각각 가우시안 분포를 따른다고 가정한다. 레이어 $l$의 요소 $\alpha \in [n^l]$가 있다고 가정할 때, $\alpha$에 따른 좌표 $(W^l x^{l-!})$는 다음과 같이 표현할 수 있다.
+여기서 중요한 것은 mean field theory를 적용할때는 각 요소는 독립적으로 행동한다고 가정하기 때문에, weight와 bias는 각각 가우시안 분포를 따른다고 가정한다.
+
+자 이 이론을 가지고 $$\dfrac{x^{l \mathsf{T}} \bar{x}^{l}}{n}$$이 다음과 같이 deterministic한 scalar $$C^l(\xi, \bar{\xi})$$로 수렴한다는 것을 보이고자 한다.
+
+$$
+\begin{align}
+\dfrac{x^{l \mathsf{T}} \bar{x}^{l}}{n} \rightarrow C^l(\xi, \bar{\xi})
+\end{align}
+$$
+
+$$\dfrac{x^{l \mathsf{T}} \bar{x}^l}{n}$$는 두 벡터 $$x^l$$와 $$\bar{x}^l$$의 내적의 평균이다.
+또한 $$(x^l_\alpha, \bar{x}^l_\alpha)$$는 직관적으로 roughly i.i.d.라고 가정할 수 있다. 이렇게 되는 이유는 weight와 bias는 guassian이지만 지속적으로 weight와 bias가 곱해지고 더해지기 때문에 레이어가 지날 수록 다른 input $$\xi, \bar{\xi}$$에 대해서 correlated되었다고 생각할 수 있기 때문이다.
+
+공교롭게도, Covariance의 기본적인 정의는 다음과 같다. 여기서 쓰이는 $$\bar{x}, \bar{y}$$는 확률 변수 $$X$$와 $$Y$$의 평균을 뜻한다.
+
+$$
+\begin{align}
+Cov(X, Y) \approx \dfrac{1}{n} \sum_{i=1}^n (x_i - \bar{x})(y_i - \bar{y})
+\end{align}
+$$
+
+그리고 확률 변수 $$X$$와 $$Y$$가 Gaussian 분포라면 평균은 0이기 때문에 위 식은 다음과 같이 변한다.
+
+$$
+\begin{align}
+\mathrm{Cov}(X, Y) \approx \dfrac{1}{n} \sum_{i=1}^n x_i y_i
+\end{align}
+$$
+
+그리고 두 벡터 $$\mathbf{x}, \mathbf{y}$$의 내적의 평균은 일반식으로 다음과 같이 표현된다.
+
+$$
+\begin{align}
+\dfrac{1}{n} \mathbf{x} \cdot \mathbf{y} = \dfrac{1}{n} \sum_{i=1}^n x_i y_i
+\end{align}
+$$
+
+동일하지 않은가! 즉, $$\dfrac{x^{l \mathsf{T}} \bar{x}^l}{n}$$는 결국 공분산(Covariance)를 구하는 문제로 환원될 수 있다.
+
+이를 확인하기 위해 레이어 $l$의 요소 $$\alpha \in [n^l]$$를 기준으로 MLP Layer를 풀어써보고자 한다. $\alpha$에 대해서 좌표 $(W^l x^{l-1})$는 다음과 같이 표현할 수 있다.
 
 $$
 \begin{align}
@@ -256,9 +296,20 @@ $$
 
 위 식에 필요한 정보는 roughly i.i.d. 특성에 의해 $$ \mathbb{E}(2 W_1 x_1 W_2 x_2 ) = 2 \mathbb{E}(W_1) \mathbb{E}(x_1) \mathbb{E}(W_2) \mathbb{E}(x_2) = 0$$이 된다는 점과, NTK의 Lecun initialization에 의해 $$W_{\alpha \beta}^l \sim \mathcal{N} \left(0, \dfrac{1}{n^l}\right)$$ 라는 점이다. 여기서 $C$는 어떤 deterinstic한 scalar값이다.
 
-종합하면 $$(W^l x^{l-1})_\alpha \sim \mathcal{N} (0, C^{l-1} (\xi, \xi))$$이 되며 마찬가지로 $\bar{x}$에 대해서도 $$(W^l \bar{x}^{l-1})_\alpha \sim \mathcal{N} (0, C^{l-1} (\bar{\xi}, \bar{\xi}) )$$ 로 나타낼 수 있다. 두 랜덤 변수 $$((W^l x^{l-1})_\alpha, (W^l \bar{x}^{l-1})_\alpha )$$, 즉 $$(x^{l-1}_\alpha, \bar{x}^{l-1}_\alpha)$$는 jointly Gaussian이며 이들의 covariance는 $$C^{l-1} (\xi, \bar{\xi})$$ 이다.
+위의 분산과 Central Limit Theorem을 적용하면 $$(W^l x^{l-1})_\alpha \sim \mathcal{N} (0, C^{l-1} (\xi, \xi))$$이 되며 마찬가지로 $\bar{x}$에 대해서도 $$(W^l \bar{x}^{l-1})_\alpha \sim \mathcal{N} (0, C^{l-1} (\bar{\xi}, \bar{\xi}) )$$ 로 나타낼 수 있다. 두 랜덤 변수 $$((W^l x^{l-1})_\alpha, (W^l \bar{x}^{l-1})_\alpha )$$, 즉 $$(x^{l-1}_\alpha, \bar{x}^{l-1}_\alpha)$$는 jointly Gaussian이며 이들의 covariance는 $$C^{l-1} (\xi, \bar{\xi})$$ 이다.
 
-$$x^{l} (\xi) = \phi (h^l (\xi))$$ 이고, Lecun initialization은 bias $b \sim \mathcal{N} (0, 1)$이라고 정의하며, 이를 종합하면 이 전 layer의 scalar $$C^{l-1}$$에 의존하는
+$$x^{l} (\xi) = \phi (h^l (\xi))$$ 이고, $$h$$는 이미 선형 변환(linear transform)이라는 점을 알고 있고, $$phi$$는 activation function에 의한 비선형 변환(nonlinear transform)이라는 것을 알 수 있다. roughly i.i.d. 특성 덕분에 $$(x^l_\alpha, \bar{x}^l_\alpha)$$는 $$(\phi(\xi), \phi(\bar{\xi}))$$와 같은 분포라고 이야기할 수 있다.
+그러면 $$\mathbb{E}(\phi(\xi))=0, \mathbb{E}(\phi(\bar{\xi}))=0$$ 특성과 결합하면 Covariance는 다음과 같이 표현이 가능하다.
+
+$$
+\begin{align}
+\mathrm{Cov}(x^l_\alpha, \bar{x}^l_\alpha) &= \mathrm{Cov}(\phi(\xi), \phi(\bar{\xi}) \\
+&= \mathbb{E}(\phi(\xi), \phi(\bar{\xi}) - \mathbb{E}(\phi(\xi))\mathbb{E}(\phi(\bar{\xi}) \\
+&= \mathbb{E}(\phi(\xi), \phi(\bar{\xi})
+\end{align}
+$$
+
+Lecun initialization에 의해 bias는 $b \sim \mathcal{N} (0, 1)$이라고 정의되며, 이를 종합하면 이 전 layer의 scalar $$C^{l-1}$$에 의존하는
 {% cite yang2020tensor --file 2024-04-10-Tensor-Program-2 %}의 Eq. (6)이 나오게 된다.
 
 $$
@@ -269,14 +320,6 @@ C^{l-1} (\xi, \xi) & C^{l-1} (\xi, \bar{\xi}) \\
 C^{l-1} (\xi, \bar{\xi}) & C^{l-1} (\bar{\xi}, \bar{\xi})
 \end{pmatrix}
   + 1 \right)
-\end{align}
-$$
-
-다시 정리하자면 forward quantities의 covariance는 다음과 같이 $C$로 수렴한다.
-
-$$
-\begin{align}
-\dfrac{x^{l \mathsf{T}} \bar{x}^{l}}{n^l} \rightarrow C^l (\xi, \bar{xi})
 \end{align}
 $$
 
@@ -357,7 +400,7 @@ $$
 
 $$
 \begin{align}
-D^l (\xi, \bar{xi}) &= \mathbb{E}_{\eta \bar{\eta}} \mathbb{E} \phi'(\xi) \phi'(\bar{\xi}) = D^{l+1} (\xi, \bar{\xi}) \mathbb{E} \phi'(\xi) \phi'(\bar{\xi}) \\
+D^l (\xi, \bar{\xi}) &= \mathbb{E}_{\eta \bar{\eta}} \mathbb{E} \phi'(\xi) \phi'(\bar{\xi}) = D^{l+1} (\xi, \bar{\xi}) \mathbb{E} \phi'(\xi) \phi'(\bar{\xi}) \\
 \textrm{ where } (\eta, \bar{\eta}) &\sim \mathcal{N} \left(0, \begin{pmatrix}
 D^{l+1} (\xi, \xi) & D^{l+1} (\xi, \bar{\xi}) \\
 D^{l+1} (\xi, \bar{\xi}) & D^{l+1} (\bar{\xi}, \bar{\xi})
@@ -370,7 +413,7 @@ C^{l} (\xi, \bar{\xi}) & C^{l} (\bar{\xi}, \bar{\xi})
 \end{align}
 $$
 
-### Foward quantities $x^{l \mathsf{T}} \bar{x}^{l} / n^l$ + Backward quantities $dh^{l \mathsf{T}} d\bar{h}^{l} / n^l$
+### Foward Quantities $x^{l \mathsf{T}} \bar{x}^{l} / n^l$ + Backward Quantities $dh^{l \mathsf{T}} d\bar{h}^{l} / n^l$
 
 이전에 NTK Decomposition을 사용하여 다음과 같이 유도하였다.
 
@@ -427,9 +470,319 @@ $$
 
 아까도 재밌다고 언급했는데, forward pass와 backward pass의 gradient가 서로 독립적이라는 가정이 과연 지속적으로 유효한 가정인가에 대한 의문은 있을 수 있다.
 
+이에 대한 저자는 다음 조건하에서 GIA를 만족한다고 한다.
+
+> Conditon 1 (Simple GIA Check) The output layer (like $$W^{L+1}$$ in the MLP above) is sampled independently and with zero mean from all other parameters and is not used anywhere else in the interior of the network
+
+이는 Backpropgation의 경우 output layer를 통해 forward pass와 backward pass가 상호작용할 수 있기 때문이다.
+자세한 것은 Strategy for Computing the Infinite-Width NTK에서 다룰 예정이다.
+
 ### 현대의 복잡한 신경망에 대해 적용할 수 있는가?
 
 CNN, RNN, LSTM 등 뿐만 아니라 ResNet, transformer에도 NTK Decompositon을 적용할 수 있는가에 대해서 당연히 의문이 들 수 밖에 없다.
+
+저자 말로는 저자가 만든 NETSOR$$\mathsf{T}$$ 언어 (NETSOR의 확장판)로 표현할 수 있는 네트워크는 적용할 수 있다고 한다. NETSOR을 처음 봤을 때는 이걸 굳이 따로 만들어야 하는 이유가 있나라는 의문이 있었는데, 이제 조금 납득이 간다. 하지만, 이미 포스트가 너무 길기 때문에 NETSOR은 다른 포스트에서 다룰 예정이다.
+
+## Strategy for Computing the Infinite-Width NTK
+
+위에서 MLP에 적용한 NTK Decomposition을 일반적인 방법론으로 설명하고자 한다.
+
+### The Canonical Decomposition
+
+NTK Decomposition에 대해서 일반적인 방법론으로 설명하고자 한다.
+
+우선 준비물을 알아보자. 일단 $\xi \in \mathbb{R}^d$를 입력으로 하고 출력은 scalar인 신경망 $$f(\xi)$$가 필요하다. 신경망 $$f(\xi)$$은 weight $$W \in \mathbb{R}^{n\times m}$$과 bias $$b \in \mathbb{R}^{n}$$ 으로 이루어져있으며, 어떤 벡터 $$y(\xi) \in \mathbb{R}^n$$, $$z(\xi) \in \mathbb{R}^m$$에 대해서 $$y(\xi) = W z(\xi)$$ 형식으로 이루어진다.
+그동안 다루었던 MLP를 예로 들면 레이어 $$l$$에 대해서 $$y(\xi) = h^l (\xi), z(\xi) = x^{l-1}(\xi)$$라고 할 수 있으며 모든 weight들이 같다면 ($$W^1 = W^2 = \cdots = W^L$$) $$(y,z) = \{ (h^2, x^1), \dots, (h^L, x^{L-1})\}$$이라고 할 수 있다.
+
+$$W$$를 바로 사용하기보다 $$\omega \in \mathbb{R}^{n\times m}$$에 대해 $$W = \dfrac{1}{\sqrt{m}} \omega$$라고 factorize한 뒤 $$\omega$$에 포커싱한다. 이런 경우 $$f$$에 대한 NTK $$\Theta$$는 다음과 같이 sum의 형태로 나타나게 된다.
+
+$$
+\begin{align}
+\Theta(\xi, \bar{\xi}) = \sum_\omega \langle \nabla_\omega f(\xi), \nabla_\omega f(\bar{\xi}) \rangle + \sum_b \langle \nabla_b f(\xi), \nabla_b f(\bar{\xi}) \rangle
+\end{align}
+$$
+
+MLP의 경우, $$W^1 = W^2 = \cdots = W^L \in \mathbb{R}^{n \times n}$$와 $$W=\dfrac{1}{\sqrt{n}} \omega$$에 따라서, $$\nabla_\omega f(\xi) = \dfrac{1}{n} \sum_{l=1}^{L-1} dh^{l+1} x^{l \mathsf{T}}$$ 이고 다음과 같이 분해했다.
+
+$$
+\begin{align*}
+\langle \nabla_\omega f(\xi), \nabla_\omega f(\bar{\xi}) \rangle &= \dfrac{1}{n^2} \langle \sum_{l=1}^{L-1} dh^{l+1}x^{l \mathsf{T}}, \sum_{\mathscr{l}=1}^{L-1} d\bar{h}^{\mathscr{l}+1}\bar{x}^{\mathscr{l} \mathsf{T}} \rangle\\
+&= \dfrac{1}{n^2} \sum_{l,\mathscr{l}=1}^{L-1} \langle dh^{l+1}x^{l \mathsf{T}}, d\bar{h}^{\mathscr{l}+1}\bar{x}^{\mathscr{l} \mathsf{T}}  \rangle \\
+&= \sum_{l,\mathscr{l}=1}^{L-1} \dfrac{dh^{l+1 \mathsf{T}} d\bar{h}^{\mathscr{l+1}}}{n} \dfrac{x^{l \mathsf{T}} \bar{x}^{\mathscr{l}}}{n}
+\end{align*}
+$$
+
+일반적인 케이스로 확장하면, $$f$$의 두 입력 $$\xi, \bar{\xi}$$에 대해서 $$\bar{y} = y(\bar{\xi}), \bar{z} = z(\bar{\xi}), dy=\sqrt{n}\nabla_y f(\xi), d\bar{y} = \sqrt{n} \nabla_\bar{y} f(\xi)$$라고 하면, $$\nabla_\omega f$$는 다음과 같이 표현된다.
+
+$$
+\begin{align}
+\langle \nabla_\omega f(\xi), \nabla_\omega f(\bar{\xi}) \rangle &= \dfrac{1}{m} \langle \nabla_W f(\xi), \nabla_W f(\bar{\xi}) \rangle \\
+&= \dfrac{1}{mn} \left\langle \sum_{y,z} dy \; z^\mathsf{T}, \sum_{\bar{y},\bar{z}} d\bar{y} \; \bar{z}^\mathsf{T} \right\rangle \\
+&= \dfrac{1}{mn} \sum_{y,z,\bar{y}, \bar{z}} \langle  dy \; z^\mathsf{T}, d\bar{y} \; \bar{z}^\mathsf{T} \rangle \\
+&= \sum_{y,z,\bar{y}, \bar{z}} \dfrac{dy^{\mathsf{T}} d\bar{y}}{n} \dfrac{z^\mathsf{T} \bar{z}}{m}
+\end{align}
+$$
+
+이 summation은 $$y=Wz, \bar{y} = W \bar{z}$$를 포함한 모든 행렬 곱셈에 대해서 이루어진다.
+
+$$w$$와 $$b$$가 NTK parameterization에 의해 standard Gaussian 분포에서 추출된다면 $$\dfrac{dy^{\mathsf{T}} d\bar{y}}{n}$$와 $$\dfrac{z^\mathsf{T} \bar{z}}{m}$$가 각각 determinisitc하게 limit $$D^{y,\bar{y}} (\xi, \bar{\xi})$$, $$C^{y,\bar{y}} (\xi, \bar{\xi})$$로 수렴할 것이다. (다음 섹션에서 증명할 예정) 마찬가지로 $$ \nabla_b f(\xi), \nabla_\bar{b} f(\bar{\xi})$$도 $$D^b (\xi, \bar{\xi})$$로 수렴한다면 Limiting NTK Kernel $$\mathring{\Theta}$$은 다음과 같이 정리된다.
+
+$$
+\begin{align}
+\mathring{\Theta} (\xi, \bar{\xi}) = \sum_{\textrm{weight} W} \sum_{\substack{y,z:y=Wz \\ \bar{y},\bar{z}:\bar{y}=W\bar{z}}} D^{y,\bar{y}} (\xi, \bar{\xi}) C^{y,\bar{y}} (\xi, \bar{\xi}) + \sum_{\textrm{bias } b} D^b (\xi, \bar{\xi})
+\end{align}
+$$
+
+### $$C$$와 $$D$$를 구하는 직관적인 규칙들
+
+결국 NTK Decomposition은 $$C$$와 $$D$$를 어떻게 구하냐의 문제로 귀결된다. GIA Check Condition을 만족한다면 (output layer가 독립적으로 샘플링 되고 zero mean을 가진다면), 이번 섹션에서 다루는 직관은 $$C$$와 $$D$$를 계산하는데 있어 핵심적인 아이디어이다.
+
+Wide Neural Network를 가정하자. (width $$n >> 1$$) (pre-)activation vector $$x \in \mathbb{R}^n$$는 roughly i.i.d. coordinate을 가지고 있다고 할 수 있으며 이 coordinate들은 랜덤 변수 $$Z^x$$에서 추출되었다고 표현한다. 이는 벡터의 원소의 분포가 roughly i.i.d.라는 말과 다름 없지만 벡터의 성분이 하나의 coordinate처럼 생각할 수 있기에 표현할 수 있는 말이다.
+하지만 $$x \in \mathbb{R}^n$$에 대한 랜덤변수 집합 $$\{Z^x \}_x$$은 correlated되었을 가능성이 있다.
+그것은  좌표 $$\alpha \in [n]$$에 대해 $$\{ x_\alpha \}_x$$가 이미 correlated되어있을 수 있기 때문이다. 하지만, $$\alpha$$에 대해 roughly i.i.d.를 만족한다.
+
+따라서 $$ n \rightarrow \infty$$일 때, 벡터 $$x, y \in \mathbb{R}^n$$은 다음 식을 만족하며 이것은 $$C$$와 $$D$$를 구할 때 필요한 형태이다.
+
+$$
+\begin{align}
+x^\mathsf{T} y / n \rightarrow \mathbb{E} Z^x Z^y
+\end{align}
+$$
+
+복잡해보인다. 그러나 설명을 좀 더 하자면 결국 우리가 원하는 것은 $$x^\mathsf{T} y / n$$의 형태를 어떻게 구하냐이고, 이는 roughly i.i.d.를 만족하는 랜덤변수 $$Z$$에 의해 기대값으로 표현될 수 있다. $$x$$와 $$y$$를 곱하고 이를 $$n$$으로 나누는 것은 기대값(평균)을 구하는 것과 큰 차이가 없다.
+
+따라서, 다음과 같은 2가지 규칙을 이용하여 activation function에 해당하는 **Nonlin**규칙과 Weihgt에 해당하는 **MatMul**규칙을 정의하고 이를 이용하면 재귀적으로 $$Z^x$$를 계산할 수 있어 $$C$$와 $$D$$를 구할 수 있다.
+
+1. **Nonlin** 어떤 고정된 $$k$$ ($$n\rightarrow \infty$$일때의 constant)에 대해서 $$\phi : \mathbb{R}^k \rightarrow \mathbb{R}$$ 함수에 대해서 다음과 같이 표현될 수 있다.
+$$
+\begin{align}
+Z^{\phi(x^1, \dots, x^k)} = \phi(Z^{x^1}, \dots, Z^{x^k})
+\end{align}
+$$
+2. **MatMul** $$\mathbb{R}^n$$의 벡터의 집합 $$\mathcal{X}$$와 행렬 $$W \in \mathbb{R}^{n\times n}$$이 있을 때, $$W_{\alpha \beta} \sim \mathcal{N}(0, \sigma_W^2 /n )$$을 만족하면 다음과 같은 랜덤변수 $$\{Z^{Wx} : x\in\mathcal{X}\}$$은 jointly Gaussian이고 zero mean을 만족하며 다음과 같은 covariance를 가진다.
+$$
+\begin{align}
+\mathrm{Cov}(Z^{Wx}, Z^{W\bar{x}}) = \sigma_W^2 \mathbb{E} Z^{x} Z^{\bar{x}}, \textrm{   for any } x, \bar{x} \in \mathcal{X}
+\end{align}
+$$
+만약, 또 다른 $$\mathbb{R}^n$$ 벡터 집합 $$\mathcal{Y}$$가 있고 $$W \neq \bar{W}$$이면, $$\{Z^{Wx} : x\in\mathcal{X}\}$$는 $$\{Z^{\bar{W}y} : y\in\mathcal{Y}\}$$와 독립적이다.
+
+여기에 몇 가지 Remark가 더 붙는다.
+
+* Remark 6.1. 규칙 2번은 $$W$$가 $$\mathcal{X}$$의 벡터와 correlated되더라도 성립한다. 예를 들면, $$x, \bar{x} \in \mathcal{X}$$일 때 $$x=W\bar{x}$$ 이거나 $$x=W^\mathsf{T} \bar{x}$$여도 성립한다.
+* Remark 6.2. 규칙 2번에서 $$\bar{W} = W^\mathsf{T}$$이면, $$\{Z^{\bar{W}y} : y\in\mathcal{Y}\}$$와 $$\{Z^{Wx} : x\in\mathcal{X}\}$$은 독립적이라는 의미이다. 이는 GIA Simple Check Condition에 따라 GIA가 적용되는 원리와 같다.
+* Remark 6.3. 고정된 차원의 입력 $$\xi$$을 Wide neural network 계산하기 위해서, 위의 규칙들을 $$\xi$$에 바로 적용하지 않고 첫번쨰 레이어 임베딩인 $$W \xi \in \mathbb{R}^n$$부터 적용한다.
+
+규칙 1번 **Nonlin**은 쉽게 이해할 수 있다. nonlinear function을 적용한 벡터 $$x^i$$들의 집합 $$Z$$나 각 집합 $$Z^{x^i}$$에 nonlinear function을 적용한 것들을 비교하나 전체 집합으로 보면 같기 때문이다.
+
+규칙 2번 **MatMul** 또한 Limit of Foward Quantities $$x^{l \mathsf{T}} \bar{x}^{l} / n^l$$ 섹션에서 봤던 직관을 생각하면 이해할 수 있다. Weight $$W \in \mathbb{R}^{n \times n}$$가 $$W_{\alpha \beta} \sim \mathcal{N}(0, \sigma_W^2 /n)$$을 따를 때 zero mean을 유지하는 선형 변환(linear transformation)은 기존 입력값 $x$의 분포를 바꾸지 못한다. 따라서 공분산을 계산할 때 $$Z^{Wx}$$대신에 $$Z^x$$를 써도 무방하고 zero mean이기 때문에 forward quantities 섹션에서 다음 식과 같이 covariance를 구했던것과 같은 직관을 사용할 수 있다.
+
+$$
+\begin{align}
+\mathrm{Cov}(x^l_\alpha, \bar{x}^l_\alpha) &= \mathrm{Cov}(\phi(\xi), \phi(\bar{\xi}) \\
+&= \mathbb{E}(\phi(\xi), \phi(\bar{\xi}) - \mathbb{E}(\phi(\xi))\mathbb{E}(\phi(\bar{\xi}) \\
+&= \mathbb{E}(\phi(\xi), \phi(\bar{\xi})
+\end{align}
+$$
+
+Remark 6.1.의 경우에는 roughly i.i.d.이기 때문에 가능한 것이다.
+Remark 6.2.의 경우는 $$\bar{W} \equiv W^{\mathsf{T}} \neq W$$이기 때문에 $$\mathcal{Y}$$와 독립이라고 할 수 있다.
+Remark 6.3.의 경우는 $$\xi$$는 특정 차원에 고정되어있기 때문에 해당 룰을 바로 적용하기 힘들다. 그러나, weight는 Wide network를 가정하고 있기 때문에 첫번쨰 레이어만 한번 변환을 거치고 적용할 수 있다. 그렇게 되면 induction에 의해 나머지 레이어도 같은 룰을 적용할 수 있다.
+
+### RNN
+
+위의 룰을 RNN에 적용해보자. RNN은 시간 $$t$$에 대해 현재의 입력 $$\xi^t$$과 이전 상태(state) $$s^{t-1}$$에 기반해서 현재 상태(state) $$s^t$$를 다음과 같이 업데이트 된다.
+
+$$
+\begin{align}
+s^t (\xi) = \phi(g^t (\xi) + u^t (\xi) + b), \; g^t(\xi) = W s^{t-1} (\xi), \; u^t(\xi) = U \xi^t
+\end{align}
+$$
+
+추가적인 기호를 설명하자면 input sequence는 $$\xi = \{ \xi^1, \dots, \xi^t, \dots, \xi^t \in \mathbb{R}^d \} $$,
+nonlinear activation function을 $$\phi$$, weight는 $$W \in \mathbb{R}^{n \times n}, U \in \mathbb{R}^{n \times d}$$, 그리고 bias $$b \in \mathbb{R}^n$$이다. 출력을 위한 output weight를 $$v \in \mathbb{R}^n$$이라고 하면 최종 시간 $$T$$에서의 상태 $$s^T (\xi) $$와 결합한 RNN의 output은 $$v^{\mathsf{T}} s^T (\xi) \in \mathbb{R}$$이라고 할 수 있다.
+이전과 마찬가지로, 각 weight들이 다음과 같은 분포를 따른다고 하자. $$W_{\alpha \beta} \sim \mathcal{N}(0, 1/n), U_{\alpha \beta} \sim \mathcal{N}(0, 1/d), b_\alpha \sim \mathcal{N} (0, 1), v_\alpha \sim \mathcal{0, 1}$$. 그러면 Condition 1은 자동으로 만족하고 위에서 언급한 **Nonlin**과 **MatMul** 규칙도 만족한다.
+
+또 다른 input $$\bar{\xi} = \{ \bar{\xi}^1, \dots, \bar{\xi}^t, \dots, \bar{\xi}^t \in \mathbb{R}^d \} $$도 가정해 볼 수 있다. 물론, $$\xi = \bar{\xi}$$도 가능하다.
+이제 지금까지의 규칙을 적용해서 NTK Decomposition을 수행하면 된다. RNN에서의 weight matrix는 $$W$$와 $$U$$ 두 개가 있다. 각각 기존의 룰을 적용해서 문제를 정의해보면 다음과 같다.
+우선 $$W$$은 $$g^t(\xi) = W s^{t-1} (\xi)$$을 만족하므로 이전에 살펴보았던 double sum($$\sum_{y,z}, \sum_{\bar{y}, \bar{z}}$$)처럼 표현해 볼 수 있다.
+
+$$
+\begin{align*}
+\langle \nabla_\omega f(\xi), \nabla_\omega f(\bar{\xi}) \rangle = \sum_{y,z,\bar{y}, \bar{z}} \dfrac{dy^{\mathsf{T}} d\bar{y}}{n} \dfrac{z^\mathsf{T} \bar{z}}{m}
+\end{align*}
+$$
+
+위 식을 $$\{g^t, s^{t-1}\}, \{\bar{g}^t, \bar{s}^{t-1}\}$$에 대해 적용하면, 우리가 풀어야할 문제는 어떤 sequence $$t$$와 $$r$$에 대해서 $$\dfrac{s^{t \mathsf{T}} \bar{s}^r}{n}, \dfrac{g^{t \mathsf{T}} \bar{g}^r}{n}$$을 푸는 것으로 환원된다.
+마찬가지로, weight $$U$$는 $$ u^t(\xi) = U \xi^t$$이므로, $$\{u^t, \xi^{t-1}\}, \{\bar{u}^t, \bar{\xi}^{t-1}\}$$에 대해 double sum의 형태로 바꾸면, $$\dfrac{u^{t \mathsf{T}} \bar{u}^r}{n}, \dfrac{\xi^{t \mathsf{T}} \bar{\xi}^r}{d}$$을 구하는 것으로 바뀌지만 $$\dfrac{\xi^{t \mathsf{T}} \bar{\xi}^r}{d}$$은 weight가 아니라서 constant이므로 계산할 필요가 없다.
+
+#### Forward
+
+섹션 "$$C$$와 $$D$$를 구하는 직관적인 규칙들"에서 나온 프레임워크를 적용하기 위해서는 벡터들과 행렬들을 랜덤변수 $$Z$$로 변환해야 한다.
+우선, 고정된 input dimension $$d$$가 있고, vector dimension $$n \rightarrow \infty$$라고 해보자.
+$$g^t, u^t, s^t, b$$는 $$Z^{g^t}, Z^{u^t}, Z^{s^t}, Z^{b}$$에서 추출한 i.i.d. coordinate를 가지고 있다고 생각한다, 이 말은 앞서 언급했던 것처럼 i.i.d. 변수라는 의미와 같다.
+이제 하나씩 살펴보자.
+가장 간단한 변수는 $$b$$이다. $$Z^b = \mathcal{N} (0, 1)$$이라고 할 수 있다.
+그 다음은 $$u$$이다. $$\{Z^{u^t}, Z^{\bar{u}^t}\}$$는 zero mean을 가지고 covariance $$\mathrm{Cov}(Z^{u^t}, Z^{\bar{u}^t) = \xi^{t \mathsf{T}} \bar{\xi}^r /d$$를 가지는 jointly Gaussian 분포라고 할 수 있다.
+지금까지는 Canonical Decomposition에서 MLP example과 같이 비교적 쉽게 이해할 수 있는 방법으로 적용한 것이고, 그 다음은 vector에서 vector로 변환하는 $$g^t(\xi) = W s^{t-1} (\xi)$$과 같은 경우에도 적용해야한다.
+**MatMul** 규칙을 적용하면 $$\{Z^{g^t}, Z^{\bar{g}^r}\}$$는 zero mean에 다음과 같은 Covariance를 가지고 있다.
+
+$$
+\begin{align}
+\mathrm{Cov}(Z^{g^t}, Z^{\bar{g}^r}) = \mathbb{E} Z^{s^{t-1}}, Z^{\bar{s}^{r-1}}
+\end{align}
+$$
+
+이 모든 것을 종합하면 MLP에서 $$C^l (\xi, \bar{xi})$$를 구했던 것과 같은 방식을 통해 다음과 같이 재귀식 형태로 정리할 수 있다.
+
+$$
+\begin{align}
+\mathbb{E} Z^{s^{t}}, Z^{\bar{s}^{r}} &=
+    \mathbb{E}  \phi(Z^{g^{t}} + Z^{u^{t}} + Z^{b})
+                \phi(Z^{\bar{g}^{r}} + Z^{\bar{u}^{r}} + Z^{b}) \\
+&=  \mathbb{E}  \phi (\xi_1) \phi (\xi_2) \\
+\textrm{where } (\xi_1, \xi_2) &\sim \mathcal{N} \left(0, \mathbb{E} \begin{pmatrix}
+\left(Z^{s^{t-1}}\right)^2 & Z^{s^{t-1}} Z^{\bar{s}^{r-1}} \\
+Z^{\bar{s}^{r-1}} Z^{s^{t-1}} & \left(Z^{\bar{s}^{r-1}}\right)^2
+\end{pmatrix}  + \dfrac{\xi^{t \mathsf{T}} \xi^r}{d} + 1 \right)
+\end{align}
+$$
+
+이를 통해 limit $$C^{s^t, \bar{s}^r} (\xi, \bar{\xi})$$은 다음과 같이 계산된다.
+
+$$
+\begin{align}
+C^{s^t, \bar{s}^r} (\xi, \bar{\xi}) = \lim_{n \rightarrow \infty} \dfrac{s^{t \mathsf{T}} \bar{s}^r }{n} = \mathbb{E} (Z^{s^t} Z^{\bar{s}^r})
+\end{align}
+$$
+
+#### Backward
+
+위에서 Backpropagation을 돌아봤듯이, RNN의 backpropagation은 다음과 같이 정의할 수 있다.
+
+$$
+\begin{align}
+d s^{t-1} = W^{\mathsf{T} dg^t, \; dg^{t} = du^t = \phi'(g^t + u^t + b)  \odot d s^t
+\end{align}
+$$
+
+MLP에서 처럼 $$d s^t$$는 $$W$$때문에 의존성이 걸려서 strict하게 i.i.d.라고 생각할 수 없지만 기존 논문의 가정을 이용하여 i.i.d.라고 가정한다.
+따라서, $$d s^t$$를 $$Z^{ds^t}$$에서 추출된 i.i.d. coordinate라고 생각할 수 있고, 다음을 만족한다.
+
+$$
+\begin{align}
+\mathbb{E} Z^{ds^t} Z^{d\bar{s}^r} &= \mathbb{E} Z^{du^{t+1}} Z^{d\bar{u}^{r+1}} \\
+&= \mathbb{E} \phi'(Z^{g^{t+1}} + Z^{u^{t+1}} + Z^{b}) Z^{ds^{t+1}} \phi'(Z^{\bar{g}^{r+1}} + Z^{u^{r+1}} + Z^{b}) Z^{d \bar{s}^{r+1}} \\
+&= \mathbb{E} Z^{ds^{t+1}} Z^{d \bar{s}^{r+1}} \mathbb{E} \phi'(Z^{g^{t+1}} + Z^{u^{t+1}} + Z^{b})  \phi'(Z^{\bar{g}^{r+1}} + Z^{u^{r+1}} + Z^{b})  \\
+&= \mathbb{E} Z^{ds^{t+1}} Z^{d \bar{s}^{r+1}} \mathbb{E} \phi'(\xi_1)  \phi'(\xi_2)  \\
+\textrm{where } (\xi_1, \xi_2) &\sim \mathcal{N}\left(0, \mathbb{E} \begin{pmatrix}
+\left(Z^{s^{t}}\right)^2 & Z^{s^{t}} Z^{\bar{s}^{r}} \\
+Z^{\bar{s}^{r}} Z^{s^{t}} & \left(Z^{\bar{s}^{r}}\right)^2
+\end{pmatrix}  + \dfrac{\xi^{t \mathsf{T}} \xi^r}{d} + 1 \right)
+\end{align}
+$$
+
+마찬가지로, 위의 재귀식은 다음과 같은 limit $$D^{s^t, \bar{s}^r} (\xi, \bar{\xi})$$은 다음과 같이 정리된다\dots
+
+$$
+\begin{align}
+& D^{s^t, \bar{s}^r} (\xi, \bar{\xi}) = \lim_{n \rightarrow \infty} \dfrac{ds^{t \mathsf{T}} d\bar{s}^r }{n} = \mathbb{E} Z^{ds^t} Z^{\bar{ds}^r}\\
+&= D^{u^{t+1}, \bar{u}^{r+1}} (\xi, \bar{\xi}) = \lim_{n \rightarrow \infty} \dfrac{du^{t+1 \mathsf{T}} d\bar{u}^{r+1} }{n} = \mathbb{E} Z^{du^{t+1}} Z^{\bar{du}^{r+1}}
+\end{align}
+$$
+
+이렇게 $$C$$와 $$D$$를 알았으니, 다음 식을 이용해서 NTK를 구할 수 있다.
+
+$$
+\begin{align}
+\mathring{\Theta} (\xi, \bar{\xi}) = \sum_{\textrm{weight} W} \sum_{\substack{y,z:y=Wz \\ \bar{y},\bar{z}:\bar{y}=W\bar{z}}} D^{y,\bar{y}} (\xi, \bar{\xi}) C^{y,\bar{y}} (\xi, \bar{\xi}) + \sum_{\textrm{bias } b} D^b (\xi, \bar{\xi})
+\end{align}
+$$
+
+### Simple GIA Check의 중요성
+
+Simple GIA Check Condition은 output layer가 다른 레이어들의 모든 파라미터와 독립이어야 하고, 내트워크 내부의 다른 파트에서 사용하지 않는다는 조건이다.
+
+#### Simple GIA Check을 만족하지 않는 경우
+
+예를 들어, 마지막 임베딩 레이어의 평균을 내서 output으로 삼는다면 이 조건이 깨지게 된다. 만약 평균이 내면 어떻게 GIA에 작용되는지 살펴보자.
+
+심플하게 2-hidden-layer network를 가정하자
+
+$$
+\begin{align}
+x^1 &= W^1 \xi + 1 \\
+h^2 &= W^2 x^1 \\
+x^2 &= \phi(h^2)  \\
+y &= \mathbb{1}^\mathsf{T} x^2 / n \\
+\phi(z) &= z^2
+\end{align}
+$$
+
+각 벡터와 행렬의 차원은 다음과 같다.
+$$\xi = 0 \in \mathbb{R}^d, y\in \mathbb{R}, x^1, h^2, x^2 \in \mathbb{R}^n,
+W^1 \mathbb{R}^{n\times d}, W^2 \in \mathbb{R}^{n\times n},
+W^1_{\alpha \beta} \sim \mathcal{N} (0, 1/d), W^2_{\alpha \beta} \sim \mathcal{N} (0, 1/n)$$
+만약에 $$dx^2 = n \dfrac{dy}{dx^2}$$부터 시작하면, backpropgation은 다음과 같이 정리할 수 있다.
+
+$$
+\begin{align*}
+dx^2 = 1, dh^2 = 2h^2  \odot 1 = 2h^2, dx^1 = W^{2 \mathsf{T}} dh^2 = 2W^{2 \mathsf{T}} h^2 = 2W^{2 \mathsf{T}} W^{2} x^2
+\end{align*}
+$$
+
+**MatMul** 에 의해서 $$h^2$$는 $$Z^{h^2} = \mathcal{N} (0, 1)$$에서 추출한 coordinate를 가진다고 할 수 있고,
+$$dh^2$$또한 $$Z^{dh^2} = 2Z^{h^2} = \mathcal{N}(0, 4)$$에서 추출한 coordinate라고 할 수 있다.
+
+기존 가정을 그대로 사용해서 $$W^{2 \mathsf{T}}$$와 $$W^2$$가 독립이라고 하자. 그러면 $$dx^1$$또한 $$\mathcal{N}(0,4)$$에서 추출한 coordinate가 되어야 한다.
+그러나, 다음과 같은 식을 통해 $$\mathbb{E} dx^1$$는 $$0$$이 되지 않는다.
+
+$$
+\begin{align*}
+\mathbb{E} dx^1_\alpha &= 2 \mathbb{E} \sum_{\beta, \gamma} W^2_{\beta \alpha} W^2_{\beta \gamma} x^1_\gamma  \\
+&= 2 \sum_\beta \mathbb{E} \left((W^2_{\beta \gamma})^2 x^1_\alpha\right) + 2 \sum_\beta \sum_{\gamma \neq \alpha} \mathbb{E} (W^2_{\beta \alpha} W^2_{\beta \gamma} x^1_\gamma ) \\
+&= 2\mathbb{E} x^1_\alpha + 0 \\
+&= 2\mathbb{E} x^1_\alpha \\
+&= 2 \neq 0
+\end{align*}
+$$
+
+$$ \mathbb{E} (W^2_{\beta \gamma})^2 = 1$$을 만족하는 반면,
+$$W^2_{\beta_\alpha}, W^2_{\beta \gamma}, x^1_\gamma$$가 독립이기 때문에
+$$ 2 \sum_\beta \sum_{\gamma \neq \alpha} \mathbb{E} (W^2_{\beta \alpha} W^2_{\beta \gamma} x^1_\gamma) = 0$$이다.
+
+#### Simple GIA Check이 GIA를 만족하는 직관
+
+만약 이전처럼 평균을 내는 것이 아니라 마지막 레이어가 전부 독립이라면,
+$$v_\alpha \sim \mathcal{N}(0,1)$$에서 추출한 $$v$$를 바탕으로
+$$y= v^\mathsf{T} x^2 / \sqrt{n}$$ 처럼 되고, Simple GIA Check Condition을 만족하게 된다.
+그렇게 되면 $$dx^2 = \sqrt{n} \dfrac{dy}{dx^2}$$에서 시작하는 backpropgation을 다시 계산할 수 있게 된다. ($$v$$ 추가)
+
+따라서 마찬가지로 $$dx^1$$의 기대값을 구하게되면 독립인 $$v_\beta$$의 영향때문에 모든 항이 0이 된다.
+
+$$
+\begin{align*}
+\mathbb{E} dx^1_\alpha &= 2 \sum_\beta \mathbb{E} \left( v_\beta (W^2_{\beta \gamma})^2 x^1_\alpha\right) + 2 \sum_\beta \sum_{\gamma \neq \alpha} \mathbb{E} (v_\beta W^2_{\beta \alpha} W^2_{\beta \gamma} x^1_\gamma ) \\
+&= 0
+\end{align*}
+$$
+
+즉, 마지막 layer가 $$W$$와 $$W^{\mathsf{T}}$$가 서로 연결(correlated)될 가능성을 차단하는 것이다.
+이것이 Simple GIA Check Condition이 GIA를 만드는 직관이다.
+
+## Conclusion
+
+지금까지, 일반적인 뉴럴 네트워크를 NTK를 확장하는 방법을 알아보았다.
+다른 아키텍처를 지니더라도 NTK의 특성을 적용할 수 있는 근거를 마련할 수 있었다.
+
+결국 이 논문을 3줄 요약하면 다음과 같다.
+
+1. NTK는 inner product 2개(forward & backward)의 곱(product)로 표현할 수 있고, 각각을 $$C$$와 $$D$$로 표현하며, 이 둘은 covariance의 limit을 통해 표현 가능하다.
+2. GIA를 만족하는 뉴럴 네트워크는 1.처럼 변환할 수 있다. (NTK화) 이걸 쉽게 확인하는 건 NETSOR$$\mathsf{T}$$를 만족하는지만 확인하면 되는데 이는 이 포스트의 한계를 넘어섰기에 생략한다.
+3. GIA는 forward와 backward pass에서의 weight들이 서로 관련이 없다는 가정인데,
+이는 output layer가 zero mean을 가지고 다른 파라미터(weight)들과 서로 독립적이며,
+뉴럴 네트워크 다른 곳에서 사용하지 않는다는 조건만 만족하면 성립한다.
+간단하게 말해서 output layer를 평균낸다는가 하는 일을 저지르지 않으면 된다.
 
 ## Reference
 
