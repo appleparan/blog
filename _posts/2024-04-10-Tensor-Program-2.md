@@ -16,7 +16,7 @@ mermaid: false
 ---
 
 ## Introduction
-{% cite yang2022tensor --file 2024-04-10-Tensor-Program-2 %}와 {% cite yang2023spectral --file 2024-04-10-Tensor-Program-2 %}를 
+{% cite yang2022tensor --file 2024-04-10-Tensor-Program-2 %}와 {% cite yang2023spectral --file 2024-04-10-Tensor-Program-2 %}를
 리뷰하기에 앞서 {% cite yang2020tensor --file 2024-04-10-Tensor-Program-2 %}를 살펴보기로 하겠다.
 
 이 논문의 핵심은 NTK를 확장하여 MLP뿐만 아니라 다른 어떤 아키텍처에서도 동일한 이론을 적용할 수 있음을 보인다.
@@ -177,7 +177,7 @@ $$
 \end{align}
 $$
 
-$$W^l= \dfrac{1}{\sqrt{n^{l-1}}} w^l$$와 chain rule을 고려하면, $\nabla_{w^{l}} f(\xi)$는 다음과 같이 두 matrix의 곱으로 표현할 수 있고 $n^l \times 1 $와 $1 \times n^{l-1}$의 곱인 $ n^l \times n^{l-1}$ matrix로 표현됨을 알 수 있다.
+$$W^l= \dfrac{1}{\sqrt{n^{l-1}}} w^l$$와 chain rule을 고려하면, $\nabla_{w^{l}} f(\xi)$는 다음과 같이 두 matrix의 곱으로 표현할 수 있으며 이는 $n^l \times 1 $와 $1 \times n^{l-1}$의 곱인 $ n^l \times n^{l-1}$ matrix이다.
 
 $$
 \begin{align}
@@ -206,7 +206,6 @@ $$
 
 자 이제 원래 내적(inner product)에 넣어서 계산해보자. 내적을 trace inner product로 표현하고, cyclic property of trace inner product ($Tr(ABC) = Tr(BCA) = Tr(CBA)$)를 사용하면 다음과 같다.
 
-
 $$
 \begin{align*}
 \langle \nabla_{w^{l}} f(\xi),\nabla_{w^{l}} f(\bar{\xi}) \rangle &= \dfrac{1}{n^{l} n^{l-1}} \langle dh^l x^{l-1 \mathsf{T}}, d\bar{h}^l \bar{x}^{l-1 \mathsf{T}} \rangle \\
@@ -220,27 +219,217 @@ $$
 
 마지막에 $Tr$이 사라지는 것은 $dh^{l \mathsf{T}} \in \mathbb{R}^{1\times n^l}, d\bar{h}^l \in \mathbb{R}^{n^l \times 1}$이고, $\bar{x}^{l-1 \mathsf{T}} \in \mathbb{R}^{1\times n^{l-1}}, x^{l-1} \in  \mathbb{R}^{n^{l-1} \times 1}$이라서 각각 scalar 값이 나오기 때문이다.
 
-### Mean Field Theory in Deep Neural Networks
-$\bar{x}^{l-1 \mathsf{T}} x^{l-1}$에 대한 이야기를 하기 전에, Mean field theory에 대한 이야기를 하지 않을 수 없다. {% cite poole2016exponential --file 2024-04-10-Tensor-Program-2 %}, {% cite schoenholz2016deep --file 2024-04-10-Tensor-Program-2 %}, {% cite roberts2022principles --file 2024-04-10-Tensor-Program-2 %}
+결론적으로 NTK를 두 입력 $\xi, \bar{\xi}$에 대해 decompose하면 $$\bar{x}^{l-1 \mathsf{T}} x^{l-1}$$와 $$dh^{l \mathsf{T}} d\bar{h}^{l \mathsf{T}} / n^l$$의 곱으로 표현할 수 있고, 이는 각각 forward와 backward quantity라고 간주할 수 있다. 다음 두 섹션은 각 quantity에 대해 자세하게 분석해볼 예정이다.
 
-특히 {% cite poole2016exponential --file 2024-04-10-Tensor-Program-2 %}의 경우에는 다음 영상에서 자세하게 리뷰되고 있다. 
+### Limits of Forward Quantities $x^{l \mathsf{T}} \bar{x}^{l} / n^l$
+
+기존에 {% cite poole2016exponential --file 2024-04-10-Tensor-Program-2 %}, {% cite schoenholz2016deep --file 2024-04-10-Tensor-Program-2 %}에서 딥러닝을 mean-field theory로 설명하고자 했다. 이 논문들에서 나온 아이디어를 바탕으로 $\bar{x}^{l \mathsf{T}} x^{l}$를 분석할 수 있다.
+
+평균장 이론(mean field theory)은 원래 통계물리학에서 각 개별입자가 전체 시스템의 평균적 효과에 의해 영향을 받는다고 가정하여 계의 거동을 설명하는 이론이다. 물리학에서의 복잡계를 딥러닝이라고 간주하면, 각 뉴런을 입자에 대응시킬 수 있고, 입자의 상호작용을 평균적인 필드에 대해서 설명하는 mean field theory를 딥러닝에 적용할 수 있게 된다. 유체역학에서 control volume을 사용하는것과 아이디어는 비슷하다고 생각된다. 자세한 내용은 다음 영상을 확인하면 좋다.
 
 {% youtube "https://www.youtube.com/watch?v=FlR8CvyaE4I" %}
 
-Mean Field Theory는 원래 통계물리학에서 각 개별입자가 전체 시스템의 평균적 효과에 의해 영향을 받는다고 가정하여 계의 거동을 설명하는 이론이다. 물리학에서의 복잡계를 딥러닝이라고 생각하면, 각 뉴런을 입자에 대응시킬 수 있고, 입자의 상호작용을 평균적인 필드로 계산하게 된다.
-
-수학적으로 각 layer $l$의 input vector의 the normalized squared length를 다음과 같이 정의할 수 있다.
+여튼, 여기서 중요한 것은 mean field theory를 적용할때는 각 요소는 독립적으로 행동한다고 가정하기 때문에, weight와 bias는 각각 가우시안 분포를 따른다고 가정한다. 레이어 $l$의 요소 $\alpha \in [n^l]$가 있다고 가정할 때, $\alpha$에 따른 좌표 $(W^l x^{l-!})$는 다음과 같이 표현할 수 있다.
 
 $$
 \begin{align}
-q^l = \dfrac{1}{N_l} \sum_{i=1}^{N_l} (\mathbf{h}^_i)^2
+(W^l x^{l-1})_\alpha = \sum_{\beta=1}^n W_{\alpha \beta}^l x_\beta^{l-1}
 \end{align}
 $$
 
-이 길이는 layer $l$의 $N_l$개의 모든 neruon에 대해서 input $\mathbf{h}^_i$의 empirical distribution의 second moments(variance)이다.
-$N_l$이 충분히 크다면, $$h_{i}^l = \sum_{j} \mathbf{W}_{ij}^l \phi(\mathbf{h}_j^{l-1} + \mathbf{b}_i^l$$은 $\mathbf{W}_{ij}^l$와 $\mathbf{b}_i^l$의 weighted sum이다. 이 둘(weight $\mathbf{W}_{ij}^l$와 bias $\mathbf{b}_i^l$)은 이전 레이어와 독립적이므로 zero mean Gaussian이다.
+이는 $$h^l(\xi) = W^l x^{l-1}(\xi) + b^l$$을 각 원소 좌표 $\alpha, \beta$에 대해 풀어쓴거라고 볼 수 있다. $$W_{\alpha \beta}^l x_\beta^{l-1}$$는 roughly i.i.d. random variable 이다. 처음 레이어에서는 완벽하게 i.i.d.를 맞춰서 샘플링하더라도 훈련이 진행되면서 weight의 분포가 달라지거나 레이어 간의 상관관계가 생겨서 i.i.d.가정이 깨지기 때문이다. 하지만 i.i.d.처럼 취급한다. 그런 이유로 Gaussian distribution을 따르는 roughly i.i.d. 랜덤변수의 평균은 0이고, $$W_{\alpha \beta}^l x_\beta^{l-1}$$의 분산은 다음과 같이 구할 수 있다. ($Var(X)=E(X^2) - [E(X)]^2$)
 
-### Forward Quantities $\bar{x}^{l-1 \mathsf{T}} x^{l-1}$ 분석
+$$
+\begin{align*}
+\mathbb{E}(W^l x^{l-1})^2_\alpha &= \mathbb{E}((W^l x^{l-1})^2_\alpha)\\
+&= \mathbb{E}\left(\left(\sum_{\beta=1}^n W_{\alpha \beta}^l x_\beta^{l-1}\right)^2\right) \\
+&= \mathbb{E}\left(\left(W_{\alpha 1}x_1 + W_{\alpha 2}x_2 + \cdots + W_{\alpha n}x_n\right)^2\right) \\
+&= \mathbb{E}(W_{\alpha 1}^2 x_1^2 + W_{\alpha 2}^2 x_2^2 + \cdots + W_{\alpha n}^2 x_n^2 + 2 W_1 x_1 W_2 x_2 ) \\
+&= \mathbb{E}(W_{\alpha 1}^2 x_1^2 + W_{\alpha 2}^2 x_2^2 + \cdots + W_{\alpha n}^2 x_n^2 ) \\
+&= \mathbb{E}(W_{\alpha 1}^2 x_1^2) + \mathbb{E}(W_{\alpha 2}^2 x_2^2) + \cdots + \mathbb{E}(W_{\alpha n}^2 x_n^2 ) \\
+&= \mathbb{E}(W_{\alpha 1}^2) \mathbb{E}(x_1^2) + \mathbb{E}(W_{\alpha 2}^2) \mathbb{E}(x_2^2) + \cdots + \mathbb{E}(W_{\alpha n}^2) \mathbb{E}(x_n^2 ) \\
+&= \sum_{\beta=1}^n \mathbb{E}((W_{\alpha \beta}^l)^2) \mathbb{E}((x_{\beta}^{l-1})^2) \\
+&= \lVert x \rVert^2 / n^{l-1} \\
+&\approx C^{l-1} (\xi, \xi)
+\end{align*}
+$$
+
+위 식에 필요한 정보는 roughly i.i.d. 특성에 의해 $$ \mathbb{E}(2 W_1 x_1 W_2 x_2 ) = 2 \mathbb{E}(W_1) \mathbb{E}(x_1) \mathbb{E}(W_2) \mathbb{E}(x_2) = 0$$이 된다는 점과, NTK의 Lecun initialization에 의해 $$W_{\alpha \beta}^l \sim \mathcal{N} \left(0, \dfrac{1}{n^l}\right)$$ 라는 점이다. 여기서 $C$는 어떤 deterinstic한 scalar값이다.
+
+종합하면 $$(W^l x^{l-1})_\alpha \sim \mathcal{N} (0, C^{l-1} (\xi, \xi))$$이 되며 마찬가지로 $\bar{x}$에 대해서도 $$(W^l \bar{x}^{l-1})_\alpha \sim \mathcal{N} (0, C^{l-1} (\bar{\xi}, \bar{\xi}) )$$ 로 나타낼 수 있다. 두 랜덤 변수 $$((W^l x^{l-1})_\alpha, (W^l \bar{x}^{l-1})_\alpha )$$, 즉 $$(x^{l-1}_\alpha, \bar{x}^{l-1}_\alpha)$$는 jointly Gaussian이며 이들의 covariance는 $$C^{l-1} (\xi, \bar{\xi})$$ 이다.
+
+$$x^{l} (\xi) = \phi (h^l (\xi))$$ 이고, Lecun initialization은 bias $b \sim \mathcal{N} (0, 1)$이라고 정의하며, 이를 종합하면 이 전 layer의 scalar $$C^{l-1}$$에 의존하는
+{% cite yang2020tensor --file 2024-04-10-Tensor-Program-2 %}의 Eq. (6)이 나오게 된다.
+
+$$
+\begin{align}
+C^{l} (\xi, \bar{\xi}) = \mathbb{E} (\phi(\xi) \phi(\bar{\xi})), \textrm{ where } \\
+(\xi, \bar{\xi}) \sim \mathcal{N} \left(0, \begin{pmatrix}
+C^{l-1} (\xi, \xi) & C^{l-1} (\xi, \bar{\xi}) \\
+C^{l-1} (\xi, \bar{\xi}) & C^{l-1} (\bar{\xi}, \bar{\xi})
+\end{pmatrix}
+  + 1 \right)
+\end{align}
+$$
+
+다시 정리하자면 forward quantities의 covariance는 다음과 같이 $C$로 수렴한다.
+
+$$
+\begin{align}
+\dfrac{x^{l \mathsf{T}} \bar{x}^{l}}{n^l} \rightarrow C^l (\xi, \bar{xi})
+\end{align}
+$$
+
+### Limits of Backward Quantities $dh^{l \mathsf{T}} d\bar{h}^{l} / n^l$
+
+우선 각 layer의 크기가 다르면 복잡하므로 $$n^1 = \cdots = n^L$$이라고 가정한 뒤 시작한다. 그리고 $$dh^l = \sqrt{n^{l}} \nabla_{h^{l}} f(\xi)$$을 정의했던 것처럼 $$dx^l_\alpha$$를 $$(W^{l+1 \mathsf{T}}dh^{l+1})_\alpha$$이라고 정의한다. 이는 레이어 $l+1$에서 $l$로 전파되는 gradient이다.
+
+1. Backpropagation을 돌이켜보면 forward propagation은 다음과 같이 전파된다.
+  $$
+  \begin{align*}
+  h^l (\xi) = W^l x^{l-1} (\xi) + b^l
+  \end{align*}
+  $$
+2. 각 레이어의 결과 $h^l$은 activation function $\phi$를 통해 최종 출력 $x^l$로 변환된다.
+  $$
+  \begin{align*}
+  x^l = \phi(h^l)
+  \end{align*}
+  $$
+3. 최종 출력 레이어에서 loss function $\mathcal{L}$에 대한 출력 값의 gradient를 계산한다.
+  $$
+  \begin{align*}
+  \nabla_{x^L} \mathcal{L}
+  \end{align*}
+  $$
+4. 여기서 나온 $\nabla_{x^L} \mathcal{L}$의 backpropagation 과정의 첫번째 gradient이다.
+각 레이어 l에 대해 activation function의 미분 $\phi'$를 적용해서 기울기를 구한다. 이 때 $\odot$은 Hadamard product를 의미한다.
+  $$
+  \begin{align*}
+  \nabla_{h^l} \mathcal{L} = \nabla_{x^l} \mathcal{L} \odot \phi'(h^l)
+  \end{align*}
+  $$
+5. MLP 레이어의 weight와 bias에 대해 loss에 대한 gradient를 계산한다. 이 때 bias는 batch 전체의 weight를 더해주어야 한다.
+  $$
+  \begin{align*}
+  \nabla_{W^l} \mathcal{L} = \nabla_{h^l} \mathcal{L} \cdot (x^{l-1})^{\mathsf{T}}, \nabla_{b^l} \mathcal{L} &= \sum \nabla_{h^l} \mathcal{L}
+  \end{align*}
+  $$
+6. 현재 레이어 $l$의 weight $W$의 trace를 사용하여 이전 레이어 $l-1$의 출력에 대한 gradient를 계산한다.
+  $$
+  \begin{align*}
+  \nabla_{x^{l-1} \mathcal{L}} = (W^l)^{\mathsf{T}} \nabla_{h^l} \mathcal{L}
+  \end{align*}
+  $$
+
+이 과정을 새로운 $$d x^l_\alpha$$의 정의와 결합하면 다음과 같다. 위에서 사용한 $\nabla$대신 $d$를 써준다고 생각하면 이해하기 쉽다.
+
+$$
+\begin{align}
+d x^l_\alpha &\stackrel{\text{def}}{=} (W^{l+1 \mathsf{T}}dh^{l+1})_\alpha \\
+&= (W^{l+1 \mathsf{T}} (dx^{l+1} \odot \phi'(h^{l+1})))_\alpha \\
+&= \sum_\beta W^{l+1}_{\beta \alpha} dx^{l+1}_{\beta} \phi' (h^{l+1}_\beta)
+\end{align}
+$$
+
+전부가 i.i.d.라서 central limit theorem을 사용하면 좋겠지만, $$h^{l+1}_\beta$$는 모든 $\gamma$에 대해 $$W^{l+1}_{\beta \gamma}$$에 의존하기 때문에 i.i.d. 를 만족하지 못한다.
+그러나, {% cite poole2016exponential --file 2024-04-10-Tensor-Program-2 %}와 {% cite poole2schoenholz2016deep016exponential --file 2024-04-10-Tensor-Program-2 %}에 따르면, 이 의존성은 무시해도 된다고 한다. 이는 mean field theory에서 뉴런의 크기 $n^l$이 크다면, weight와 bias는 독립적으로 작용하여 이전 레이어의 영향을 받지 않고 $h$는 이런 $W$와 $b$의 weighted sum이라고 표현할 수 있기 때문이다.
+
+이를 통해 {% cite yang2020tensor --file 2024-04-10-Tensor-Program-2 %}에서는 다음과 같은 아주 재미있는 Heuristic을 사용하게 된다. {% cite schoenholz2016deep --file 2024-04-10-Tensor-Program-2 %}의 Section 4와  {% cite yang2017mean --file 2024-04-10-Tensor-Program-2 %}의 Axiom 3.2를 참고하면 되겠다. Forward와 Backward pass의 weight가 서로 독립적이라니 이 얼마나 재밌는 가정이지 않은가!
+
+> Heuristic 4.1 (gradient independent assumption, or GIA), For any matrix $$W$$, we assume $$W^{\mathsf{T}}$$ used in backprop is independent from $$W$$ used in forward pass.
+
+여튼, 위 가정과 함께 Limits of Forward Quantities $$\bar{x}^{l-1 \mathsf{T}} x^{l-1}$$에서 했던 방식을 똑같이 적용할 수 있다. Backward pass의 weight는 forward pass때의 weight와 독립적이니 동일한 방식을 의심없이 적용할 수 있게 되었다.
+그러면 $x$대신에 $dh$로 기호를 바꾼셈이 되어버려서 $$d x^{l}_\alpha$$는 $$\mathcal{N}(0, \lVert d h^{l+1} \rVert^2 / n^{l+1})$$ 분포를 따르며 $$\alpha$$에 대해 roughly i.i.d.를 만족한다고 할 수 있다.
+또한 pair $$(dx^l_\alpha, d \bar{x}^l_\alpha) \stackrel{\text{def}}{=} ((W^{l+1 \mathsf{T}}dh^{l+1})_\alpha, (W^{l+1 \mathsf{T}}d \bar{h}^{l+1})_\alpha) $$ 역시 zero mean과 $$\lVert d h^{l+1} d \bar{h}^{l+1} \rVert^2 / n^{l+1}$$를 만족하는 $$\alpha$$에 대한 i.i.d.분포라고 할 수 있다. (jointly Gaussian)
+$$dx^l_\alpha$$뿐만 아니라 $$h$$로 확장하면 $$(h^{l}, \bar{h}^{l})$$ 역시 roughly i.i.d이기 때문에  $$(dh^{l}_\alpha, \bar{h}^{l}_\alpha) = (d x_\alpha^{l} \phi'(h^l_\alpha), d \bar{x}_\alpha^{l} \phi'(\bar{h}^l_\alpha) )$$ 도 비슷한 결과를 가진다고 얘기할 수 있다.
+
+이로써 Backward quantities $dh^{l \mathsf{T}} d\bar{h}^{l} / n^l$에 도달하였다.
+이전 섹션에서의 $C$대신 Scalar $D^l (\xi, \bar{\xi})$를 도입하여 variance를 표현하면 다음과 같은 backward quantities의 covariance는 $D$로 수렴한다.
+
+$$
+\begin{align}
+\dfrac{dh^{l \mathsf{T}} d\bar{h}^{l}}{n^l} \rightarrow D^l (\xi, \bar{\xi})
+\end{align}
+$$
+
+그리고 $D^l (\xi, \bar{\xi})$ 도 다음과 같은 재귀함수로 정의된다.
+
+$$
+\begin{align}
+D^l (\xi, \bar{xi}) &= \mathbb{E}_{\eta \bar{\eta}} \mathbb{E} \phi'(\xi) \phi'(\bar{\xi}) = D^{l+1} (\xi, \bar{\xi}) \mathbb{E} \phi'(\xi) \phi'(\bar{\xi}) \\
+\textrm{ where } (\eta, \bar{\eta}) &\sim \mathcal{N} \left(0, \begin{pmatrix}
+D^{l+1} (\xi, \xi) & D^{l+1} (\xi, \bar{\xi}) \\
+D^{l+1} (\xi, \bar{\xi}) & D^{l+1} (\bar{\xi}, \bar{\xi})
+\end{pmatrix}\right) \\
+(\xi, \bar{\xi}) &\sim \mathcal{N} \left(0, \begin{pmatrix}
+C^{l} (\xi, \xi) & C^{l} (\xi, \bar{\xi}) \\
+C^{l} (\xi, \bar{\xi}) & C^{l} (\bar{\xi}, \bar{\xi})
+\end{pmatrix}
+  + 1 \right)
+\end{align}
+$$
+
+### Foward quantities $x^{l \mathsf{T}} \bar{x}^{l} / n^l$ + Backward quantities $dh^{l \mathsf{T}} d\bar{h}^{l} / n^l$
+
+이전에 NTK Decomposition을 사용하여 다음과 같이 유도하였다.
+
+$$
+\begin{align*}
+\langle \nabla_{w^{l}} f(\xi),\nabla_{w^{l}} f(\bar{\xi}) \rangle = \left(\dfrac{dh^{l \mathsf{T}} d\bar{h}^l}{n^{l}} \right)  \left( \dfrac{\bar{x}^{l-1 \mathsf{T}} x^{l-1}}{n^{l-1}} \right)
+\end{align*}
+$$
+
+지금까지 각 항에 대해 정의한 $C$와 $D$에 대해 표현하면 다음과 같다.
+
+$$
+\begin{align*}
+\langle \nabla_{w^{l}} f(\xi),\nabla_{w^{l}} f(\bar{\xi}) \rangle = C^{l-1} (\xi, \bar{\xi}) D^{l} (\xi, \bar{\xi}), \forall l \in [2, L]
+\end{align*}
+$$
+
+마찬가지로, bias에 대해서도 $\nabla_{b^l} f(\xi) = \nabla_{h^l} f(\xi) = dh^l / \sqrt{n^l}$이므로,
+
+$$
+\begin{align*}
+\langle \nabla_{b^{l}} f(\xi),\nabla_{b^{l}} f(\bar{\xi}) \rangle = D^{l} (\xi, \bar{\xi}), \forall l \in [2, L]
+\end{align*}
+$$
+
+기존 NTK 정의와 결합하면
+$$
+\begin{align}
+\Theta (\xi, \bar{\xi}) &= \langle \nabla_\theta f(\xi; \theta_0), \nabla_\theta  f(\bar{\xi}; \theta_0) \rangle \\
+&= \sum_{l=1}^{L+1} \langle \nabla_{w^{l}} f(\xi),\nabla_{w^{l}} f(\bar{\xi}) \rangle + \sum_{l=1}^L \langle \nabla_{b^{l}} f(\xi),\nabla_{b^{l}} f(\bar{\xi}) \rangle \\
+&= \sum_{l=1}^{L+1} C^{l-1} (\xi, \bar{\xi}) D^{l} (\xi, \bar{\xi}) + \sum_{l=1}^L D^{l} (\xi, \bar{\xi}) \\
+\end{align}
+$$
+
+이를 통해 MLP에 대해서 기존 NTK보다 훨씬 심플하게 $C$와 $D$라는 Scalar의 곱으로 표현하였다. 이 논문의 키 포인트는 NTK로부터 해당 식을 유도하고, 이를 다른 아키텍처 즉 CNN이나 RNN으로 확장하고자 하는 것이다.
+
+## NTK -> Any Architecture
+
+{% cite yang2020tensor --file 2024-04-10-Tensor-Program-2 %}은 지금까지의 과정이 과연 generalized될 수 있는가에 대해 독자들이 생각할 수 있는 질문에 대한 답을 미리 준비해 놓았다. 지금까지의 과정은 MLP였기 때문에 가능한 것이 아닌가라는 의심은 당연한 것이기 때문이다.
+
+### NTK Decomposition을 의미있게 일반화할 수 있는가?
+
+다음 분해는 MLP라는 가정하에서 이루어졌다. 그러나 $$\frac{dh^{l \mathsf{T}} d\bar{h}^l}{n^l}$$같은 값들이 수렴할지 어떻게 알 수 있으며, 발산하지 않는다는 보장이 어디 있는가?
+$$
+\begin{align}
+\Theta (\xi, \bar{\xi}) &= \langle \nabla_\theta f(\xi; \theta_0), \nabla_\theta  f(\bar{\xi}; \theta_0) \rangle \\
+&= \sum_{l=1}^{L+1} \langle \nabla_{w^{l}} f(\xi),\nabla_{w^{l}} f(\bar{\xi}) \rangle + \sum_{l=1}^L \langle \nabla_{b^{l}} f(\xi),\nabla_{b^{l}} f(\bar{\xi}) \rangle \\
+\end{align}
+$$
+
+이에 대해 저자는 NTK를 NTK Decomposition, 즉 inner product의 곱셈의 합으로 분해할 수 있도록 일반화할 수 있다고 생각한다. NTK가 수렴한다면 말이다. 이는 다음 섹션 Strategy for Computing the Infinite-Width NTK에서 어떻게 일반화할지 보여줄 예정이다.
+
+### GIA를 계속 가정해도 되는가?
+
+아까도 재밌다고 언급했는데, forward pass와 backward pass의 gradient가 서로 독립적이라는 가정이 과연 지속적으로 유효한 가정인가에 대한 의문은 있을 수 있다.
+
+### 현대의 복잡한 신경망에 대해 적용할 수 있는가?
+
+CNN, RNN, LSTM 등 뿐만 아니라 ResNet, transformer에도 NTK Decompositon을 적용할 수 있는가에 대해서 당연히 의문이 들 수 밖에 없다.
 
 ## Reference
 
