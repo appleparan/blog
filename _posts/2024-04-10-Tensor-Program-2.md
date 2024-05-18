@@ -784,7 +784,6 @@ $$
 뉴럴 네트워크 다른 곳에서 사용하지 않는다는 조건만 만족하면 성립한다.
 간단하게 말해서 output layer를 평균낸다는가 하는 일을 저지르지 않으면 된다.
 
-## Reference
+## References
 
 {% bibliography --cited --file 2024-04-10-Tensor-Program-2 %}
-

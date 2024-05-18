@@ -164,6 +164,6 @@ $$
   Re \simeq \dfrac{8.5}{(\eta_{T} \kappa_0)^{5/6} N^{2/9}_{F}}
 $$
 
-# Reference
+# References
 
 {% bibliography --cited --file 2020-08-25-External-Forcing %}

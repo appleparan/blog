@@ -82,6 +82,6 @@ $$
 d_{ij}^\omega = 1 - \omega_{ij}
 $$
 
-## Reference
+## References
 
 {% bibliography --cited --file 2021-08-13-Topological-Overlap-Matrix %}
