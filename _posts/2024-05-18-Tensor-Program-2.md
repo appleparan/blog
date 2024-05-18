@@ -2,7 +2,7 @@
 layout: post
 title: Tensor Program II
 author: jongsukim
-date: 2024-04-10 09:00:00 +0900
+date: 2024-05-18 11:30:00 +0900
 categories: [Deep Learning, LLM, Tensor Program]
 tags:
   - Large Deep Learning Model
@@ -783,6 +783,8 @@ $$
 이는 output layer가 zero mean을 가지고 다른 파라미터(weight)들과 서로 독립적이며,
 뉴럴 네트워크 다른 곳에서 사용하지 않는다는 조건만 만족하면 성립한다.
 간단하게 말해서 output layer를 평균낸다는가 하는 일을 저지르지 않으면 된다.
+
+근데, Greg Yang은 천재인가? 이걸 혼자 썼다고? 아니다. 그는 천재다.
 
 ## References
 
