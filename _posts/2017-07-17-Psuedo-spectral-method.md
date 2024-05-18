@@ -228,6 +228,6 @@ $$
 \end{align}
 $$
 
-## Reference
+## References
 
 {% bibliography --cited --file 2017-07-17-Psuedo-spectral-method %}

@@ -53,5 +53,3 @@ $ pipreqs .
 $ pip install -e .
 $ tox
 ```
-
-

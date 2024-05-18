@@ -426,7 +426,7 @@ Transformer 학습의 안정화를 위해 적용한 또 다른 방법은 layer n
 * [Illustrated Guide to Transformers Neural Network: A step by step explanatio](https://www.youtube.com/watch?v=4Bdc55j80l8)
 * [Visualizing Attention, a Transformer's Heart | Chapter 6, Deep Learning](https://www.youtube.com/watch?v=eMlx5fFNoYc)
 
-## Reference
+## References
 
 {% bibliography --cited --file 2024-03-24-Transformer %}
 

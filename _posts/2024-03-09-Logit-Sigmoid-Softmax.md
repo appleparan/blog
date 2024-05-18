@@ -627,6 +627,6 @@ Loss function의 의미로는 KL Divergence를 쓰는게 맞다.
 
 지금까지 Cross Entropy Loss를 이해하기 위해 odds부터 시작하여 기본적인 내용을 다뤄보았다. Cross Entropy는 단순 분류모델뿐만 아니라 LLM(Large Language Model)에서도 중요하게 쓰이는 개념이다. LLM의 기본적인 개념은 모델이 알고있는 단어들 중에서 가장 높은 확률의 다음 단어를 예측하는 모델이기 때문이다.
 
-## Reference
+## References
 
 {% bibliography --file 2024-03-09-Logit-Sigmoid-Softmax %}

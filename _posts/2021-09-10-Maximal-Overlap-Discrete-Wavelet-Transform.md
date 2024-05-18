@@ -131,6 +131,6 @@ orthonormal하지 않고, 모든 샘플링 사이즈에 대해 정의할 수 있
 
 {% cite percivalAnalysisSubtidalCoastal1997 --file 2021-09-10-MODWT %}.
 
-## Reference
+## References
 
 {% bibliography --cited --file 2021-09-10-MODWT %}

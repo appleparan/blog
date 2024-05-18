@@ -107,7 +107,7 @@ Arch Linux기반의 EndeavourOS를 설치하였다. 이 과정에서 삽질한 �
     * Wireless driver도 설치했고, 커널 빌드해서 부팅하니까 키보드도 정상 작동
     * 위 삽질을 하고 싶지 않으면 Windows를 쓰거나 AMD Ryzen Zen 3+ (Rembrandt, 6000 series) CPU는 기다렸다가 사는 것을 추천
 
-5. Reference
+5. References
 * [https://askubuntu.com/questions/1412450/network-driver-for-realtek-10ecb852](https://askubuntu.com/questions/1412450/network-driver-for-realtek-10ecb852)
 * [https://bbs.archlinux.org/viewtopic.php?id=277260](https://bbs.archlinux.org/viewtopic.php?id=277260)
 * [https://wiki.archlinux.org/title/Laptop/Lenovo#ThinkBook_series](https://wiki.archlinux.org/title/Laptop/Lenovo#ThinkBook_series)
