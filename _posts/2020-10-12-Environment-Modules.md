@@ -3,7 +3,7 @@ layout: post
 title: Environment Modules 사용하기
 author: jongsukim
 date: 2020-10-12 12:00:00 +0900
-categories: [Programming]
+categories: [Server Engineering, HPC]
 tags:
   - Modules
   - Environments
