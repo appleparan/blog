@@ -732,9 +732,9 @@ dx^2 = 1, dh^2 = 2h^2  \odot 1 = 2h^2, dx^1 = W^{2 \mathsf{T}} dh^2 = 2W^{2 \mat
 $$
 
 **MatMul** 에 의해서 $$h^2$$는 $$Z^{h^2} = \mathcal{N} (0, 1)$$에서 추출한 coordinate를 가진다고 할 수 있고,
-$$dh^2$$또한 $$Z^{dh^2} = 2Z^{h^2} = \mathcal{N}(0, 4)$$에서 추출한 coordinate라고 할 수 있다.
+$$dh^2$$또한 $$Z^{dh^2} = 2Z^{h^2} = \mathcal{N}(0, 2)$$에서 추출한 coordinate라고 할 수 있다.
 
-기존 가정을 그대로 사용해서 $$W^{2 \mathsf{T}}$$와 $$W^2$$가 독립이라고 하자. 그러면 $$dx^1$$또한 $$\mathcal{N}(0,4)$$에서 추출한 coordinate가 되어야 한다.
+기존 가정을 그대로 사용해서 $$W^{2 \mathsf{T}}$$와 $$W^2$$가 독립이라고 하자. 그러면 $$dx^1$$또한 $$\mathcal{N}(0, 2)$$에서 추출한 coordinate가 되어야 한다.
 그러나, 다음과 같은 식을 통해 $$\mathbb{E} dx^1$$는 $$0$$이 되지 않는다.
 
 $$
@@ -748,14 +748,17 @@ $$
 $$
 
 $$ \mathbb{E} (W^2_{\beta \gamma})^2 = 1$$을 만족하는 반면,
-$$W^2_{\beta_\alpha}, W^2_{\beta \gamma}, x^1_\gamma$$가 독립이기 때문에
-$$ 2 \sum_\beta \sum_{\gamma \neq \alpha} \mathbb{E} (W^2_{\beta \alpha} W^2_{\beta \gamma} x^1_\gamma) = 0$$이다.
+$$W^2_{\beta_\alpha}, W^2_{\beta \gamma}, x^1_\gamma$$가 독립이기 때문에 각각의 기대값의 곱으로 바뀔 수 있고
+이는 위의 정의에 따라 0이다.
+$$ 2 \sum_\beta \sum_{\gamma \neq \alpha} \mathbb{E} (W^2_{\beta \alpha} W^2_{\beta \gamma} x^1_\gamma) =
+2 \sum_\beta \sum_{\gamma \neq \alpha} \mathbb{E} W^2_{\beta \alpha}  \mathbb{E} W^2_{\beta \gamma} \mathbb{E} x^1_\gamma = 0$$
 
 #### Simple GIA Check이 GIA를 만족하는 직관
 
 만약 이전처럼 평균을 내는 것이 아니라 마지막 레이어가 전부 독립이라면,
 $$v_\alpha \sim \mathcal{N}(0,1)$$에서 추출한 $$v$$를 바탕으로
 $$y= v^\mathsf{T} x^2 / \sqrt{n}$$ 처럼 되고, Simple GIA Check Condition을 만족하게 된다.
+$$ \mathbb{E} v_b (W^2_{\beta \gamma})^2 x^1_\alpha = \mathbb{E} v_b \mathbb{E} (W^2_{\beta \gamma})^2 \mathbb{E} x^1_\alpha = 0$$
 그렇게 되면 $$dx^2 = \sqrt{n} \dfrac{dy}{dx^2}$$에서 시작하는 backpropgation을 다시 계산할 수 있게 된다. ($$v$$ 추가)
 
 따라서 마찬가지로 $$dx^1$$의 기대값을 구하게되면 독립인 $$v_\beta$$의 영향때문에 모든 항이 0이 된다.
