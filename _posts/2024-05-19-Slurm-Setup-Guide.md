@@ -1,12 +1,11 @@
 ---
 layout: post
-title: SLURM + Apptainer Setup Guide
+title: Slurm Setup Guide
 author: jongsukim
 date: 2024-05-19 00:01:00 +0900
 categories: [Server Engineering, HPC]
 tags:
-  - SLURM
-  - Apptainer
+  - Slurm
   - Server Engineering
   - HPC
 ---
@@ -31,16 +30,16 @@ batch system을 쓰는 것은 interactive하게 코드를 작성하는 Jupyter�
 필요할 때만 GPU를 할당받고 효율적으로 사용할 수 있다.
 참고로 로깅이나 plot을 실시간으로 보는 interactive함을 원한다면 [Weight & Biases](https://wandb.ai/site)나 [Tensorboard](https://www.tensorflow.org/tensorboard)같은 툴을 사용하면 되고, 디버깅은 디버깅용 노드를 따로 마련하는 방법이 있을 수 있다.
 
-Job scheduler 중에서도 GPU 클러스터에서 가장 많이 사용하는 것이 [**SLURM**](https://slurm.schedmd.com/documentation.html)이다.
-어쩄든, SLURM을 처음부터 세팅하는 것은 생각보다 어렵다. 왜냐하면, SLURM설정이 처음 보면 난해하기 때문이다. 그래서 이를 알려주고자 한다.
+Job scheduler 중에서도 GPU 클러스터에서 가장 많이 사용하는 것이 [**slurm**](https://slurm.schedmd.com/documentation.html)이다.
+어쩄든, slurm을 처음부터 세팅하는 것은 생각보다 어렵다. 왜냐하면, slurm설정이 처음 보면 난해하기 때문이다. 그래서 이를 알려주고자 한다.
 
 여기에 HPC 환경을 위한 Container인 Apptainer(former Singularity)도 같이 설정해서 컨테이너 환경에서 Reproducible한 연구가 될 수 있도록 가이드할 예정이다.
 
 ### Batch System
 
-SLURM을 셋업하기 앞서, batch system의 전체적인 구조 및 workflow를 소개하고자 한다.
+slurm을 셋업하기 앞서, batch system의 전체적인 구조 및 workflow를 소개하고자 한다.
 
-{% img align="center" style='background-color: #fff' caption='<a href="https://hpc-wiki.info/hpc/File:Batch_System.png">Schematic of how users can access the batch system</a>' src='/assets/images/post/2024-05-10-SLURM-Setup-Guide/01-Schematic-Batch-System.png' %}
+{% img align="center" style='background-color: #fff' caption='<a href="https://hpc-wiki.info/hpc/File:Batch_System.png">Schematic of how users can access the batch system</a>' src='/assets/images/post/2024-05-10-Slurm-Setup-Guide/01-Schematic-Batch-System.png' %}
 
 우선, 유저는 로그인 노드(login node) 혹은 메인 노드(main node)라는 서버에 접속해서 모든것을 수행한다. 유저는 계산 노드(computing node)에 접근할 수 없다.
 그리고 job script 파일을 통해 job scheduler에 계산 혹은 실험(job)을 submit하고 job scheduler는 유저가 작성한 job script 파일을 보고 스케줄링 시스템에 따라 적절한 계산노드에 job을 할당한다.
@@ -48,7 +47,7 @@ SLURM을 셋업하기 앞서, batch system의 전체적인 구조 및 workflow�
 
 로그인 노드와 각 계산 노드는 당연히 동일한 유저가 있어야 하고, NAS 같이 별도의 파일서버가 있어서 파일 시스템도 공유해야 job 결과를 메인노드에서도 확인할 수 있게 된다. 이를 이해하기 위해서는 [공개 키 암호방식](https://ko.wikipedia.org/wiki/%EA%B3%B5%EA%B0%9C_%ED%82%A4_%EC%95%94%ED%98%B8_%EB%B0%A9%EC%8B%9D)에 대해서는 필수적으로 공부할 필요가 있다.
 
-{% img align="center" style='background-color: #fff' caption='<a href="https://hpc-wiki.info/hpc/File:Scheduler.png">Schematic of how a scheduler may distribute jobs onto nodes</a>' src='/assets/images/post/2024-05-10-SLURM-Setup-Guide/02-Scheduler.png' %}
+{% img align="center" style='background-color: #fff' caption='<a href="https://hpc-wiki.info/hpc/File:Scheduler.png">Schematic of how a scheduler may distribute jobs onto nodes</a>' src='/assets/images/post/2024-05-10-Slurm-Setup-Guide/02-Scheduler.png' %}
 
 주의할 점은 Job scheduler는 단순히 비어있는 공간에 유저가 요청한 자원을 할당한다는 점이다. 만약에 Job schduler에는 1개의 GPU를 사용한다고 명시했는데, 코드 상에서 강제로 GPU를 2개 사용해버리면 다른 유저가 사용하고 있는 GPU를 같이 사용하게 돼서 문제가 생길 수 있다.
 
@@ -83,8 +82,8 @@ SLURM을 셋업하기 앞서, batch system의 전체적인 구조 및 workflow�
 
 1. Name : hpc-node-login
 2. Region과 Zone을 고른다.
-    * Zone : us-central1 (Iwoa)
-    * Region : us-central1-b
+    * Zone : us-west4
+    * Region : us-west4-a
 3. Machine Configuration
     * E2 선택 후 다음 프리셋 선택
     * Preset : e2-standard-4 (4 vCPU, 2 core, 16 GB memory)
@@ -108,8 +107,8 @@ Virtual machines -> Instance templates -> Create Instance Template를 클릭하�
 
 1. Name : hpc-node-compute-template
 2. Region과 Zone을 고른다.
-    * Zone : us-central1 (Iwoa)
-    * Region : us-central1-b
+    * Zone : us-east5
+    * Region : us-east5-a
 3. Machine Configuration
     * GPU type : NVIDIA T4
     * Number of GPUs : 2
@@ -141,11 +140,11 @@ Virtual machines -> Instance templates -> Create Instance Template를 클릭하�
     * 각 노드 당 2개의 T4를 가지고 있다고 가정한다.
     * 이 클러스터의 총 GPU는 NVIDIA T4 4대이다.
 
-## SLURM Setup Guide
+## Slurm Setup Guide (CPU)
 
 자 이제 Login node instance를 실행하고 다음과 같이 slurm을 설치한다. (**Ubuntu 24.04 LTS 기준**)
 
-### Install SLURM
+### Install Slurm
 
 1. System upgrade. 기본적으로 시스템을 최신상태로 유지한다. 만약 nvidia driver가 미리 깔려있었다면, nvidia driver가 업데이트될 수도 있는데, 이러면 driver mismatch 에러가 나면서 nvidia-smi부터 안되기 시작할 수 있다. 그러기에 다음 명령어 수행 후 재부팅을 한번 진행하면 좋다.
     ```shell
@@ -159,12 +158,12 @@ Virtual machines -> Instance templates -> Create Instance Template를 클릭하�
     libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev
     ```
 
-3. SLURM을 설치한다.
+3. slurm을 설치한다.
     ```shell
     sudo apt install slurm-wlm slurm-wlm-doc
     ```
 
-4. `mailutils`를 설치해서 SLURM이 `/bin/mail`이 없다고 complain하는걸 막는다.
+4. `mailutils`를 설치해서 slurm이 `/bin/mail`이 없다고 complain하는걸 막는다.
     [single_machine_slurm_on_ubuntu](https://gist.github.com/ckandoth/2acef6310041244a690e4c08d2610423)를 참고했다.
 
     ```shell
@@ -174,7 +173,7 @@ Virtual machines -> Instance templates -> Create Instance Template를 클릭하�
 
 5. `/etc/hosts` 맨 아래에 hostname을 **추가**한다.
     ```shell
-    10.128.0.2 slurm-demo.hpc-node-login
+    10.182.0.4 slurm-demo.hpc-node-login
     ```
 
     `ping`을 통해 체크해본다.
@@ -199,7 +198,7 @@ Virtual machines -> Instance templates -> Create Instance Template를 클릭하�
     sudo chmod 755 /var/run/slurm
     ```
 
-7. 본격적인 Setup에 앞서 인증을 위해 MUNGE를 설치하고 SLURM Accounting을 위해 MariaDB를 셋업한다.
+7. 본격적인 Setup에 앞서 인증을 위해 MUNGE를 설치하고 slurm Accounting을 위해 MariaDB를 셋업한다.
 
 ### Install MUNGE
 
@@ -254,7 +253,7 @@ MUNGE는 그 위에서 작동한다. MUNGE는 관리자 권한(privileged permis
     ```shell
     $ munge -n | unmunge
     STATUS:          Success (0)
-    ENCODE_HOST:     hpc-node-login.us-central1-b.c.slurm-demo-MYPROJECT.internal (10.128.0.2)
+    ENCODE_HOST:     slurm-demo.hpc-node-login (10.182.0.4)
     ENCODE_TIME:     2024-05-19 07:44:43 +0000 (1716104683)
     DECODE_TIME:     2024-05-19 07:44:43 +0000 (1716104683)
     TTL:             300
@@ -268,7 +267,7 @@ MUNGE는 그 위에서 작동한다. MUNGE는 관리자 권한(privileged permis
 
 ### Install MariaDB
 
-SLURM에는 Accounting이라는 기능이 있다. Job scheduler의 회계같은 기능이라고 보면 되는데,
+slurm에는 Accounting이라는 기능이 있다. Job scheduler의 회계같은 기능이라고 보면 되는데,
 이 기능은 job이 사용한 리소스등을 기록하는 역할을 하고 자원 제한(reousrce limit)등에 이용할 수 있다.
 여튼, accounting을 사용하기 위해서는 어딘가 기록을 해야하는데, 아무래도 파일보다는 DB에 기록하는게 좋다.
 유저들이 자기의 job을 조회하는 등에서 파일은 불리한 점이 많고, 점점 지날수록 용량도 많이 차지하기 때문이다.
@@ -290,7 +289,7 @@ SLURM에는 Accounting이라는 기능이 있다. Job scheduler의 회계같은 
     6. test database를 제거한다. "Remove test database and access to it? [Y/n] y"
     7. 지금까지 설정한것을 반영하기 위해 privilege table를 reload한다. "Reload privilege tables now? [Y/n] y"
 
-3. SLURM accounting table을 만들기 위해 root로 로그인한다. (다음 명령어 입력후 위에서 설정한 패스워드를 입력한다.)
+3. slurm accounting table을 만들기 위해 root로 로그인한다. (다음 명령어 입력후 위에서 설정한 패스워드를 입력한다.)
     ```shell
     sudo mysql -u root -p
     ```
@@ -305,7 +304,7 @@ SLURM에는 Accounting이라는 기능이 있다. Job scheduler의 회계같은 
     CREATE DATABASE slurm_acct_db;
     ```
 
-6. SLURM의 DB 패스워드를 "SOME_SLURM_PASSWORD"라고 하고, 다음과 같이 slurm을 위한 DB user `slurm`를 생성한다.
+6. Slurm의 DB 패스워드를 "SOME_SLURM_PASSWORD"라고 하고, 다음과 같이 slurm을 위한 DB user `slurm`를 생성한다.
     host는 `localhost`를 강제해서 로컬에서만 연결할 수 있게 하였다.
     물론 보안상 root 유저와 다른 패스워드를 사용해야한다.
     ```shell
@@ -327,7 +326,7 @@ SLURM에는 Accounting이라는 기능이 있다. Job scheduler의 회계같은 
     EXIT;
     ```
 
-10. SLURM에서 DB를 연결하기 위해 `slurmdbd`패키지를 설치한다.
+10. slurm에서 DB를 연결하기 위해 `slurmdbd`패키지를 설치한다.
     ```shell
     sudo apt install -y slurmdbd
     ```
@@ -348,16 +347,16 @@ SLURM에는 Accounting이라는 기능이 있다. Job scheduler의 회계같은 
     sudo systemctl restart slurmdbd
     ```
 
-### Setup SLURM
+### Setup slurm
 
-이제 본격적으로 SLURM 환경설정을 해야한다.
+이제 본격적으로 slurm 환경설정을 해야한다.
 여기부터는 각자 시스템마다 다른 환경을 지니고 있어 시스템 사양 특히 CPU와 메모리를 알아둘 필요가 있다.
 현재는 login node와 compute node가 같은 노드이므로 서버를 바꾸지 않고 바로 진행해보도록 하겠다.
 
 #### Find System Information
 
 1. Memory 알아내기
-    * SLURM configuration의 RealMemory에 해당하는 값을 알 필요가 있다.
+    * slurm configuration의 RealMemory에 해당하는 값을 알 필요가 있다.
     * RealMemory는 Megabytes단위를 적어주면 되는데 다음과 같은 명령어를 입력하고 "Total"에 해당하는 값을 적어주면 된다.
         ```shell
         free -m
@@ -370,7 +369,7 @@ SLURM에는 Accounting이라는 기능이 있다. Job scheduler의 회계같은 
         Swap:              0           0           0
     ```
 2. CPU 정보 알아내기
-    * SLURM configuration의 CPUs, Sockets, CoresPerSocket, ThreadsPerCore를 알아내야한다. 아마 가장 실수하기 좋을 부분일 것이다.
+    * slurm configuration의 CPUs, Sockets, CoresPerSocket, ThreadsPerCore를 알아내야한다. 아마 가장 실수하기 좋을 부분일 것이다.
     * 각각은 다음과 같은 의미를 지닌다.
         * CPUs : 노드의 logical processor의 개수. 생략할 경우, Boards(메인보드수인데 보통은 1), Sockets, CoresPerSocket, ThreadsPerCore의 곱으로 결정된다.
         * Sockets : 노드의 physical processor의 개수.
@@ -391,7 +390,7 @@ SLURM에는 Accounting이라는 기능이 있다. Job scheduler의 회계같은 
 #### Configuration File (slurm.conf)
 
 자 이제 본격적으로 slurm.conf 파일을 작성할 필요가 있다.
-항목이 많지만, 이걸 SLURM 공식 사이트에서 자동으로 생성해준다. (웹에서는 최신버전만 지원)
+항목이 많지만, 이걸 slurm 공식 사이트에서 자동으로 생성해준다. (웹에서는 최신버전만 지원)
 
 [Slurm Version 23.11 Configuration Tool](https://slurm.schedmd.com/configurator.html)로 이동한다.
 
@@ -564,7 +563,7 @@ AccountingStorageHost=localhost
 AccountingStoragePort=6819
 AccountingStorageType=accounting_storage/slurmdbd
 AccountingStorageUser=slurm
-AccountingStoragePass=SOME_SLURM_PASSWORD
+# AccountingStoragePass=
 # AccountingStoreFlags=
 #JobCompHost=
 JobCompLoc=/var/log/slurm/job_completions
@@ -668,9 +667,9 @@ sudo chown slurm:slurm /etc/slurm/slurmdbd.conf
 sudo chmod 600 /etc/slurm/slurmdbd.conf
 ```
 
-### Run SLURM
+### Run slurm
 
-1. 본격적으로 SLURM을 가동해볼 차례이다.
+1. 본격적으로 slurm을 가동해볼 차례이다.
     ```shell
     sudo systemctl restart slurmdbd
     sudo systemctl restart slurmctld
@@ -685,7 +684,7 @@ sudo chmod 600 /etc/slurm/slurmdbd.conf
 
     다음과 같이 IDLE상태면 정상이다.
     ```shell
-    appleparan@slurm-demo:/etc/slurm$ sinfo
+    $ sinfo
     PARTITION AVAIL  TIMELIMIT  NODES  STATE NODELIST
     cpu*         up   infinite      1   idle slurm-demo.hpc-node-login
     ```
@@ -693,7 +692,7 @@ sudo chmod 600 /etc/slurm/slurmdbd.conf
 
 #### Setup Accounting
 
-SLURM의 Accounting을 사용하기 위해서는 Accounting에 클러스터와 유저를 등록해야한다.
+slurm의 Accounting을 사용하기 위해서는 Accounting에 클러스터와 유저를 등록해야한다.
 [이 링크](https://wiki.fysik.dtu.dk/Niflheim_system/Slurm_accounting/#create-accounts)의 매뉴얼이 Accounting을 이해하는데 많은 도움이 될 것이다.
 
 1. 클러스터를 등록한다. 등록이 이미 되어있으면, 이미 등록되었다고 나올 것이다.
@@ -738,12 +737,12 @@ SLURM의 Accounting을 사용하기 위해서는 Accounting에 클러스터와 �
     sudo sacctmgr show account -s xxx
     ```
 
-### Use SLURM
+### Use slurm
 
 #### Submit Job (Test)
 
 기본적으로는 srun을 통해 간단하게 slurm을 테스트해볼 수 있다.
-다음은 `cpu` 파티션에 `echo "Running in cpu partition"`을 실행시켜서 SLURM을 테스트 하는 경우이다.
+다음은 `cpu` 파티션에 `echo "Running in cpu partition"`을 실행시켜서 slurm을 테스트 하는 경우이다.
 
 ```shell
 srun -p cpu echo "Running in cpu partition"
@@ -813,9 +812,410 @@ JOBID PARTITION     NAME     USER ST       TIME  NODES NODELIST(REASON)
 $ scancel 4
 ```
 
-### Add GPU Node to SLURM (WIP)
+## Slurm Setup Guide (GPU)
 
-지금까지는 CPU만 있는 노드에 SLURM을 세팅해봤다.
+### Add GPU Node to slurm
+
+지금까지는 CPU만 있는 노드에 slurm을 세팅해봤다.
 하지만 이제 GPU 노드를 추가해보고자 한다.
 
-GPU할당 받으면 진행함...
+계산 노드 2개를 다음과 같이 각각 만들어준다.
+
+### Setup Compute Node in GCP
+
+xx를 01과 02로 해서 2개를 만들었다.
+
+1. Name : hpc-node-compute-xx
+2. Region과 Zone을 고른다.
+    * Zone : us-west4
+    * Region : us-west4-a
+3. Machine Configuration
+    * N1 선택 후 다음 프리셋 선택
+    * Preset : n1-standard-1
+    * VM provisioning model : GCP에서 Spot으로 T4 GPU를 절대 할당받을수 없었기에 눈물을 머금고 Standard
+4. Boot disk
+    * OS : Ubuntu
+    * Version : Ubuntu 24.04 LTS (built on 5/16)
+    * Size : 80 GB
+5. Advanced options
+    1. Networking
+        * Hostname : slurm-demo.hpc-node-computexx
+    2. Network interfaces 위에서 만든 VPC를 붙인다.
+        * Network : hpc-cluster-vpc
+        * Subnetwork : hpc-cluster-vpc IPv4
+    3. Network Service Tier : Standard
+
+
+즉 지금 다음과 같이 3개의 노드가 있다.
+
+1. hpc-node-login (10.182.0.4)
+    * login 노드 및 cpu용 compute 겸용
+2. hpc-node-compute01  (10.182.0.2)
+    * gpu용 compute
+3. hpc-node-compute02  (10.182.0.3)
+    * gpu용 compute
+
+세 노드에 user는 모두 같은 구성이다. (UID=1001인 MYUSERNAME이 있다고 가정)
+
+진행하기 전에 각 노드 `hosts` 파일에 hostname을 추가해준다.
+
+```
+10.182.0.4 slurm-demo.hpc-node-login
+10.182.0.2 slurm-demo.hpc-node-compute01
+10.182.0.3 slurm-demo.hpc-node-compute02
+```
+
+### Install CUDA
+
+각 compute노드마다 다음과 같이 패키지를 업데이트하고 CUDA를 설치한다.
+
+1. 디바이스 확인 및 `ubuntu-drivers-common` 설치
+    ```shell
+    sudo apt update
+    sudo apt upgrade -y
+    sudo lspci | grep -i nvidia
+    sudo apt install ubuntu-drivers-common
+    ```
+
+2. nvidia driver 확인
+    ```shell
+    $ sudo ubuntu-drivers devices
+    udevadm hwdb is deprecated. Use systemd-hwdb instead.
+    udevadm hwdb is deprecated. Use systemd-hwdb instead.
+    udevadm hwdb is deprecated. Use systemd-hwdb instead.
+    udevadm hwdb is deprecated. Use systemd-hwdb instead.
+    ERROR:root:aplay command not found
+    == /sys/devices/pci0000:00/0000:00:05.0 ==
+    modalias : pci:v000010DEd00001EB8sv000010DEsd000012A2bc03sc02i00
+    vendor   : NVIDIA Corporation
+    model    : TU104GL [Tesla T4]
+    driver   : nvidia-driver-535-server - distro non-free
+    driver   : nvidia-driver-535 - distro non-free recommended
+    driver   : nvidia-driver-470-server - distro non-free
+    driver   : nvidia-driver-470 - distro non-free
+    driver   : xserver-xorg-video-nouveau - distro free builtin
+    ```
+
+3. 현재 드라이버 기준으로 가장 최신인 `nvidia-driver-535-server`를 설치한다.
+    ```shell
+    sudo apt install nvidia-driver-535-server
+    ```
+
+4. 재부팅
+    ```shell
+    sudo reboot
+    ```
+
+5. CUDA 설치. 이제는 NVIDIA Repo를 추가 안해도 바로 CUDA 설치가 되는 듯하다.
+    ```shell
+    sudo apt install nvidia-cuda-toolkit
+    ```
+
+6. nvidia-smi로 GPU driver가 제대로 로드되었는지 확인해본다.
+    ```shell
+    nvidia-smi
+    ```
+
+### SSH & MUNGE Key configuration
+
+1. 로그인 노드로 다시 돌아가서 SSH Key를 생성한다.
+    ```shell
+    ssh-keygen -t ed25519
+    ```
+
+2. 키 파일명들을 `compute-node`로 바꿔준다.
+    ```shell
+    mv ~/.ssh/id_ed25519 ~/.ssh/compute-node
+    mv ~/.ssh/id_ed25519.pub ~/.ssh/compute-node.pub
+    ```
+
+3. ssh agent를 편하게 관리하는 [keychain](https://www.funtoo.org/Funtoo:Keychain) 설치
+    ```shell
+    sudo apt install keychain
+    ```
+
+4. 다음을 `~/.bashrc`에 추가해서 키를 등록한다
+    ```shell
+    eval `keychain --eval --agents ssh compute-node`
+    ```
+
+5. `source`를 통해 `.bashrc`를 다시 로드한다.
+    ```shell
+    $ source ~/.bashrc
+
+    * keychain 2.8.5 ~ http://www.funtoo.org
+    * Starting ssh-agent...
+    * Adding 1 ssh key(s): compute-node
+    * ssh-add: Identities added: compute-node
+    ```
+
+6. 혹시 모르니 `~/.ssh/config` 도 다음과 같이 만들어준다.
+    ```
+    Host slurm-demo.hpc-node-compute01
+        HostName slurm-demo.hpc-node-compute01
+        User MYUSERNAME
+        IdentityFile ~/.ssh/compute-node
+
+    Host slurm-demo.hpc-node-compute02
+        HostName slurm-demo.hpc-node-compute02
+        User MYUSERNAME
+        IdentityFile ~/.ssh/compute-node
+    ```
+
+7. public key를 클립보드에 복사한다.
+    ```shell
+    cat ~/.ssh/compute-node.pub
+    ```
+
+8. 계산 노드에 들어가서 `~/.ssh` 디렉토리를 만들고 `authorized_keys`에 public key를 넣어준다. `~/.ssh` 와 `~/.ssh/authorized_keys`는 보안을 위해 소유자만 접근할 수 있는 권한을 설정해준다.
+    ```shell
+    mkdir -p ~/.ssh
+    chmod 700 ~/.ssh
+    echo PUBIC_KEY_복사한거 >> ~/.ssh/authorized_keys
+    chmod 600 ~/.ssh/authorized_keys
+    ```
+
+9. 로그인 노드로 다시 돌아가 접속이 되는지 테스트해본다.
+    ```
+    ssh MYUSERNAME@slurm-demo.hpc-node-compute-01
+    ssh MYUSERNAME@slurm-demo.hpc-node-compute-02
+    ```
+
+### Install slurm
+
+각 계산노드에도 다음과 같이 slurm을 설치한다.
+
+1. slurm 설치 (compute node이므로 `slurmd`만 설치)
+    ```shell
+    sudo apt install slurmd
+    ```
+
+2. MUNGE key를 ssh 디렉토리에 복사해놓는다. (아무 디렉토리에 복사하기엔 양심에 찔림) 그리고 소유주도 임시적으로 바꿔준다.
+    ```shell
+    sudo cp /etc/munge/munge.key ~/.ssh/munge.key
+    sudo chown MYUSERNAME:MYUSERNAME ~/.ssh/munge.key
+    ```
+
+3. 로그인 노드에서 기존에 MUNGE Key만든것을 계산노드로 전송한다.
+    ```shell
+    scp ~/.ssh/munge.key MYUSERNAME@slurm-demo.hpc-node-compute01:/home/MYUSERNAME/.ssh/munge.key
+    scp ~/.ssh/munge.key MYUSERNAME@slurm-demo.hpc-node-compute02:/home/MYUSERNAME/.ssh/munge.key
+    ```
+
+4. 각 계산 노드로 들어가 MUNGE Key를 확인하고 소유주를 `munge`로 바꾼뒤 원래 있어야할 경로(`/etc/munge/`)로 복사한다.
+    ```shell
+    sudo chown munge:munge ~/.ssh/munge.key
+    sudo mv ~/.ssh/munge.key /etc/munge/munge.key
+    ```
+
+5. 계산 노드에서 MUNGE를 재시작한다.
+    ```shell
+    sudo systemctl restart munge
+    ```
+
+### slurm.conf Modification
+
+기존의 `slurm.conf`의 node와 partition부분에 새로운 compute노드를 추가하고, 이 설정을 동일하게 모든 노드에 업데이트해야한다.
+
+1. 로그인 노드로 들어가서 `slurm.conf`의 맨 마지막 부분 다음 부분에 주목한다.
+    ```shell
+    NodeName=slurm-demo.hpc-node-login CPUs=4 RealMemory=15990 Sockets=1 CoresPerSocket=2 ThreadsPerCore=2 State=UNKNOWN
+    PartitionName=cpu Nodes=ALL Default=YES MaxTime=INFINITE State=UP
+    ```
+
+2. 기존 cpu partition의 Nodes부분만 수정하고(계속 쓸테니), 새롭게 GPU node와 partition을 추가한다. 여기서 조심해야할 것은 NodeName에 `-`이 너무 많으면 slurm이 node를 제대로 인식 못할 수 있다.
+    ```shell
+    NodeName=slurm-demo.hpc-node-login CPUs=4 RealMemory=15990 Sockets=1 CoresPerSocket=2 ThreadsPerCore=2 State=UNKNOWN
+    PartitionName=cpu Nodes=slurm-demo.hpc-node-login Default=YES MaxTime=INFINITE State=UP
+
+    # Define the types of GRES available
+    GresTypes=gpu
+
+    NodeName=slurm-demo.hpc-node-compute01 Gres=gpu:2 CPUs=1 RealMemory=3661 Sockets=1 CoresPerSocket=1 ThreadsPerCore=1 State=UNKNOWN
+    NodeName=slurm-demo.hpc-node-compute02 Gres=gpu:2 CPUs=1 RealMemory=3661 Sockets=1 CoresPerSocket=1 ThreadsPerCore=1 State=UNKNOWN
+
+    PartitionName=gpu Nodes=slurm-demo.hpc-node-compute[01-02] Default=YES MaxTime=INFINITE State=UP
+    ```
+
+3. 로그인 노드에서 scp를 사용해서 `slurm.conf`를 전파한다.
+    ```shell
+    sudo cp /etc/slurm/slurm.conf ~/slurm.conf
+    sudo chown MYUSERNAME:MYUSERNAME ~/slurm.conf
+    scp ~/slurm.conf MYUSERNAME@slurm-demo.hpc-node-compute01:/home/MYUSERNAME/slurm.conf
+    scp ~/slurm.conf MYUSERNAME@slurm-demo.hpc-node-compute02:/home/MYUSERNAME/slurm.conf
+    ```
+
+4. 각 계산노드에 들어가서 `slurm.conf`를 로그인 노드에서 복사한 `slurm.conf`로 교체해준다. 파일이 이미 있는 경우 백업을 해준다.
+    ```
+    sudo chown root:root ~/slurm.conf
+    sudo mv /etc/slurm/slurm.conf /etc/slurm/slurm.conf.backup
+    sudo mv ~/slurm.conf /etc/slurm/slurm.conf
+    ```
+
+5. 그리고 GPU 2개를 가정했을 때, `/etc/gres/gres.conf`를 만들어준다. [공식 문서](https://manpages.ubuntu.com/manpages/focal/en/man5/gres.conf.5.html)를 참고하면 좋다.
+    ```shell
+    # Node-specific GRES configuration for slurm-demo.hpc-node-compute-01
+    Name=gpu Type=tesla File=/dev/nvidia0
+    Name=gpu Type=tesla File=/dev/nvidia1
+    ```
+
+    ```shell
+    # Node-specific GRES configuration for slurm-demo.hpc-node-compute-02
+    Name=gpu Type=tesla File=/dev/nvidia0
+    Name=gpu Type=tesla File=/dev/nvidia1
+    ```
+
+6. 로그인 노드의 slurm데몬들을 재시작한다.
+    ```shell
+    sudo systemctl restart slurmctld
+    sudo systemctl restart slurmd
+    ```
+
+7. 계산 노드의 slurm데몬들을 재시작한다.
+    ```shell
+    sudo systemctl restart slurmd
+    ```shell
+
+8. `slurmd`의 동작상태를 확인해본다.
+    ```shell
+    sudo systemctl status slurmd
+    ```
+
+8. `gres.conf`은 계산 노드 로컬에 저장되므로 따로따로 관리되지만, `slurm.conf`은 모두 통일되어야 한다. 따라서 만약에 Resource limit등으로 `slurm.conf`를 수정했다면 이를 모든 계산노드에 전파할 필요가 있다.
+
+9. 만약 안된다면 방화벽 문제일 수도 있다. 클라우드라면 VPC에 Firewall Rule이 등록되었는지 확인하자(Default port: 6817, 6818)
+그리고 `ufw`가 활성화 되어있다면 `ufw`로 모든 노드의 방화벽 룰을 등록해주자.
+    ```
+    sudo ufw allow 6817/tcp
+    sudo ufw allow 6818/tcp
+    ```
+
+10. 로그인 노드로 돌아와서 노드 상태를 확인한다. 다음과 같이 `unk*`이면 UNKNOWN상태라는 뜻이다.
+    ```shell
+    $ sinfo
+    PARTITION AVAIL  TIMELIMIT  NODES  STATE NODELIST
+    cpu          up   infinite      1   idle slurm-demo.hpc-node-login
+    gpu*         up   infinite      2   unk* slurm-demo.hpc-node-compute[01-02]
+    ```
+
+11. idle상태가 되어야 해당 노드를 사용할 수 있다. idle로 강제로 바꿔주자.
+    ```shell
+    sudo scontrol update NodeName=slurm-demo.hpc-node-compute01 State=RESUME
+    sudo scontrol update NodeName=slurm-demo.hpc-node-compute02 State=RESUME
+    ```
+
+12. `srun`으로 slurm을 테스트해본다.
+    ```shell
+    $ srun --nodes=1 --ntasks=1 --partition=gpu nvidia-smi
+    Wed May 22 18:20:31 2024
+    +---------------------------------------------------------------------------------------+
+    | NVIDIA-SMI 535.161.08             Driver Version: 535.161.08   CUDA Version: 12.2     |
+    |-----------------------------------------+----------------------+----------------------+
+    | GPU  Name                 Persistence-M | Bus-Id        Disp.A | Volatile Uncorr. ECC |
+    | Fan  Temp   Perf          Pwr:Usage/Cap |         Memory-Usage | GPU-Util  Compute M. |
+    |                                         |                      |               MIG M. |
+    |=========================================+======================+======================|
+    |   0  Tesla T4                       Off | 00000000:00:04.0 Off |                    0 |
+    | N/A   77C    P0              30W /  70W |      2MiB / 15360MiB |      0%      Default |
+    |                                         |                      |                  N/A |
+    +-----------------------------------------+----------------------+----------------------+
+    |   1  Tesla T4                       Off | 00000000:00:05.0 Off |                    0 |
+    | N/A   77C    P0              33W /  70W |      2MiB / 15360MiB |      8%      Default |
+    |                                         |                      |                  N/A |
+    +-----------------------------------------+----------------------+----------------------+
+
+    +---------------------------------------------------------------------------------------+
+    | Processes:                                                                            |
+    |  GPU   GI   CI        PID   Type   Process name                            GPU Memory |
+    |        ID   ID                                                             Usage      |
+    |=======================================================================================|
+    |  No running processes found                                                           |
+    +---------------------------------------------------------------------------------------+
+    ```
+13. 노드 상태도 확인해본다.
+    ```shell
+    $ scontrol show nodes
+    NodeName=slurm-demo.hpc-node-compute01 Arch=x86_64 CoresPerSocket=1
+    CPUAlloc=0 CPUEfctv=1 CPUTot=1 CPULoad=0.00
+    AvailableFeatures=(null)
+    ActiveFeatures=(null)
+    Gres=gpu:2
+    NodeAddr=slurm-demo.hpc-node-compute01 NodeHostName=slurm-demo.hpc-node-compute01 Version=23.11.4
+    OS=Linux 6.8.0-1007-gcp #7-Ubuntu SMP Sat Apr 20 00:58:31 UTC 2024
+    RealMemory=3661 AllocMem=0 FreeMem=3055 Sockets=1 Boards=1
+    State=IDLE ThreadsPerCore=1 TmpDisk=0 Weight=1 Owner=N/A MCS_label=N/A
+    Partitions=gpu
+    BootTime=2024-05-22T17:56:01 SlurmdStartTime=2024-05-22T18:18:36
+    LastBusyTime=2024-05-22T18:20:32 ResumeAfterTime=None
+    CfgTRES=cpu=1,mem=3661M,billing=1
+    AllocTRES=
+    CapWatts=n/a
+    CurrentWatts=0 AveWatts=0
+    ExtSensorsJoules=n/a ExtSensorsWatts=0 ExtSensorsTemp=n/a
+
+    NodeName=slurm-demo.hpc-node-compute02 Arch=x86_64 CoresPerSocket=1
+    CPUAlloc=0 CPUEfctv=1 CPUTot=1 CPULoad=0.00
+    AvailableFeatures=(null)
+    ActiveFeatures=(null)
+    Gres=gpu:2
+    NodeAddr=slurm-demo.hpc-node-compute02 NodeHostName=slurm-demo.hpc-node-compute02 Version=23.11.4
+    OS=Linux 6.8.0-1007-gcp #7-Ubuntu SMP Sat Apr 20 00:58:31 UTC 2024
+    RealMemory=3661 AllocMem=0 FreeMem=3105 Sockets=1 Boards=1
+    State=IDLE ThreadsPerCore=1 TmpDisk=0 Weight=1 Owner=N/A MCS_label=N/A
+    Partitions=gpu
+    BootTime=2024-05-22T17:00:28 SlurmdStartTime=2024-05-22T18:18:29
+    LastBusyTime=2024-05-22T18:17:03 ResumeAfterTime=None
+    CfgTRES=cpu=1,mem=3661M,billing=1
+    AllocTRES=
+    CapWatts=n/a
+    CurrentWatts=0 AveWatts=0
+    ExtSensorsJoules=n/a ExtSensorsWatts=0 ExtSensorsTemp=n/a
+
+    NodeName=slurm-demo.hpc-node-login Arch=x86_64 CoresPerSocket=2
+    CPUAlloc=0 CPUEfctv=4 CPUTot=4 CPULoad=0.00
+    AvailableFeatures=(null)
+    ActiveFeatures=(null)
+    Gres=(null)
+    NodeAddr=slurm-demo.hpc-node-login NodeHostName=slurm-demo.hpc-node-login Version=23.11.4
+    OS=Linux 6.8.0-1007-gcp #7-Ubuntu SMP Sat Apr 20 00:58:31 UTC 2024
+    RealMemory=15990 AllocMem=0 FreeMem=14952 Sockets=1 Boards=1
+    State=IDLE ThreadsPerCore=2 TmpDisk=0 Weight=1 Owner=N/A MCS_label=N/A
+    Partitions=cpu
+    BootTime=2024-05-22T14:43:47 SlurmdStartTime=2024-05-22T17:04:34
+    LastBusyTime=2024-05-22T17:17:21 ResumeAfterTime=None
+    CfgTRES=cpu=4,mem=15990M,billing=4
+    AllocTRES=
+    CapWatts=n/a
+    CurrentWatts=0 AveWatts=0
+    ExtSensorsJoules=n/a ExtSensorsWatts=0 ExtSensorsTemp=n/a
+    ```
+
+## Troubleshooting
+
+Slurm을 쓰면서 가장 많이 겪는 문제 중 하나가 갑자기 노드가 drain상태에 빠지는 것이다.
+만약, 특정 노드(예를 들어 `slurm-demo.hpc-node-compute01`)이 drain상태에 빠졌다면 수동으로 다음과 같이 복구할 수 있다.
+```
+scontrol: update NodeName=slurm-demo.hpc-node-compute01 State=DOWN Reason="undraining"
+scontrol: update NodeName=slurm-demo.hpc-node-compute01 State=RESUME
+```
+
+이 문제의 원인을 한동안 몰랐는데, 최근에 이유를 추측할 수 있었다. Slurm job이 종료가 될 때, 돌고 있는 프로세스에 [`SIGTERM`](https://en.wikipedia.org/wiki/Signal_(IPC)#SIGTERM) signal을 보내게 되는데, `SIGTERM`을 보낸 후 어느정도 지나면 `SIGKILL`을 보낸다. 근데 만약 특정 시간이 지나도 Job 종료가 안되면 drain상태에 빠지는 것으로 추측한다.
+
+특히, 서버의 자원이 대용량이 되어가면서 메모리 등을 반환하는데 시간이 예전보다 더 걸리는 경우가 많아서 `slurm.conf`의 timeout 시간들을 기본값보다 조금씩 늘려보는것도 나쁘지 않을 것 같다.
+
+```
+To cancel a job, invoke scancel without --signal option. This will send first a SIGCONT to all steps to eventually wake them up followed by a SIGTERM, then wait the KillWait duration defined in the slurm.conf file and finally if they have not terminated send a SIGKILL. This gives time for the running job/step(s) to clean up.
+```
+
+하지만, 자동으로 완전히 해결할 방법은 딱히 없어보인다.
+timeout시간도 어느정도가 적정선인지는 시스템마다 경험적으로 알아내는 수밖에 없다.
+모니터링을 열심히 하거나 cron으로 drain된 노드가 있으면 자동으로 undrain해주는 스크립트를 돌리거나 하는 방법밖에는 없어보인다.
+
+## Conclusion
+
+이렇게 slurm이 잘 되는 것을 확인했다. 많은 도움이 되었기를 바란다.
+자세한건 이제 [공식 문서](https://slurm.schedmd.com/documentation.html)를 살펴보면서 바꿔보면 된다.
+
+계산노드에 똑같은 작업을 반복해서 하기 귀찮다면 Ansible같은 여러 자동화툴이 존재하니까 써보면 나쁘지 않을 것같다.
+
+그리고 다음 포스트에서는 Docker 대신 사용할 수 있는 Apptainer를 설치하고 이를 slurm에서 어떻게 돌릴 수 있는지 알아보겠다.
