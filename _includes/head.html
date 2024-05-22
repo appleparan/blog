@@ -120,7 +120,20 @@
     rel="stylesheet"
     href="{{ site.data.origin[type]['lazy-polyfill'].css | relative_url }}"
   />
+  {% endif %} {% if page.layout == 'page' or page.layout == 'post' %} {% if
+  page.layout == 'page' or page.layout == 'post' %}
+  <!-- Image Popup -->
+  <link
+    rel="stylesheet"
+    href="{{ site.data.origin[type].glightbox.css | relative_url }}"
+  />
   {% endif %} {% if page.layout == 'page' or page.layout == 'post' %}
+  <!-- Image Popup -->
+  <link
+    rel="stylesheet"
+    href="{{ site.data.origin[type].glightbox.css | relative_url }}"
+  />
+  {% endif %}
   <!-- Manific Popup -->
   <link
     rel="stylesheet"
