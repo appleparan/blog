@@ -18,6 +18,18 @@
 
 </div>
 
+## How to use it (Development)
+
+1. Open in dev container 
+2. bundle install
+```shell
+bundle install
+```
+3. Open live server
+```shell
+bundle exec jekyll serve
+```
+
 ## Features
 
 - Dark Theme

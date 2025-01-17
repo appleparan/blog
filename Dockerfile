@@ -1,4 +1,4 @@
-FROM ruby:3.1.4-bullseye
+FROM ruby:3.3.4-bookworm
 
 # Install base, Ruby, Headers, Jekyll, Bundler, github-pages Export Path
 RUN apt update
