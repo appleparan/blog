@@ -49,11 +49,13 @@ assign js = 'commons' %} {% endcase %} {% capture script %}{{ js_dist }}{{ js
       /* start/end delimiter pairs for display math */
       displayMath: [
         ["$$", "$$"],
-        ["\\[", "\\]"]
+        ["\\\[", "\\\]"]
       ],
       /* equation numbering */
       tags: "ams",
-      packages: { "[+]": ["mathtools"] }
+      packages: {
+        "[+]": ["base", "mathtools"]
+      }
     },
     loader: { load: ["[tex]/mathtools"] }
   };
