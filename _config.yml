@@ -10,6 +10,7 @@ description: >- # used by seo meta and the atom feed
 
 # E.g. 'https://username.github.io', note that it does not end with a '/'.
 url: https://blog.liam.kim
+# baseurl: "" # the subpath of your site, e.g. /blog
 
 github:
   username: appleparan # change to your github username
@@ -87,7 +88,7 @@ theme_mode: # [light | dark]
 # will be added to all media resources (site avatar, posts' images, audio and video files) paths starting with '/'
 #
 # e.g. 'https://cdn.com'
-cdn: "https://chirpy-img.netlify.app"
+# cdn: "https://chirpy-img.netlify.app"
 
 # theme_mode: # [light | dark]
 
