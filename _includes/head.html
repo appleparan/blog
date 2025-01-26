@@ -1,28 +1,9 @@
 <head>
-<<<<<<< HEAD
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
-  <meta
-    name="theme-color"
-    media="(prefers-color-scheme: light)"
-    content="#f7f7f7"
-  />
-  <meta
-    name="theme-color"
-    media="(prefers-color-scheme: dark)"
-    content="#1b1b1e"
-  />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta
-    name="apple-mobile-web-app-status-bar-style"
-    content="black-translucent"
-  />
-=======
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
   <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f7f7f7">
   <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1b1b1e">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
->>>>>>> v7.2.4-branch
   <meta
     name="viewport"
     content="width=device-width, user-scalable=no initial-scale=1, shrink-to-fit=no, viewport-fit=cover"
@@ -68,13 +49,13 @@
   {{ seo_tags }}
 
   <title>
-    {%- unless page.layout == 'home' -%} {{ page.title | append: ' | ' }} {%-
-    endunless -%} {{ site.title }}
+    {%- unless page.layout == 'home' -%}
+      {{ page.title | append: ' | ' }}
+    {%- endunless -%}
+    {{ site.title }}
   </title>
 
-  {% include_cached favicons.html %} {% if site.resources.ignore_env !=
-  jekyll.environment and site.resources.self_hosted %}
-  
+  {% include_cached favicons.html %}
 
   <!-- Resource Hints -->
   {% unless site.assets.self_host.enabled %}
@@ -103,29 +84,7 @@
   <!-- 3rd-party Dependencies -->
 
   {% if site.toc and page.toc %}
-  <link
-    rel="stylesheet"
-    href="{{ site.data.origin[type].toc.css | relative_url }}"
-  />
-  {% endif %} {% if page.layout == 'post' or page.layout == 'page' or
-  page.layout == 'home' %}
-  <link
-    rel="stylesheet"
-    href="{{ site.data.origin[type]['lazy-polyfill'].css | relative_url }}"
-  />
-  {% endif %} {% if page.layout == 'page' or page.layout == 'post' %} {% if
-  page.layout == 'page' or page.layout == 'post' %}
-  <!-- Image Popup -->
-  <link
-    rel="stylesheet"
-    href="{{ site.data.origin[type].glightbox.css | relative_url }}"
-  />
-  {% endif %} {% if page.layout == 'page' or page.layout == 'post' %}
-  <!-- Image Popup -->
-  <link
-    rel="stylesheet"
-    href="{{ site.data.origin[type].glightbox.css | relative_url }}"
-  />
+    <link rel="stylesheet" href="{{ site.data.origin[type].toc.css | relative_url }}">
   {% endif %}
 
   {% if page.layout == 'post' or page.layout == 'page' or page.layout == 'home' %}
