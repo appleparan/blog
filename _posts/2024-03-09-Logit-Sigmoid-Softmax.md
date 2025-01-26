@@ -43,7 +43,8 @@ $$
 \end{equation}
 $$
 
-logit이 log odds에서 출발하기는 했지만, 일반적으로는 모델을 통해 나온 출력값을 뜻한다. 예를 들면 어떤 모델을 통해 count값이 나왔다고 가정했을 때, logit은 그 count값이 될 수 있다. 하지만, 이러면 확률로 변환이 안 되어있어 계산하기가 번거롭기에 확률로 바꿔주는 도구가 필요하다.
+logit이 log odds에서 출발하기는 했지만, 일반적으로는 모델을 통해 나온 출력값을 뜻한다. 예를 들면 어떤 모델을 통해 count값이 나왔다고 가정했을 때, logit은 그 count값이 될 수 있다. 날 것의 숫자 그 자체인 것이다.
+하지만, 이러면 확률로 변환이 안 되어있어 계산하기가 번거롭기에 확률로 바꿔주는 도구가 필요하다.
 
 ## sigmoid
 
@@ -73,14 +74,21 @@ sigmoid 함수를 통해 어떤 값 logit을($-\infty, \infty$) 확률의 범위
 
 ## softmax
 
-앞에서 본 sigmoid는 2개 (Win/Loss)의 클래스에 대해 분류하는 문제에 적용할 수 있는 문제이다.
-이를 K개의 클래스로 확장하면, softmax 함수가 된다.
+하지만 sigmoid는 logit scalar, 즉 logit 하나에 대해 확률로 변환을 수행하는 함수이다. 비선형함수로 만들기 위한 activation function이라고 할 수 있다.
+
+그러나 logit **vector**에 대해 확률 분포 **vector**로 변환하는 함수가 필요하다. 즉, 여러 개의 logit이 있을 때 이를 확률 분포로 변환하고자 할 때는 다음과 같이 **softmax**함수를 사용한다.
+
+정리하자면, sigmoid는 logit을 확률로 변환하는 함수, softmax는 logit vector를 확률 분포로 바꿔주는 함수라고 할 수 있다.
 
 $$
 \begin{align}
 \textrm{softmax}(x_i) &:= \dfrac{e^{x_i}}{\sum_{j=1}^K e^{x_j}} \\
 \end{align}
 $$
+
+보통 softmax라고 불리우는 이 함수는 **softargmax** 혹은 **normalized exponential function**라는 명칭으로 이해해야 자연스럽다. 왜냐하면 위 함수의 form은 vector $\mathbf{x}$에 대해서 $$LogSumExp(x_i) = \log{\sum_i \exp{x_i}}$$와 유사하며, 이는 $max$함수의 soft한 버전 즉 softmax라고 불리우기 때문이다.
+
+softmax함수는 벡터에 대해 적용할 수 있기 때문에 앞에서 본 sigmoid는 2개 (Win/Loss)의 클래스에 대해 분류하는 문제에 적용할 수 있는 문제에 많이 쓰이기도 하고, 이를 K개의 클래스로 확장할 때는 softmax를 많이 쓴다.
 
 logit과 sigmoid 입장에서 softmax를 해석하면, 단순하게 odds로 바꾸어서 생각하면 된다.
 어떤 logit(log odds) $X$가 있을 때, 지수 함수(exponential function)를 취하면 $\textrm{odds} \in [0, +\infty)$ 형태가 된다.
@@ -146,24 +154,45 @@ $$
 \end{equation}
 $$
 
+### What is "Machine Learning"?
+
+그러면 본질적인 문제로 돌아가보자 Machine Learning, 즉 기계 학습이란 어떤 의미일까?
+
+**새로운 데이터가 관찰하여 기존의 가설 혹은 모델에 대한 신뢰도를 점진적으로 업데이트하는 확률적 과정이다.**
+
+* 초기이든 아니면 기존의 가설($H$, hypothesis)이 존재하든, 이를 확률로 나타내면 prior $$P(H)$$ prior이다.
+* 이 때 새로운 데이터 $D$가 주어졌다고 하자.
+* 새로운 데이터 $$D$$에 대해 가설이 얼마나 가능한지에 대한 신뢰도는 $$P(D \rvert H)$$라고 할 수 있다. (likelihood) (현상)
+* prior과 likelihood를 곱한 뒤 이를 전체 데이터의 확률 (evidence) $$P(D)$$로 나눌 수 있다.
+* 그리고 그렇게 정한 최종 결과를 사후 확률 (posterior) $$P(H \rvert D)$$이라고 하며 이를 종합하면 베이즈 정리(Bayes' Theorem)이다. (원인)
+
+$$
+\begin{equation}
+P(H\rvert D) = \dfrac{P(D\rvert H) P(H)}{ P(D)}
+\end{equation}
+$$
+
+$$
+\begin{equation}
+\textrm{posterior} = \dfrac{\textrm{likelihood} \cdot \textrm{prior}}{ \textrm{evidence}}
+\end{equation}
+$$
+
+다시 정리하면, 모델 훈련은 기존 evidence(데이터)에 대한 가설(hypothesis)의 신뢰도(likelihood)를 업데이트하는 과정이다. 궁극적으로는 posterior(사후 확률)을 추론하여 원인을 파악하고자 하는 것이 목적이다.
+
+posterior $$P(H \rvert D)$$는 결국 다음 학습의 prior $$P(H)$$가 되어 지속적으로 업데이트 된다.
 
 ### Likelihood
 
-이 모델을 어떻게 훈련한다는 것은 어떤 의미일까?
-모델 훈련은 *loss function을 최소화화여, 모델의 예측이 실제 클래스(혹은 레이블)에 가장 가깝도록*하는 것이다.
-loss function은 얼마나 모델이 잘못되었는지 알려주는 함수인데, 모델이 정확할 수록 *모델의 잘못됨*은 작아질 수 밖에 없다.
-
-따라서 모델을 효과적으로 훈련시키기 위해서는, **훈련 데이터가 어떤 확률 분포를 따르고 있는지**를 파악하는 것이 중요하다.
-
-이전의 접근 방식에서 우리는 모델이 정답 클래스를 예측할 확률에 초점을 맞췄다. (분류문제라고 했을 때)
+위에서 언급한 분류문제에서는 모델이 정답 클래스를 예측할 확률에 초점을 맞췄다. (분류문제라고 했을 때)
 하지만, 이는 본질적으로 **모델의 매개변수가 주어진 훈련 데이터에 얼마나 잘 맞는지를 측정**하는 것과 관련이 있다.
 여기서 얘기하는 얼마나 잘 맞는지에 대한 적합도, 즉
-**데이터가 특정 모델 매개변수를 얼마나 '지지'하거나 '가능하게 하는지'의 척도**를 **가능도(likelihood)**라고 한다.
+**데이터가 특정 모델 매개변수를 얼마나 '지지'하거나 '가능하게 하는지'의 척도 혹은 신뢰도**를 **가능도(likelihood)**라고 한다.
 우도라고 표현하는 경우도 있지만, 가능도 혹은 기여도라고 해석하는게 직관적이다. 영어로 보면 "Like"란 단어는 좋아하다라는 의미도 있지만 '가깝다', '유사함'의 의미로 생각하면 이해가 쉬울 것이라고 생각한다.
 
 처음에 이해하기 어려운 개념이다. 그러나, 알고보면 그동안 사람들이 매번 하는 것이다.
 
-예를 들어 소개팅을 나간다고 하자, 소개팅에서 연애로 발전할 확률을 구할 수도 있다. 이는 특정 분포 (그동안 경험을 통해 보유)를 통해 새로운 소개팅 이성에 대해 성공할 확률을 계산할 수 있다. 이는 **분포로부터 데이터를 추정**이라고 볼 수 있다. 즉, **확률(Probability)**이다. (분포 고정)
+예를 들어 소개팅을 나간다고 하자, 소개팅에서 연애로 발전할 확률을 구할 수도 있다. 이는 특정 분포 (그동안 경험(prior)을 통해 보유)를 통해 새로운 소개팅 이성에 대해 성공할 확률을 계산할 수 있다. 이는 **분포로부터 데이터를 추정**이라고 볼 수 있다. 즉, **확률(Probability)**이다. (분포 고정)
 
 반대로 상대방 이성에 대한 정보(데이터)가 소개팅 성공에 얼마나 기여할까를 측정할 수도 있다. 프로필사진을 더 신뢰할 수도 있고, 주변인들의 전언을 더 신뢰할 수도 있다. (모델 파라미터) 경험이 쌓일수록 내가 어떤 정보를 더 신뢰해야하는가에 대해 통찰력이 생길것이다. 이는 **데이터로부터 분포를 추정**이라고 볼 수 있다. 즉, **가능도(Likelihood)**이다. (데이터 고정)
 
@@ -179,8 +208,8 @@ $$
 
 ### MLE(Maximum Likelihood Estimation) and Log-likelihood
 
-그러면 모델은 주어진 데이터를 통해 확률분포를 예측하는 걸 훈련하는게 목적이라고 정의한다고 했다.
-즉, 가능도를 최대화 해야한다. (Maximize Likelihood)
+모델은 주어진 데이터를 통해 확률분포를 예측하는 걸 훈련하는게 목적이라고 정의한다고 했다.
+prior에 상관하지 않을 때 이 말은 가능도를 최대화 해야한다는 것과 치환할 수 다. (Maximize Likelihood)
 
 그리고 가능도를 최대화하도록 모델 파라미터를 추정하는 것을 MLE(Maximum Likelihood Estimation)이라고 한다.
 
@@ -589,7 +618,18 @@ D_{KL}(P \;\|\; Q) &= H(P, Q) - H(P) \\
 $$
 
 Loss function의 의미로는 KL Divergence를 쓰는게 맞다.
-하지만 현실적으로 모델링의 관점에서 실제 분포 $P$를 정확히 알 수 없어 $H(P)$를 알 수 없기에, KL Divergence를 최소화 하는것을 cross entropy를 minimize하는 것으로 바꾸어서 풀게된다. 간접적인 최소화라고 할 수 있다. 따라서 보통 분류문제의 loss를 cross entropy로 대신해서 사용한다.
+하지만 현실적으로 모델링의 관점에서 실제 분포 $P$를 정확히 알 수 없어 $H(P)$를 알 수 없기에, KL Divergence를 최소화 하는것을 cross entropy를 minimize하는 것으로 바꾸어서 풀게된다. 간접적인 최소화라고 할 수 있다.
+
+그런데 분류 문제에서는 실제 분포 $P$는 one-hot vector로 이루어진다. one-hot vector는 한 변수를 제외하고는 나머지 변수는 0의 값을 지닌다.
+
+따라서 다음 식처럼 변하게 되고, $$H(P, Q)$$는 cross entropy이기에 KLD와 cross entropy가 같으므로 결국 cross entropy loss는 KL divergence를 minimize하는 것과 같은 효과를 지닌다.
+
+$$
+\begin{align}
+D_{KL}(P \;\|\; Q) &= H(P, Q) - H(P) \\
+&= H(P, Q)  \\
+\end{align}
+$$
 
 스팸메일 분류를 예로 들어보자. 실제 스팸일 확률은 80%, 하지만 모델은 70%로 예측한다고 해보자. 이를 표로 표현하면 다음과 같다.
 
