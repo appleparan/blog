@@ -96,3 +96,16 @@
   ></script>
 {% endif %}
 
+<!-- Pageviews -->
+{% if page.layout == 'post' %}
+  {% assign provider = site.pageviews.provider %}
+
+  {% if provider and provider != empty %}
+    {% case provider %}
+      {% when 'goatcounter' %}
+        {% if site.analytics[provider].id != empty and site.analytics[provider].id %}
+          {% include pageviews/{{ provider }}.html %}
+        {% endif %}
+    {% endcase %}
+  {% endif %}
+{% endif %}
