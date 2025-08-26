@@ -7,6 +7,9 @@ gem "terminal-table"
 gem "kramdown"
 gem "kramdown-parser-gfm"
 gem "html-proofer", "~> 5.0", group: :test
+gem "csv"
+gem "base64"
+gem "faraday-retry"
 
 # plugins
 group :jekyll_plugins do
