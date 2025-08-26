@@ -13,6 +13,7 @@
     "url": "https://github.com/cotes2020/jekyll-theme-chirpy/issues"
   },
   "homepage": "https://github.com/cotes2020/jekyll-theme-chirpy/",
+  "type": "module",
   "scripts": {
     "build": "concurrently npm:build:*",
     "build:css": "node purgecss.js",
