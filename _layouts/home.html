@@ -2,7 +2,6 @@
 layout: default
 refactor: true
 ---
-
 {% include lang.html %}
 
 {% assign all_pinned = site.posts | where: 'pin', 'true' %}
@@ -55,9 +54,7 @@ refactor: true
 
         {% if post.image %}
           {% assign src = post.image.path | default: post.image %}
-          {% unless src contains '//' %}
-            {% assign src = post.media_subpath | append: '/' | append: src | replace: '//', '/' %}
-          {% endunless %}
+          {% capture src %}{% include media-url.html src=src subpath=post.media_subpath %}{% endcapture %}
 
           {% assign alt = post.image.alt | xml_escape | default: 'Preview Image' %}
 

@@ -155,7 +155,7 @@ assets:
     enabled: # boolean, keep empty means false
     # specify the Jekyll environment, empty means both
     # only works if `assets.self_host.enabled` is 'true'
-    env: # [development | production]
+    env: production # [development | production]
 
 pwa:
   enabled: true # The option for PWA feature (installable)
@@ -186,10 +186,10 @@ plugins:
   - jekyll-youtube
 
 img:
-  die_on_img_error: false
+  die_on_img_error: true
 
 quote:
-  die_on_quote_error: false
+  die_on_quote_error: true
 
 sass:
   style: :compressed
