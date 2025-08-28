@@ -177,7 +177,6 @@ plugins:
   - jekyll-gist
   - jekyll_img
   - jekyll-paginate-v2
-  - jekyll_picture_tag
   - jekyll_quote
   - jekyll-sass-converter
   - jekyll-sitemap
