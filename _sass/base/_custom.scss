@@ -1,0 +1,11 @@
+.imgWrapper figure {
+  text-align: center; /* All inline/inline-block in center */
+}
+
+.imgWrapper figure img {
+  display: inline-block; /* text-align: center if inline-block */
+}
+
+.imgWrapper figure figcaption {
+  text-align: center;
+}
