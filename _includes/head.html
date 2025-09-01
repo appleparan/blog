@@ -62,18 +62,18 @@
       {% for link in hint.links %}
         <link rel="{{ link.rel }}" href="{{ hint.url }}" {{ link.opts | join: ' ' }}>
       {% endfor %}
-    {% endunless %}
+    {% endfor %}
+  {% endunless %}
 
-    <!-- Web Fonts -->
-    <link
-      rel="stylesheet"
-      href="{{ site.data.origin[type].webfonts | relative_url }}"
-    />
-    <link
-      rel="stylesheet"
-      href="{{ site.data.origin[type].webfonts2 | relative_url }}"
-    />
-  {% endif %}
+  <!-- Web Fonts -->
+  <link
+    rel="stylesheet"
+    href="{{ site.data.origin[type].webfonts | relative_url }}"
+  />
+  <link
+    rel="stylesheet"
+    href="{{ site.data.origin[type].webfonts2 | relative_url }}"
+  />
 
   <!-- GA -->
   {% if jekyll.environment == 'production' and site.analytics.google.id != empty and site.analytics.google.id %}
@@ -154,9 +154,6 @@
     {% endfor %}
   {% endif %}
 
-  {% unless site.theme_mode %}
-    {% include mode-toggle.html %}
-  {% endunless %}
 
   {% include metadata-hook.html %}
 </head>
