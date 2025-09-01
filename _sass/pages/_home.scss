@@ -106,7 +106,7 @@
 
 .pagination {
   color: var(--text-color);
-  font-family: Lato, sans-serif;
+  font-family: 'Pretendard Variable', Lato, sans-serif;
   justify-content: space-evenly;
 
   @include bp.lg {
@@ -160,7 +160,7 @@
       cursor: not-allowed;
 
       .page-link {
-        color: rgba(108, 117, 125, 0.57);
+        color: rgb(108, 117, 125, 0.57);
       }
     }
   } /* .page-item */

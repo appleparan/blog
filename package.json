@@ -20,13 +20,13 @@
     "build:js": "rollup -c --bundleConfigAsCjs --environment BUILD:production",
     "watch:js": "rollup -c --bundleConfigAsCjs -w",
     "lint:scss": "stylelint _sass/**/*.scss",
-    "lint:fix:scss": "npm run lint:scss -- --fix",
-    "test": "npm run lint:scss",
+    "lint:fix:scss": "bun run lint:scss -- --fix",
+    "test": "bun run lint:scss",
     "prepare": "husky"
   },
   "dependencies": {
     "@popperjs/core": "^2.11.8",
-    "bootstrap": "^5.3.6"
+    "bootstrap": "^5.3.8"
   },
   "devDependencies": {
     "@babel/core": "^7.27.1",

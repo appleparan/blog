@@ -11,7 +11,7 @@ const config = {
   // The `safelist` should be changed appropriately for future development
   safelist: {
     standard: [/^collaps/, /^w-/, 'shadow', 'border', 'kbd'],
-    greedy: [/^col-/, /tooltip/]
+    greedy: [/^col-/, /tooltip/, /^btn-/]
   }
 };
 
