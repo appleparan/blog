@@ -46,7 +46,15 @@ if $prod; then
   command="JEKYLL_ENV=production $command"
 fi
 
+# Force polling for better file watching in container/WSL environments
 if [ -e /proc/1/cgroup ] && grep -q docker /proc/1/cgroup; then
+  echo "Docker container detected, enabling --force_polling"
+  command="$command --force_polling"
+elif [ -e /.dockerenv ]; then
+  echo "Docker environment detected, enabling --force_polling" 
+  command="$command --force_polling"
+elif grep -qi microsoft /proc/version 2>/dev/null || [ -n "$WSL_DISTRO_NAME" ]; then
+  echo "WSL environment detected, enabling --force_polling"
   command="$command --force_polling"
 fi
 

@@ -26,5 +26,17 @@
       ]
     }
   },
+  
+  // Use 'forwardPorts' to make a list of ports inside the container available locally.
+  "forwardPorts": [4000],
+
+  // Run commands after the container is created.
+  "postCreateCommand": "bundle install",
+
+  // Mount options for better file watching performance in WSL
+  "mounts": [
+    "source=${localWorkspaceFolder},target=/workspace,type=bind,consistency=delegated"
+  ],
+
   "remoteUser": "devcontainer"
 }
