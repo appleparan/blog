@@ -624,7 +624,7 @@ Spectrum Norm 기반 Regularzation은 weight의 크기 자체보다, weight matr
 
 $$
 \begin{equation*}
-K_f \leq \Phi_{i=1}^L K_{f_i}= \Phi_{i=1}^L \| W_i \|_\sigma
+K_f \leq \sum_{i=1}^L K_{f_i}= \sum_{i=1}^L \| W_i \|_\sigma
 \end{equation*}
 $$
 
