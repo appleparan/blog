@@ -652,13 +652,15 @@ L2 Regularization과 같은 기존 방식들은 여기서 딜레마가 발생한
 반면, SN(Spectral Normalization)은 행렬의 rank와는 독립적으로 오직 최대 singular value(최대 민감도)만을 제어한다.
 따라서 판별자가 Lipschitz constant bound를 유지하면서 다양한 feature를 활용할 수 있게 해준다.
 
-### Batch Normalization (WIP)
+### Batch Normalization
 
 Batch Normalization은 학습 시 미니배치(mini-batch) 단위로 데이터의 평균과 분산을 계산하여 각 레이어의 입력을 정규화하는 방식이다.
 
+그런데 Batch Normalization은 또 다루면 너무 길어지므로 자세한건 다른 포스트에서 다루도록 하겠다.
 
 ## Conclusion
-지금까지 일반화(Generalization) 성능을 올리기 위해 모델 복잡도를 줄이는 방법을 살펴보았다. 모델의 일반화 성능을 올리기 위해서는 훈련 데이터와 테스트 데이터가 동일분포라고 가정할 때 (1) 충분한 훈련 데이터양을 확보하고 (2) 훈련의 품질을 높여 좋은 모델을 찾아내고 (3) 모델의 복잡도를 낮춰야한다. 이 중 (3)에 집중하여 이론적으로 가설 공간의 크기를 줄이는 것이 모델의 복잡도를 낮추는 역할이다. 특히 신경망에서는 추상적이었던 모델의 복잡도 혹은 가설 공간의 크기는 모델을 구성하는 파라미터들의 **Norm**으로 실체화시켜서 측정이 가능하다. Norm을 통해 직접적으로 weight를 줄이는 Weight Decay 방법, 그리고 간접적으로 배치의 스케일을 조정하여 간접적으로 weight를 줄이는 Batch Normalization을 알아보았다.
+지금까지 일반화(Generalization) 성능을 올리기 위해 모델 복잡도를 줄이는 방법을 살펴보았다. 모델의 일반화 성능을 올리기 위해서는 훈련 데이터와 테스트 데이터가 동일분포라고 가정할 때 (1) 충분한 훈련 데이터양을 확보하고 (2) 훈련의 품질을 높여 좋은 모델을 찾아내고 (3) 모델의 복잡도를 낮춰야한다. 이 중 (3)에 집중하여 이론적으로 가설 공간의 크기를 줄이는 것이 모델의 복잡도를 낮추는 역할이다. 특히 신경망에서는 추상적이었던 모델의 복잡도 혹은 가설 공간의 크기는 모델을 구성하는 파라미터들의 **Norm**으로 실체화시켜서 측정이 가능하다. Norm을 통해 직접적으로 weight를 줄이는 Weight Decay 방법을 알아보았다.
+간접적으로 배치의 스케일을 조정하여 간접적으로 weight를 줄이는 Batch Normalization이 있지만 너무 길어져서 생략한다.
 
 ## References
 * [CS260 Machine Learning Algorithms](https://www.cs.cmu.edu/~atalwalk/teaching/winter17/cs260/index.html)
