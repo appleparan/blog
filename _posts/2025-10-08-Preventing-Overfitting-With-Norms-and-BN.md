@@ -1,6 +1,6 @@
 ---
 layout: post
-title: Preventing Overfitting with Norms and Batch Normalization
+title: Preventing Overfitting
 author: jongsukim
 date: 2025-10-08 02:00:00 +0900
 ccategories: [Deep Learning, LLM]
@@ -13,7 +13,6 @@ tags:
   - Rademacher Complexity
   - Regularization
   - Weight decay
-  - Batch Normalization
   - Generalization
 math: true
 mermaid: false
