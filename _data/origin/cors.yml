@@ -31,7 +31,7 @@ search:
   js: https://cdn.jsdelivr.net/npm/simple-jekyll-search@1.10.0/dest/simple-jekyll-search.min.js
 
 mermaid:
-  js: https://cdn.jsdelivr.net/npm/mermaid@11.4.0/dist/mermaid.min.js
+  js: https://cdn.jsdelivr.net/npm/mermaid@11.12.0/dist/mermaid.min.js
 
 dayjs:
   js:
@@ -52,4 +52,4 @@ clipboard:
   js: https://cdn.jsdelivr.net/npm/clipboard@2.0.11/dist/clipboard.min.js
 
 mathjax:
-  js: https://cdn.jsdelivr.net/npm/mathjax@3.2.2/es5/tex-chtml-full.js
+  js: https://cdnjs.cloudflare.com/ajax/libs/mathjax/4.0.0/tex-chtml.min.js
