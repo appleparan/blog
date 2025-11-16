@@ -329,7 +329,7 @@ $$
 이 때 ELBO는 두 가지 term으로 구성된다.
 
 * Reconstruction (디코더 $z -> x$)
-  * $$mathbb{E}_{\mathbf{z} \sim q_\theta (z \mid x)} \left[ \log p_\phi(\mathbf{x \mid z}) \right]$$
+  * $$\mathbb{E}_{\mathbf{z} \sim q_\theta (z \mid x)} \left[ \log p_\phi(\mathbf{x \mid z}) \right]$$
   * 방향: $\mathbf{z} \rightarrow \mathbf{x}$ (Decoder, 생성)
   * 목표: 데이터 충실도 (Data Fidelity). 즉, $z$로부터 원본 $x$를 얼마나 잘 복원하는가?
   * 최대화가 목표 (그래서 +)
@@ -423,7 +423,7 @@ $$
 
 즉,
 L2 손실(Reconstruction Error)을 최소화하는 최적의 Decoder $$\mu^*(\mathbf{z})$$는
-**어떤 $$\mathbf{z}$$가 주어졌을 때, 그 $$\mathbf{z}$$를 만들었을 가능성이 있는 모든 원본 $$\mathbf{x}$$들의 '평균'을 출력**이 된다는 것이다.
+**어떤 $$\mathbf{z}$$가 주어졌을 때, 그 $$\mathbf{z}$$를 만들었을 가능성이 있는 모든 원본 $$\mathbf{x}$$들의 '평균'을 출력**하게 된다는 것이다.
 
 ## Variational Perspective: DDPM
 
@@ -433,10 +433,10 @@ L2 손실(Reconstruction Error)을 최소화하는 최적의 Decoder $$\mu^*(\ma
 DDPM(Denoising Diffusion Probabilistic Models)은 이를 해결하기 위해 Encoder를 고정하고 Decoder만을 학습한다.
 
 * The forward pass (Fixed Encoder):
-  * $p(\mathbf{x}_i \mid \mathbf{x}_{i-1})$이라는 transition kernel을 통해 데이터에 Gaussian noise를 서서히 주입하여 데이터를 왜곡한다.
+  * $$p(\mathbf{x}_i \mid \mathbf{x}_{i-1})$$이라는 transition kernel을 통해 데이터에 Gaussian noise를 서서히 주입하여 데이터를 왜곡한다.
   * 결국 데이터는 isotropic Gaussian data로 전환되게 되고, 이 과정은 항상 일정하므로 고정된 Encoder라고 할 수 있다.
 * The reverse Denoising Process (Learnables Decoder):
-  * Decoder에서는 parameterized된 $p_{\phi}(\mathbf{x}_{i_1} \mid\mathbf{x}_{i})$을 통해 노이즈 주입을 **reverse**하는 과정을 배우게 된다.
+  * Decoder에서는 parameterized된 $$p_{\phi}(\mathbf{x}_{i_1} \mid\mathbf{x}_{i})$$을 통해 노이즈 주입을 **reverse**하는 과정을 배우게 된다.
   * VAE에서 한번에 denoising하는 것보다는 훨씬 더 controllable하다.
 
 {% img align="center" style='background-color: #fff'
