@@ -195,7 +195,7 @@ blog:
   truncated_preview: false
 
 scholar:
-  style: chicago-author-date
+  style: ieee
   source: _bibliography
 
 # Produces a cleaner folder structure when using categories
