@@ -3,7 +3,7 @@ layout: post
 title: Attention Mechanism 최적화와 KV Cache 계산
 author: jongsukim
 date: 2025-01-18 01:00:00 +0900
-ccategories: [Deep Learning, LLM]
+categories: [Deep Learning, LLM]
 tags:
   - LLM
   - Inference

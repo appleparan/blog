@@ -3,7 +3,7 @@ layout: post
 title: Preventing Overfitting
 author: jongsukim
 date: 2025-10-08 02:00:00 +0900
-ccategories: [Deep Learning, LLM]
+categories: [Deep Learning]
 tags:
   - Norm
   - L1 Norm

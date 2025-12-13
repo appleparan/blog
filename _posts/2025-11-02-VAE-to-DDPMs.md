@@ -3,7 +3,7 @@ layout: post
 title: From VAEs to DDPMs
 author: jongsukim
 date: 2025-11-02 02:00:00 +0900
-ccategories: [Deep Learning, LLM]
+categories: [Deep Learning, Diffusion, Vision]
 tags:
   - VAE
   - Diffusion Models
