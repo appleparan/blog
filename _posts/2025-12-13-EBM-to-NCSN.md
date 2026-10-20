@@ -565,9 +565,9 @@ $$
 
 증명은 각 MSE Loss를 전개하면 $\phi$관련된 term은 소거되고 관련없는 term만 $C$로 남게 된다.
 
-이를 통해 DDPM부터 내려온 다음과 같은 테크닉을 알 수 있다.
+이를 통해 DDPM때도 있었고, NCSN을 거쳐, 앞으로도 관통할 다음과 같은 테크닉을 알 수 있다.
 
-**데이터 포인트 $\mathbf{x}$에 대해 conditioning을 사용해서 intractable한 loss를 tractable한 loss로 바꾼다. (MOnte Carlo Estimation 대상)**
+**데이터 포인트 $\mathbf{x}$에 대해 conditioning을 사용해서 intractable한 loss를 tractable한 loss로 바꾼다. (Monte Carlo Estimation 대상)**
 
 #### Special Case: Additive Gaussian Noise
 
