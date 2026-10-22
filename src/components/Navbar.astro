@@ -41,3 +41,25 @@ const { currentPath = '/' } = Astro.props;
     </div>
   </div>
 </nav>
+
+<style>
+  /* Phone width: the brand takes its own row and the links wrap, so nothing overflows. */
+  @media (max-width: 768px) {
+    .navbar-inner {
+      flex-wrap: wrap;
+      gap: 0.25rem 1rem;
+      padding: 0.6rem 1rem;
+    }
+
+    .navbar-brand {
+      white-space: nowrap;
+    }
+
+    .navbar-links {
+      width: 100%;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 0.25rem 0.5rem;
+    }
+  }
+</style>
