@@ -23,15 +23,16 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
+    "@commitlint/cli": "^19.8.1",
+    "@commitlint/config-conventional": "^19.8.1",
+    "@mdx-js/mdx": "^3.1.1",
+    "husky": "^9.1.7",
     "node-html-parser": "^9.0.4",
     "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
     "typescript": "^6.0.3",
     "vite-plugin-compression": "^0.5.1",
-    "vitest": "^5.0.2",
-    "husky": "^9.1.7",
-    "@commitlint/cli": "^19.8.1",
-    "@commitlint/config-conventional": "^19.8.1"
+    "vitest": "^5.0.2"
   },
   "commitlint": {
     "extends": [
