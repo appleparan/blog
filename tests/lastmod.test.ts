@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -15,6 +15,22 @@ describe('lastModified', () => {
     const file = join(mkdtempSync(join(tmpdir(), 'lastmod-')), 'post.mdx');
     writeFileSync(file, 'x');
     expect(lastModified(file)).toBeNull();
+  });
+
+  it('returns null in a shallow clone', () => {
+    const run = (cwd: string, ...args: string[]) =>
+      execFileSync('git', args, { cwd, stdio: 'ignore' });
+    const root = mkdtempSync(join(tmpdir(), 'lastmod-shallow-'));
+    const origin = join(root, 'origin');
+    mkdirSync(origin);
+    run(origin, 'init', '-q');
+    for (const n of ['1', '2']) {
+      writeFileSync(join(origin, `${n}.mdx`), n);
+      run(origin, 'add', '.');
+      run(origin, '-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '-m', n);
+    }
+    run(root, 'clone', '-q', '--depth', '1', `file://${origin}`, 'clone');
+    expect(lastModified(join(root, 'clone', '1.mdx'))).toBeNull();
   });
 
   it('returns null for a missing file', () => {

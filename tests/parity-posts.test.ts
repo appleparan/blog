@@ -42,6 +42,12 @@ describe('post pages match the Jekyll site', () => {
     expect(readFileSync(`dist${url}index.html`, 'utf8')).not.toContain('katex-error');
   });
 
+  it.each(Object.keys(reference.posts))('%s has no duplicate ids in the article', (url) => {
+    const article = parse(readFileSync(`dist${url}index.html`, 'utf8')).querySelector('article')!;
+    const ids = article.querySelectorAll('[id]').map((el) => el.id);
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+  });
+
   it('builds no post page that Jekyll did not publish', () => {
     const built = readdirSync('dist/posts', { recursive: true, encoding: 'utf8' })
       .filter((f) => f.endsWith('index.html'))

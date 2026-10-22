@@ -20,4 +20,15 @@ describe('rehypeReferencesHeading', () => {
     rehypeReferencesHeading()(tree);
     expect(tree.children).toHaveLength(1);
   });
+
+  it.each([
+    ['text References', { children: [{ type: 'text', value: 'References' }] }],
+    ['text 참고문헌', { children: [{ type: 'text', value: ' 참고문헌 ' }] }],
+    ['id references', { properties: { id: 'references' }, children: [] }],
+  ])('adds nothing when the post already has a heading with %s', (_, heading) => {
+    const author = { type: 'element', tagName: 'h2', properties: {}, ...heading };
+    const tree = { type: 'root', children: [author, p(), refs()] };
+    rehypeReferencesHeading()(tree);
+    expect(tree.children.map((c) => c.tagName)).toEqual(['h2', 'p', 'div']);
+  });
 });
