@@ -1,3 +1,9 @@
 {
-  "extends": "astro/tsconfigs/strict"
+  "extends": "astro/tsconfigs/strict",
+  // Read by the MDX VS Code extension (unifiedjs.vscode-mdx) only; Astro's
+  // build uses the processor in astro.config.mjs. These remark parsers let the
+  // editor understand YAML front matter, GFM tables, and $…$ math in posts.
+  "mdx": {
+    "plugins": [["remark-frontmatter", ["yaml"]], "remark-gfm", "remark-math"]
+  }
 }

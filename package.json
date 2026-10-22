@@ -38,6 +38,8 @@
     "node-html-parser": "^9.0.4",
     "oxfmt": "^0.70.0",
     "oxlint": "^1.85.0",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
     "typescript": "^6.0.3",
     "vitest": "^5.0.2",
     "yaml": "^2.9.1"
