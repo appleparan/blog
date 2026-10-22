@@ -33,9 +33,8 @@ export interface CategoryNode {
 /** Jekyll-compatible slug: drop punctuation, spaces to hyphens, lowercase. */
 export function slugify(name: string): string {
   return name
-    .replace(/[^\p{L}\p{N} -]/gu, "")
-    .trim()
-    .replace(/ +/g, "-")
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
     .toLowerCase();
 }
 
@@ -132,8 +131,8 @@ export function relatedPosts(post: Post, posts: Post[], limit = 3): Post[] {
     .map((p) => ({
       p,
       score:
-        p.data.tags.filter((t) => tags.has(t)).length +
-        p.data.categories.filter((c) => cats.has(c)).length,
+        new Set(p.data.tags.filter((t) => tags.has(t))).size +
+        new Set(p.data.categories.filter((c) => cats.has(c))).size,
     }))
     .filter((x) => x.score > 0)
     .sort((a, b) => b.score - a.score || b.p.data.date.getTime() - a.p.data.date.getTime())

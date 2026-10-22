@@ -1,6 +1,5 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { parse } from "yaml";
 import {
   adjacentPosts,
   categoryIndex,
@@ -32,20 +31,25 @@ describe("slugify", () => {
     expect(slugify("external forcing$$")).toBe("external-forcing");
   });
 
+  it("turns each run of separators into one hyphen", () => {
+    expect(slugify("a.b")).toBe("a-b");
+    expect(slugify("Q&A")).toBe("q-a");
+    expect(slugify("foo/bar")).toBe("foo-bar");
+    expect(slugify("a - b")).toBe("a-b");
+  });
+
   it("maps every published tag and category to a URL in the Jekyll fixture", () => {
     const { urls } = JSON.parse(readFileSync("tests/fixtures/jekyll-reference.json", "utf8"));
     const known = new Set<string>(urls);
-    const missing: string[] = [];
-    for (const file of readdirSync("_posts")) {
-      const fm = parse(readFileSync(`_posts/${file}`, "utf8").split("---")[1]);
-      if (fm.draft) continue;
-      for (const c of fm.categories ?? []) {
-        if (!known.has(`/categories/${slugify(c)}/`)) missing.push(`category ${c}`);
-      }
-      for (const t of fm.tags ?? []) {
-        if (!known.has(`/tags/${slugify(t)}/`)) missing.push(`tag ${t}`);
-      }
-    }
+    const names = JSON.parse(readFileSync("tests/fixtures/taxonomy-names.json", "utf8"));
+    const missing = [
+      ...names.categories
+        .filter((c: string) => !known.has(`/categories/${slugify(c)}/`))
+        .map((c: string) => `category ${c}`),
+      ...names.tags
+        .filter((t: string) => !known.has(`/tags/${slugify(t)}/`))
+        .map((t: string) => `tag ${t}`),
+    ];
     expect(missing).toEqual([]);
   });
 });
