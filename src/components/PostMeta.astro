@@ -1,6 +1,6 @@
 ---
 // Meta line above the post title: `date · 수정 <lastmod> · N분`.
-import { siteConfig } from '../config';
+import { formatSeoulDate } from '../lib/format-date';
 
 interface Props {
   date: Date;
@@ -10,16 +10,9 @@ interface Props {
 
 const { date, lastmod, minutes } = Astro.props;
 
-// en-CA formats as YYYY-MM-DD.
-const seoulDate = new Intl.DateTimeFormat('en-CA', {
-  timeZone: siteConfig.timezone,
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-});
-const published = seoulDate.format(date);
+const published = formatSeoulDate(date);
 // Show the edit date only when it falls on a later day than the publish date.
-const modified = lastmod ? seoulDate.format(lastmod) : null;
+const modified = lastmod ? formatSeoulDate(lastmod) : null;
 const showModified = modified !== null && modified !== published;
 ---
 

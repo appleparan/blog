@@ -1,0 +1,82 @@
+---
+import type { GetStaticPaths } from 'astro';
+import type { CollectionEntry } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostCard from '../components/PostCard.astro';
+import Pagination from '../components/Pagination.astro';
+import SidePanel from '../components/SidePanel.astro';
+import { siteConfig } from '../config';
+import { getPosts } from '../lib/get-posts';
+import { lastModified } from '../lib/lastmod';
+import { trendingTags } from '../lib/posts';
+
+const RECENT_COUNT = 5;
+
+export const getStaticPaths = (async ({ paginate }) => {
+  const posts = await getPosts();
+  const pages = paginate(posts, { pageSize: siteConfig.postsPerPage, props: { all: posts } });
+  // paginate() builds `/2`; the site keeps Jekyll's `/page/2/` (page 1 stays `/`).
+  return pages.map((p) => ({
+    ...p,
+    params: { page: p.params.page ? `page/${p.params.page}` : undefined },
+  }));
+}) satisfies GetStaticPaths;
+
+const { page, all } = Astro.props;
+// Shallow clones have no git history (lastModified is null), so fall back to the post date.
+const recent = all
+  .map((post) => {
+    const { filePath } = post as CollectionEntry<'posts'>;
+    return { post, modified: (filePath && lastModified(filePath)) || post.data.date };
+  })
+  .sort((a, b) => b.modified.getTime() - a.modified.getTime())
+  .slice(0, RECENT_COUNT);
+const pageHref = (n: number) => (n === 1 ? '/' : `/page/${n}/`);
+const currentPath = pageHref(page.currentPage);
+---
+
+<BaseLayout currentPath={currentPath}>
+  <div class="content-container home-container">
+    <h1 class="sr-only">{siteConfig.title}</h1>
+    <div class="home-grid">
+      <main>
+        {page.data.map((post) => <PostCard post={post} />)}
+        <Pagination
+          current={page.currentPage}
+          last={page.lastPage}
+          prev={page.currentPage > 1 ? pageHref(page.currentPage - 1) : undefined}
+          next={page.currentPage < page.lastPage ? pageHref(page.currentPage + 1) : undefined}
+        />
+      </main>
+      <SidePanel recent={recent} tags={trendingTags(all)} />
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .home-container {
+    max-width: 1100px;
+  }
+
+  .home-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 240px;
+    gap: 2.5rem;
+    align-items: start;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  @media (max-width: 1023px) {
+    .home-grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

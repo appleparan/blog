@@ -8,6 +8,7 @@ import Share from '../components/Share.astro';
 import CopyCode from '../components/CopyCode.astro';
 import Mermaid from '../components/Mermaid.astro';
 import { siteConfig } from '../config';
+import { formatSeoulDate } from '../lib/format-date';
 import { postUrl, slugify, type Post } from '../lib/posts';
 import type { TocHeading } from '../lib/toc-headings';
 
@@ -27,8 +28,6 @@ const { post, headings, prev, next, related, lastmod, minutes } = Astro.props;
 const { title, description, date, categories, tags, mermaid } = post.data;
 const url = postUrl(post);
 const hasToc = headings.some((h) => h.depth >= 2 && h.depth <= 4);
-const shortDate = (d: Date) =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: siteConfig.timezone, dateStyle: 'short' }).format(d);
 ---
 
 <BaseLayout title={title} description={description} currentPath={url}>
@@ -96,7 +95,7 @@ const shortDate = (d: Date) =>
                 {related.map((p) => (
                   <li>
                     <a href={postUrl(p)}>{p.data.title}</a>
-                    <time datetime={p.data.date.toISOString()}>{shortDate(p.data.date)}</time>
+                    <time datetime={p.data.date.toISOString()}>{formatSeoulDate(p.data.date)}</time>
                   </li>
                 ))}
               </ul>

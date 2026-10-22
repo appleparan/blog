@@ -1,0 +1,78 @@
+---
+// One post in the home list: title, `date · category · N분`, and an excerpt.
+import { formatSeoulDate } from '../lib/format-date';
+import { excerpt } from '../lib/excerpt';
+import { postUrl, slugify, type Post } from '../lib/posts';
+import { readingTime } from '../lib/reading-time';
+
+interface Props {
+  post: Post;
+}
+
+const { post } = Astro.props;
+const { title, date, categories, description } = post.data;
+const category = categories[0];
+const summary = description ?? excerpt(post.body ?? '');
+---
+
+<article class="post-card">
+  <h2 class="post-card-title"><a href={postUrl(post)}>{title}</a></h2>
+  <div class="post-card-meta">
+    <time datetime={date.toISOString()}>{formatSeoulDate(date)}</time>
+    {
+      category && (
+        <>
+          {' · '}
+          <a class="post-card-category" href={`/categories/${slugify(category)}/`}>
+            {category}
+          </a>
+        </>
+      )
+    }
+    {` · ${readingTime(post.body ?? '')}분`}
+  </div>
+  {summary && <p class="post-card-excerpt">{summary}</p>}
+</article>
+
+<style>
+  .post-card {
+    padding: 1.1rem 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .post-card:first-child {
+    padding-top: 0;
+  }
+
+  .post-card-title {
+    margin: 0 0 0.25rem;
+    font-size: 1.2rem;
+    line-height: 1.35;
+  }
+
+  .post-card-title a {
+    color: var(--text-heading);
+  }
+
+  .post-card-title a:hover {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .post-card-meta {
+    color: var(--text-muted);
+    font-size: 0.85rem;
+  }
+
+  .post-card-category {
+    color: var(--accent);
+  }
+
+  .post-card-excerpt {
+    margin: 0.5rem 0 0;
+    color: var(--text);
+    font-size: 0.95rem;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+  }
+</style>

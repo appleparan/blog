@@ -1,0 +1,53 @@
+---
+// Newer/older links under the home list. Page 1 is `/`, page N is `/page/N/`.
+interface Props {
+  current: number;
+  last: number;
+  prev?: string;
+  next?: string;
+}
+
+const { current, last, prev, next } = Astro.props;
+---
+
+{
+  last > 1 && (
+    <nav class="pagination" aria-label="Pagination">
+      {prev ? (
+        <a href={prev} rel="prev">
+          &larr; 최신 글
+        </a>
+      ) : (
+        <span />
+      )}
+      <span class="pagination-status">
+        {current} / {last}
+      </span>
+      {next ? (
+        <a href={next} rel="next">
+          이전 글 &rarr;
+        </a>
+      ) : (
+        <span />
+      )}
+    </nav>
+  )
+}
+
+<style>
+  .pagination {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1.75rem;
+    font-size: 0.9rem;
+  }
+
+  .pagination a {
+    color: var(--accent);
+  }
+
+  .pagination-status {
+    color: var(--text-muted);
+  }
+</style>
