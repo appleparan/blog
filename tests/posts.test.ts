@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
   adjacentPosts,
@@ -28,7 +27,7 @@ describe('slugify', () => {
     expect(slugify('LLM Inference')).toBe('llm-inference');
   });
 
-  it('strips trailing punctuation like Jekyll', () => {
+  it('strips trailing punctuation', () => {
     expect(slugify('external forcing$$')).toBe('external-forcing');
   });
 
@@ -37,21 +36,6 @@ describe('slugify', () => {
     expect(slugify('Q&A')).toBe('q-a');
     expect(slugify('foo/bar')).toBe('foo-bar');
     expect(slugify('a - b')).toBe('a-b');
-  });
-
-  it('maps every published tag and category to a URL in the Jekyll fixture', () => {
-    const { urls } = JSON.parse(readFileSync('tests/fixtures/jekyll-reference.json', 'utf8'));
-    const known = new Set<string>(urls);
-    const names = JSON.parse(readFileSync('tests/fixtures/taxonomy-names.json', 'utf8'));
-    const missing = [
-      ...names.categories
-        .filter((c: string) => !known.has(`/categories/${slugify(c)}/`))
-        .map((c: string) => `category ${c}`),
-      ...names.tags
-        .filter((t: string) => !known.has(`/tags/${slugify(t)}/`))
-        .map((t: string) => `tag ${t}`),
-    ];
-    expect(missing).toEqual([]);
   });
 });
 

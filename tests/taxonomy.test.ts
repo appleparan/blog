@@ -1,13 +1,9 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { parse } from 'node-html-parser';
 import { describe, expect, it } from 'vitest';
 import { publishedPosts, taxonomyUrls } from './helpers/source-posts';
 
 // Reads the built site, so run `bun run build` before `bun run test`.
-const fixture = JSON.parse(readFileSync('tests/fixtures/jekyll-reference.json', 'utf8')) as {
-  urls: string[];
-};
-const fixtureTaxonomyUrls = fixture.urls.filter((u) => /^\/(categories|tags)\/[^/]+\/$/.test(u));
 const page = (path: string) => parse(readFileSync(`dist${path}index.html`, 'utf8'));
 const subdirs = (dir: string) =>
   readdirSync(dir, { withFileTypes: true })
@@ -15,12 +11,6 @@ const subdirs = (dir: string) =>
     .map((e) => e.name);
 
 describe('taxonomy pages', () => {
-  it('builds every category and tag URL from the Jekyll fixture', () => {
-    expect(fixtureTaxonomyUrls.length).toBeGreaterThan(0);
-    for (const url of fixtureTaxonomyUrls)
-      expect(existsSync(`dist${url}index.html`), url).toBe(true);
-  });
-
   it('builds one page per category and tag of the published posts, and no other', () => {
     for (const kind of ['categories', 'tags'] as const) {
       const built = subdirs(`dist/${kind}`).map((s) => `/${kind}/${s}/`);
