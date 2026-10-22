@@ -7,18 +7,27 @@ const DISPLAY_MATH = /\$\$[\s\S]*?\$\$/g;
 const PAREN_MATH = /\\\\\(.+?\\\\\)/g;
 const parenToDollar = (m: string): string => `$${m.slice(3, -3)}$`;
 
-// A `$$` pair is a display block only when both `$$` sit on their own lines. Otherwise kramdown
-// reads it as inline math, but remark-math would read a line-start `$$x` as a block fence.
-// Such a pair becomes `$x$`, which renders the same inline math.
+// How a `$$…$$` span is read:
+// - own lines (`$$` line, body, `$$` line): display block, kept as is.
+// - one paragraph on its own (blank line or file edge on both sides): display math, so a
+//   single-line span becomes block form (the leading indent is kept).
+// - anything else is inline math. remark-math would read a line-start `$$x` as a block fence,
+//   so such a span becomes `$x$`, which renders the same inline math.
 function fixInlineDisplayMath(match: string, whole: string, offset: number): string {
-  const end = offset + match.length;
-  const isBlock =
-    /^\$\$[ \t]*\n/.test(match) &&
-    /\n[ \t]*\$\$$/.test(match) &&
-    /^[ \t]*(\n|$)/.test(whole.slice(end));
-  const atLineStart = offset === 0 || whole[offset - 1] === '\n';
-  if (isBlock || !atLineStart) return match;
-  return `$${match.slice(2, -2)}$`;
+  const lineStart = whole.lastIndexOf('\n', offset - 1) + 1;
+  const indent = whole.slice(lineStart, offset);
+  if (/\S/.test(indent)) return match; // mid-sentence inline math
+  const rest = whole.slice(offset + match.length);
+  const endsLine = /^[ \t]*(\n|$)/.test(rest);
+  const isBlock = /^\$\$[ \t]*\n/.test(match) && /\n[ \t]*\$\$$/.test(match) && endsLine;
+  if (isBlock) return match;
+  const blankBefore = lineStart === 0 || /(^|\n)[ \t]*\n$/.test(whole.slice(0, lineStart));
+  const blankAfter = endsLine && /^[ \t]*(\n[ \t]*(\n|$)|$)/.test(rest);
+  const inner = match.slice(2, -2);
+  if (blankBefore && blankAfter) {
+    return `$$\n${indent}${inner.trim()}\n${indent}$$`;
+  }
+  return `$${inner}$`;
 }
 
 // Single-dollar math on one line. The closing `$` is not followed by a digit, so "$5 and $10" stays text.

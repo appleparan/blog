@@ -1,6 +1,7 @@
 // Placeholder masking: hide spans from regex passes, then put them back.
-const OPEN = '';
-const CLOSE = '';
+// Private-use characters (U+E000, U+E001) never occur in posts, so they are safe delimiters.
+const OPEN = '\uE000';
+const CLOSE = '\uE001';
 const PLACEHOLDER = new RegExp(`${OPEN}(\\d+)${CLOSE}`, 'g');
 
 export interface Masked {
