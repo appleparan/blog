@@ -9,7 +9,9 @@ if (!postsDir || !outFile) throw new Error('usage: capture-taxonomy.ts <postsDir
 const categories = new Set<string>();
 const tags = new Set<string>();
 for (const file of readdirSync(postsDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.+\.md$/.test(f))) {
-  const front = Bun.YAML.parse(readFileSync(join(postsDir, file), 'utf8').split(/^---\s*$/m)[1]) as {
+  const front = Bun.YAML.parse(
+    readFileSync(join(postsDir, file), 'utf8').split(/^---\s*$/m)[1],
+  ) as {
     draft?: boolean;
     categories?: string[];
     tags?: unknown[];
@@ -19,4 +21,7 @@ for (const file of readdirSync(postsDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.+\.m
   for (const t of front.tags ?? []) tags.add(String(t));
 }
 const sort = (s: Set<string>): string[] => [...s].sort();
-writeFileSync(outFile, JSON.stringify({ categories: sort(categories), tags: sort(tags) }, null, 2) + '\n');
+writeFileSync(
+  outFile,
+  JSON.stringify({ categories: sort(categories), tags: sort(tags) }, null, 2) + '\n',
+);

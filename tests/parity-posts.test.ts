@@ -23,13 +23,16 @@ const KNOWN_DIFFERENCES: Record<string, { counts: Partial<Counts>; reason: strin
 };
 
 function builtCounts(url: string): Counts {
-  const article = parse(readFileSync(`dist${url}index.html`, 'utf8')).querySelector('.article-body');
+  const article = parse(readFileSync(`dist${url}index.html`, 'utf8')).querySelector(
+    '.article-body',
+  );
   if (!article) throw new Error(`no .article-body in ${url}`);
   return {
     images: article.querySelectorAll('img').length,
     math: article.querySelectorAll('.katex').length,
-    citations: new Set(article.querySelectorAll('a[href^="#bib-"]').map((a) => a.getAttribute('href')))
-      .size,
+    citations: new Set(
+      article.querySelectorAll('a[href^="#bib-"]').map((a) => a.getAttribute('href')),
+    ).size,
     references: article.querySelectorAll('#refs .csl-entry').length,
   };
 }

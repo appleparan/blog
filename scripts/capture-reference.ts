@@ -25,12 +25,19 @@ const siteUrls = files
   .sort();
 
 // _site can be stale, so keep only generated pages that the current posts produce.
-const slugify = (name: string): string => name.trim().toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, '-').replace(/^-+|-+$/g, '');
+const slugify = (name: string): string =>
+  name
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_-]+/gu, '-')
+    .replace(/^-+|-+$/g, '');
 const expected = new Set<string>();
 let postCount = 0;
 for (const file of readdirSync(postsDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.+\.md$/.test(f))) {
   const slug = file.replace(/^\d{4}-\d{2}-\d{2}-/, '').replace(/\.md$/, '');
-  const front = Bun.YAML.parse(readFileSync(join(postsDir, file), 'utf8').split(/^---\s*$/m)[1]) as {
+  const front = Bun.YAML.parse(
+    readFileSync(join(postsDir, file), 'utf8').split(/^---\s*$/m)[1],
+  ) as {
     date: string | Date;
     draft?: boolean;
     categories?: string[];
@@ -47,7 +54,8 @@ for (const file of readdirSync(postsDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.+\.m
 }
 for (let n = 2; n <= Math.ceil(postCount / POSTS_PER_PAGE); n++) expected.add(`/page/${n}/`);
 
-const isGenerated = (u: string): boolean => /^\/(posts\/\d{4}\/\d{2}|categories|tags|page)\/[^/]+\/$/.test(u);
+const isGenerated = (u: string): boolean =>
+  /^\/(posts\/\d{4}\/\d{2}|categories|tags|page)\/[^/]+\/$/.test(u);
 const urls = siteUrls.filter((u) => !isGenerated(u) || expected.has(u));
 const dropped = siteUrls.filter((u) => !urls.includes(u));
 const missing = [...expected].filter((u) => !siteUrls.includes(u)).sort();
@@ -68,13 +76,18 @@ function mathText(article: HTMLElement): string {
   return copy.textContent;
 }
 
-const posts: Record<string, { images: number; math: number; citations: number; references: number }> = {};
+const posts: Record<
+  string,
+  { images: number; math: number; citations: number; references: number }
+> = {};
 for (const url of urls.filter((u) => /^\/posts\/\d{4}\/\d{2}\/[^/]+\/$/.test(u))) {
   const root = parse(readFileSync(join(siteDir, url, 'index.html'), 'utf8'));
   const article = root.querySelector('article .content');
   if (!article) throw new Error(`no article content in ${url}`);
   const html = article.innerHTML;
-  const targets = new Set(article.querySelectorAll('a.citation').map((a) => a.getAttribute('href')));
+  const targets = new Set(
+    article.querySelectorAll('a.citation').map((a) => a.getAttribute('href')),
+  );
   posts[url] = {
     images: article.querySelectorAll('img').length,
     // Chirpy renders math client-side with MathJax: kramdown's \( and \[ openers plus the

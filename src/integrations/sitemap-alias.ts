@@ -1,6 +1,6 @@
-import { copyFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import type { AstroIntegration } from "astro";
+import { copyFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import type { AstroIntegration } from 'astro';
 
 /**
  * Copies `sitemap-index.xml` to `sitemap.xml`, the URL the Jekyll site used and robots.txt
@@ -8,11 +8,11 @@ import type { AstroIntegration } from "astro";
  */
 export function sitemapAlias(): AstroIntegration {
   return {
-    name: "sitemap-alias",
+    name: 'sitemap-alias',
     hooks: {
-      "astro:build:done": ({ dir }) => {
+      'astro:build:done': ({ dir }) => {
         const out = (name: string) => fileURLToPath(new URL(name, dir));
-        copyFileSync(out("sitemap-index.xml"), out("sitemap.xml"));
+        copyFileSync(out('sitemap-index.xml'), out('sitemap.xml'));
       },
     },
   };

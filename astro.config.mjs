@@ -22,12 +22,16 @@ export default defineConfig({
     swVersion(),
   ],
   vite: {
-    plugins: [tailwindcss(), viteCompression({
+    plugins: [
+      tailwindcss(),
+      viteCompression({
         algorithm: 'gzip',
         threshold: 1024,
         // sw.min.js is rewritten after the build (build id), so a gzip copy would go stale.
-        filter: (file) => /\.(js|mjs|json|css|html)$/i.test(file) && !/(^|\/)sw\.min\.js$/.test(file),
-      })],
+        filter: (file) =>
+          /\.(js|mjs|json|css|html)$/i.test(file) && !/(^|\/)sw\.min\.js$/.test(file),
+      }),
+    ],
   },
   markdown: {
     // Astro 7 defaults to the Satteri processor, which does not run remark/rehype
@@ -38,7 +42,10 @@ export default defineConfig({
         rehypeKatex,
         // The .bib file name comes from each post's `bibliography` front matter,
         // which rehype-citation reads from `file.data.astro.frontmatter`.
-        [rehypeCitation, { path: 'src/content/bibliography', csl: 'ieee.csl', linkCitations: true }],
+        [
+          rehypeCitation,
+          { path: 'src/content/bibliography', csl: 'ieee.csl', linkCitations: true },
+        ],
         rehypeReferencesHeading,
       ],
     }),

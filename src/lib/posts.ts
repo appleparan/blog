@@ -1,4 +1,4 @@
-import { siteConfig } from "../config";
+import { siteConfig } from '../config';
 
 /** Minimal structural post type, compatible with CollectionEntry<'posts'>. */
 export interface Post {
@@ -33,26 +33,26 @@ export interface CategoryNode {
 /** Jekyll-compatible slug: drop punctuation, spaces to hyphens, lowercase. */
 export function slugify(name: string): string {
   return name
-    .replace(/[^\p{L}\p{M}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/g, "")
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
     .toLowerCase();
 }
 
 /** Strips the `YYYY-MM-DD-` prefix from a post id. */
 export function postSlug(id: string): string {
-  return id.replace(/^\d{4}-\d{2}-\d{2}-/, "");
+  return id.replace(/^\d{4}-\d{2}-\d{2}-/, '');
 }
 
-const seoulFormat = new Intl.DateTimeFormat("en-CA", {
+const seoulFormat = new Intl.DateTimeFormat('en-CA', {
   timeZone: siteConfig.timezone,
-  year: "numeric",
-  month: "2-digit",
+  year: 'numeric',
+  month: '2-digit',
 });
 
 export function seoulYearMonth(date: Date): { year: string; month: string } {
   const parts = seoulFormat.formatToParts(date);
-  const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
-  return { year: pick("year"), month: pick("month") };
+  const pick = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return { year: pick('year'), month: pick('month') };
 }
 
 export function postUrl(post: { id: string; data: { date: Date } }): string {

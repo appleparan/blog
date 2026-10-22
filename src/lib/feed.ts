@@ -1,18 +1,18 @@
-import { siteConfig } from "../config";
-import { excerpt } from "./excerpt";
-import { postUrl, type Post } from "./posts";
+import { siteConfig } from '../config';
+import { excerpt } from './excerpt';
+import { postUrl, type Post } from './posts';
 
-const FEED_PATH = "/feed.xml";
+const FEED_PATH = '/feed.xml';
 const SUMMARY_LENGTH = 200;
 
 /** Escapes text for use in XML element content and attribute values. */
 export function escapeXml(text: string): string {
   return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
 }
 
 /**
@@ -33,20 +33,20 @@ export function buildAtom(
 
   const entries = posts.map((post) => {
     const url = abs(postUrl(post));
-    const summary = post.data.description ?? excerpt(post.body ?? "", SUMMARY_LENGTH);
+    const summary = post.data.description ?? excerpt(post.body ?? '', SUMMARY_LENGTH);
     return [
-      "  <entry>",
+      '  <entry>',
       `    <title>${escapeXml(post.data.title)}</title>`,
       `    <link href="${escapeXml(url)}"/>`,
       `    <id>${escapeXml(url)}</id>`,
       `    <published>${post.data.date.toISOString()}</published>`,
       `    <updated>${updatedOf(post).toISOString()}</updated>`,
-      summary ? `    <summary>${escapeXml(summary)}</summary>` : "",
+      summary ? `    <summary>${escapeXml(summary)}</summary>` : '',
       ...post.data.tags.map((t) => `    <category term="${escapeXml(t)}"/>`),
-      "  </entry>",
+      '  </entry>',
     ]
       .filter(Boolean)
-      .join("\n");
+      .join('\n');
   });
 
   return [
@@ -55,12 +55,12 @@ export function buildAtom(
     `  <title>${escapeXml(siteConfig.title)}</title>`,
     `  <subtitle>${escapeXml(siteConfig.description)}</subtitle>`,
     `  <link rel="self" type="application/atom+xml" href="${abs(FEED_PATH)}"/>`,
-    `  <link rel="alternate" type="text/html" href="${abs("/")}"/>`,
-    `  <id>${abs("/")}</id>`,
+    `  <link rel="alternate" type="text/html" href="${abs('/')}"/>`,
+    `  <id>${abs('/')}</id>`,
     `  <updated>${(feedUpdated ?? new Date(0)).toISOString()}</updated>`,
     `  <author><name>${escapeXml(siteConfig.author)}</name></author>`,
     ...entries,
-    "</feed>",
-    "",
-  ].join("\n");
+    '</feed>',
+    '',
+  ].join('\n');
 }

@@ -1,30 +1,30 @@
-const ELLIPSIS = "…";
+const ELLIPSIS = '…';
 
 /** Block-level syntax that never counts as prose. */
 const NON_PROSE_START = /^(#|import\s|export\s|<|\$\$|\||>|[-*+]\s|\d+[.)]\s|!\[|---|\{%|\{\/?\*)/;
 
 function stripBlocks(body: string): string {
   return body
-    .replace(/^(```|~~~)[\s\S]*?^\1[^\n]*$/gm, "")
-    .replace(/\$\$[\s\S]*?\$\$/g, "")
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/<([A-Z][\w.]*)\b[^>]*?\/>/g, "")
-    .replace(/<([A-Z][\w.]*)\b[\s\S]*?<\/\1>/g, "");
+    .replace(/^(```|~~~)[\s\S]*?^\1[^\n]*$/gm, '')
+    .replace(/\$\$[\s\S]*?\$\$/g, '')
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/<([A-Z][\w.]*)\b[^>]*?\/>/g, '')
+    .replace(/<([A-Z][\w.]*)\b[\s\S]*?<\/\1>/g, '');
 }
 
 function stripInline(text: string): string {
   return text
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, "")
-    .replace(/\[@[^\]]*\]/g, "")
-    .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\{%[\s\S]*?%\}/g, "")
-    .replace(/\{\{[\s\S]*?\}\}/g, "")
-    .replace(/<[^>]+>/g, "")
-    .replace(/\$[^$\n]+\$/g, "")
-    .replace(/`([^`]*)`/g, "$1")
-    .replace(/(\*\*|__)(.*?)\1/g, "$2")
-    .replace(/(\*|_)(.*?)\1/g, "$2")
-    .replace(/\s+/g, " ")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, '')
+    .replace(/\[@[^\]]*\]/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\{%[\s\S]*?%\}/g, '')
+    .replace(/\{\{[\s\S]*?\}\}/g, '')
+    .replace(/<[^>]+>/g, '')
+    .replace(/\$[^$\n]+\$/g, '')
+    .replace(/`([^`]*)`/g, '$1')
+    .replace(/(\*\*|__)(.*?)\1/g, '$2')
+    .replace(/(\*|_)(.*?)\1/g, '$2')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -41,5 +41,5 @@ export function excerpt(body: string, max = 150): string {
     if (!text) continue;
     return text.length > max ? text.slice(0, max - 1).trimEnd() + ELLIPSIS : text;
   }
-  return "";
+  return '';
 }

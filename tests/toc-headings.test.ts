@@ -6,9 +6,13 @@ const junk = { depth: 3, slug: 'range-of-ωijomega_ijωij', text: 'Range of ωij
 
 describe('tocHeadings', () => {
   it('renders math in headings from the source TeX', () => {
-    const body = '## Intro\n\n```sh\n# not a heading $HOME\n```\n\n### Range of $\\omega_{ij}$ <x>\n';
+    const body =
+      '## Intro\n\n```sh\n# not a heading $HOME\n```\n\n### Range of $\\omega_{ij}$ <x>\n';
     const [intro, range] = tocHeadings(
-      [{ depth: 2, slug: 'intro', text: 'Intro' }, { ...junk, text: junk.text + ' <x>' }],
+      [
+        { depth: 2, slug: 'intro', text: 'Intro' },
+        { ...junk, text: junk.text + ' <x>' },
+      ],
       body,
     );
     expect(intro).toEqual({ depth: 2, slug: 'intro', text: 'Intro' });
