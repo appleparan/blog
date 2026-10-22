@@ -1,6 +1,6 @@
 // @ts-nocheck -- hand-built hast trees; the plugin takes a loose Node type.
 import { describe, expect, it } from 'vitest';
-import { rehypeCitationBacklinks } from '../src/lib/rehype-citation-backlinks';
+import { letters, rehypeCitationBacklinks } from '../src/lib/rehype-citation-backlinks';
 
 const text = (value) => ({ type: 'text', value });
 const el = (tagName, properties = {}, children = []) => ({
@@ -21,8 +21,10 @@ const entry = (key) =>
     el('div', { className: ['csl-right-inline'] }, [text('Some paper')]),
   ]);
 const refs = (...keys) => el('div', { id: 'refs', className: ['references'] }, keys.map(entry));
-const backlinks = (e) =>
-  e.children.filter((c) => c.tagName === 'a' && c.properties.className?.includes('backlink'));
+const backlinks = (e) => {
+  const wrapper = e.children.find((c) => c.properties?.className?.includes('csl-backlinks'));
+  return wrapper ? wrapper.children : [];
+};
 
 describe('rehypeCitationBacklinks', () => {
   it('adds one plain back-link for a key cited once', () => {
@@ -81,5 +83,20 @@ describe('rehypeCitationBacklinks', () => {
     rehypeCitationBacklinks()(tree);
     expect(tree.children).toHaveLength(1);
     expect(tree.children[0].children).toHaveLength(1);
+  });
+});
+
+describe('letters', () => {
+  it.each([
+    [0, 'a'],
+    [25, 'z'],
+    [26, 'aa'],
+    [27, 'ab'],
+    [51, 'az'],
+    [52, 'ba'],
+    [701, 'zz'],
+    [702, 'aaa'],
+  ])('maps %i to %s', (i, expected) => {
+    expect(letters(i)).toBe(expected);
   });
 });

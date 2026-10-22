@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { parse } from 'node-html-parser';
 import { describe, expect, it } from 'vitest';
 
@@ -73,11 +73,21 @@ describe(`citation back-links and popover on ${URL}`, () => {
     }
   });
 
-  it('ships the popover script', () => {
+  it('ships the popover script with its guard and selector', () => {
     const scripts = root.querySelectorAll('script').map((s) => {
       const src = s.getAttribute('src');
       return src ? readFileSync(`dist${src}`, 'utf8') : s.text;
     });
-    expect(scripts.some((code) => code.includes('cite-popover'))).toBe(true);
+    const code = scripts.find((c) => c.includes('cite-popover'));
+    expect(code).toBeDefined();
+    expect(code).toMatch(/getElementById\(["'`]refs["'`]\)/);
+    expect(code).toMatch(/a\[href\^=["']#bib-/);
+  });
+
+  it('ships no unprocessed :global() in built CSS', () => {
+    const dir = 'dist/_astro';
+    const css = readdirSync(dir).filter((f) => f.endsWith('.css'));
+    expect(css.length).toBeGreaterThan(0);
+    for (const f of css) expect(readFileSync(`${dir}/${f}`, 'utf8'), f).not.toContain(':global(');
   });
 });

@@ -29,8 +29,13 @@
     // Set while Escape returns focus to the link, so the focus handler does not reopen it.
     let restoringFocus = false;
 
-    const entryFor = (link: HTMLAnchorElement): HTMLElement | null =>
-      document.getElementById(decodeURIComponent(link.hash.slice(1)));
+    const entryFor = (link: HTMLAnchorElement): HTMLElement | null => {
+      try {
+        return document.getElementById(decodeURIComponent(link.hash.slice(1)));
+      } catch {
+        return null; // Malformed % escape in the hash: no entry to show.
+      }
+    };
 
     function build(link: HTMLAnchorElement, entry: HTMLElement): HTMLElement {
       const pop = document.createElement('div');
@@ -60,6 +65,10 @@
       go.addEventListener('click', () => hide());
 
       pop.append(text, go);
+      // Limitation of the tooltip pattern: a tooltip is not focusable, so its links stay out of the
+      // tab order (mouse and touch can click them). Keyboard users follow the citation link itself,
+      // which already goes to the entry.
+      pop.querySelectorAll('a').forEach((a) => a.setAttribute('tabindex', '-1'));
       pop.style.maxWidth = `min(${MAX_WIDTH_PX}px, calc(100vw - ${2 * VIEWPORT_MARGIN_PX}px))`;
       pop.addEventListener('mouseenter', cancelHide);
       pop.addEventListener('mouseleave', scheduleHide);
@@ -152,8 +161,15 @@
 
     // A fixed hover card would drift from its link while scrolling, so desktop closes it.
     // Touch keeps it: it scrolls with the page and the reader may be reading it.
-    window.addEventListener('scroll', () => canHover && hide(), { passive: true });
-    window.addEventListener('resize', hide);
+    // Capture phase also catches inner scroll containers (tables, KaTeX blocks).
+    document.addEventListener('scroll', () => canHover && hide(), { capture: true, passive: true });
+    // Mobile browsers fire resize when the URL bar collapses, so close only on a width change.
+    let lastWidth = window.innerWidth;
+    window.addEventListener('resize', () => {
+      if (window.innerWidth === lastWidth) return;
+      lastWidth = window.innerWidth;
+      hide();
+    });
   }
 </script>
 
@@ -173,7 +189,7 @@
     overflow-wrap: anywhere;
   }
 
-  :global([data-theme='dark']) .cite-popover {
+  [data-theme='dark'] .cite-popover {
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
   }
 

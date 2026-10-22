@@ -48,9 +48,21 @@ const backlink = (href: string, label: string): Node => ({
   children: [{ type: 'text', value: label }],
 });
 
+/** 0 -> a, 25 -> z, 26 -> aa, 27 -> ab, ... (spreadsheet-column style). */
+export function letters(index: number): string {
+  let n = index + 1;
+  let out = '';
+  while (n > 0) {
+    const rest = (n - 1) % 26;
+    out = String.fromCharCode(97 + rest) + out;
+    n = Math.floor((n - 1) / 26);
+  }
+  return out;
+}
+
 /** `↩` for one citation; `↩ a`, `↩ b`, ... for several. */
 const labelFor = (index: number, total: number): string =>
-  total === 1 ? '↩' : `↩ ${String.fromCharCode(97 + index)}`;
+  total === 1 ? '↩' : `↩ ${letters(index)}`;
 
 /**
  * Appends back-links to each bibliography entry, one per in-text citation of its key. Each link
@@ -68,7 +80,14 @@ export function rehypeCitationBacklinks() {
       const ids = citations.get(id.replace(/^bib-/, '')) ?? [];
       if (ids.length === 0) return;
       const links = ids.map((spanId, i) => backlink(`#${spanId}`, labelFor(i, ids.length)));
-      node.children = [...(node.children ?? []), ...links];
+      // One wrapper, so the links can wrap together instead of squeezing the entry text.
+      const wrapper: Node = {
+        type: 'element',
+        tagName: 'span',
+        properties: { className: ['csl-backlinks'] },
+        children: links,
+      };
+      node.children = [...(node.children ?? []), wrapper];
     });
   };
 }

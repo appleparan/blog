@@ -196,6 +196,7 @@ const hasToc = headings.some((h) => h.depth >= 2 && h.depth <= 4);
 
   .article-body #refs .csl-entry {
     display: flex;
+    flex-wrap: wrap;
     gap: 0.75rem;
     margin-bottom: 0.6rem;
     line-height: 1.6;
@@ -208,14 +209,20 @@ const hasToc = headings.some((h) => h.depth >= 2 && h.depth <= 4);
   }
 
   .article-body #refs .csl-right-inline {
-    flex: 1;
+    flex: 1 1 12rem;
     min-width: 0;
+  }
+
+  /* The back-links wrap together, and drop below the text when the row is too narrow. */
+  .article-body #refs .csl-backlinks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1rem 0.5rem;
+    align-self: flex-start;
   }
 
   /* Back-links from rehype-citation-backlinks: return to the citation in the text. */
   .article-body #refs .backlink {
-    flex-shrink: 0;
-    align-self: flex-start;
     font-size: 0.8rem;
     white-space: nowrap;
     text-decoration: none;
