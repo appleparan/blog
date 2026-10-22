@@ -3,6 +3,8 @@ interface Heading {
   depth: number;
   slug: string;
   text: string;
+  /** Rendered heading content (math), used instead of `text` when present. */
+  html?: string;
 }
 
 interface Props {
@@ -40,7 +42,9 @@ const tocHeadings = headings.filter((h) => h.depth >= 2 && h.depth <= 4);
       <ul class="toc-list" aria-labelledby="toc-heading">
         {tocHeadings.map((heading) => (
           <li class={`toc-item toc-h${heading.depth}`}>
-            <a href={`#${heading.slug}`}>{heading.text}</a>
+            <a href={`#${heading.slug}`}>
+              {heading.html ? <Fragment set:html={heading.html} /> : heading.text}
+            </a>
           </li>
         ))}
       </ul>

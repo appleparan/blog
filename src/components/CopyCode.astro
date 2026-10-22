@@ -1,0 +1,66 @@
+---
+// Adds a copy button to every code block in `.article-body`. Mermaid blocks are skipped:
+// Mermaid.astro replaces them with diagrams.
+---
+
+<script>
+  const COPIED_MS = 1500;
+
+  for (const pre of document.querySelectorAll<HTMLPreElement>('.article-body pre')) {
+    if (pre.matches('pre[data-language="mermaid"], pre:has(> code.language-mermaid)')) continue;
+    // The wrapper holds the button, so it stays put while the code scrolls sideways.
+    const wrapper = document.createElement('div');
+    wrapper.className = 'code-block';
+    pre.replaceWith(wrapper);
+    wrapper.append(pre);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'copy-code';
+    button.textContent = 'Copy';
+    button.setAttribute('aria-label', '코드 복사');
+    button.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(pre.querySelector('code')?.innerText ?? pre.innerText);
+      } catch (error) {
+        console.error('Copying the code failed', error);
+        return;
+      }
+      button.textContent = 'Copied';
+      setTimeout(() => (button.textContent = 'Copy'), COPIED_MS);
+    });
+    wrapper.append(button);
+  }
+</script>
+
+<style is:global>
+  .article-body .code-block {
+    position: relative;
+  }
+
+  .article-body .copy-code {
+    position: absolute;
+    top: 0.4rem;
+    right: 0.4rem;
+    padding: 0.15rem 0.5rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--text-muted);
+    font-size: 0.7rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+  }
+
+  .article-body .code-block:hover .copy-code,
+  .article-body .copy-code:focus-visible {
+    opacity: 1;
+  }
+
+  @media (hover: none) {
+    .article-body .copy-code {
+      opacity: 1;
+    }
+  }
+</style>

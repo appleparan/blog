@@ -1,30 +1,39 @@
 ---
-// Minimal post route. Task 5 replaces the layout around <Content />.
 import { render, type CollectionEntry } from 'astro:content';
-import BaseLayout from '../../../../layouts/BaseLayout.astro';
-import Mermaid from '../../../../components/Mermaid.astro';
+import PostLayout from '../../../../layouts/PostLayout.astro';
 import { getPosts } from '../../../../lib/get-posts';
-import { postUrl } from '../../../../lib/posts';
+import { lastModified } from '../../../../lib/lastmod';
+import { adjacentPosts, postUrl, relatedPosts } from '../../../../lib/posts';
+import { readingTime } from '../../../../lib/reading-time';
+import { tocHeadings } from '../../../../lib/toc-headings';
 
 export async function getStaticPaths() {
   const posts = await getPosts();
   return posts.map((post) => {
     const [, , year, month, slug] = postUrl(post).split('/');
-    return { params: { year, month, slug }, props: { post } };
+    const { prev, next } = adjacentPosts(post, posts);
+    return {
+      params: { year, month, slug },
+      props: { post, prev, next, related: relatedPosts(post, posts) },
+    };
   });
 }
 
-const { post } = Astro.props;
+const { post, prev, next, related } = Astro.props;
 // getPosts() returns collection entries typed with the structural Post shape.
-const { Content } = await render(post as CollectionEntry<'posts'>);
+const entry = post as CollectionEntry<'posts'>;
+const { Content, headings } = await render(entry);
+const lastmod = entry.filePath ? lastModified(entry.filePath) : null;
 ---
 
-<BaseLayout title={post.data.title} description={post.data.description} currentPath={postUrl(post)}>
-  <div class="content-container">
-    <article class="article-body">
-      <h1>{post.data.title}</h1>
-      <Content />
-    </article>
-  </div>
-  {post.data.mermaid && <Mermaid />}
-</BaseLayout>
+<PostLayout
+  post={post}
+  headings={tocHeadings(headings, post.body ?? '')}
+  prev={prev}
+  next={next}
+  related={related}
+  lastmod={lastmod}
+  minutes={readingTime(post.body ?? '')}
+>
+  <Content />
+</PostLayout>
