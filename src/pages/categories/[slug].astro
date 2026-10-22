@@ -17,7 +17,7 @@ const { name, posts } = Astro.props;
 
 <BaseLayout title={name} currentPath="/categories/">
   <div class="content-container">
-    <h1>{name}</h1>
+    <h1 class="index-title">{name}</h1>
     <div class="lecture-list">
       {posts.map((post) => <PostRow post={post} />)}
     </div>

@@ -14,7 +14,7 @@ for (const post of await getPosts()) {
 
 <BaseLayout title="Archives" currentPath="/archives/">
   <div class="content-container">
-    <h1>Archives</h1>
+    <h1 class="index-title">Archives</h1>
     {[...byYear.entries()].map(([year, posts]) => (
       <section>
         <h2 class="archive-year">{year}</h2>
