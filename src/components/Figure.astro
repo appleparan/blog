@@ -32,16 +32,29 @@ const Caption = () => caption;
     margin: 1.5rem 0;
   }
 
+  /* Tailwind's preflight makes img a block, so text-align alone does not move it. */
   .figure-center {
     text-align: center;
+  }
+
+  .figure-center img {
+    margin-inline: auto;
   }
 
   .figure-left {
     text-align: left;
   }
 
+  .figure-left img {
+    margin-right: auto;
+  }
+
   .figure-right {
     text-align: right;
+  }
+
+  .figure-right img {
+    margin-left: auto;
   }
 
   figcaption {
