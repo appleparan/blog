@@ -1,0 +1,65 @@
+---
+// Image with an optional caption. The image itself uses the global
+// `.article-body img` styles; only the figure layout lives here.
+interface Props {
+  src: string;
+  /** Plain text, or a JSX fragment (e.g. with links) from MDX. */
+  caption?: unknown;
+  align?: 'center' | 'left' | 'right';
+  /** Backdrop color for transparent images, e.g. `#fff`. */
+  background?: string;
+  alt?: string;
+}
+
+const { src, caption, align = 'center', background, alt } = Astro.props;
+const altText = alt ?? (typeof caption === 'string' ? caption : '');
+// Astro templates print a JSX value as `[object Object]`. Wrapped in a function component,
+// it is rendered by the `astro:jsx` renderer that the MDX integration registers.
+const Caption = () => caption;
+---
+
+<figure class:list={['figure', `figure-${align}`]}>
+  <img src={src} alt={altText} loading="lazy" style={background ? { background } : undefined} />
+  {
+    caption && (
+      <figcaption>{typeof caption === 'string' ? caption : <Caption />}</figcaption>
+    )
+  }
+</figure>
+
+<style>
+  .figure {
+    margin: 1.5rem 0;
+  }
+
+  /* Tailwind's preflight makes img a block, so text-align alone does not move it. */
+  .figure-center {
+    text-align: center;
+  }
+
+  .figure-center img {
+    margin-inline: auto;
+  }
+
+  .figure-left {
+    text-align: left;
+  }
+
+  .figure-left img {
+    margin-right: auto;
+  }
+
+  .figure-right {
+    text-align: right;
+  }
+
+  .figure-right img {
+    margin-left: auto;
+  }
+
+  figcaption {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+  }
+</style>

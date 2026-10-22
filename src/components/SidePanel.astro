@@ -1,0 +1,105 @@
+---
+// Right panel on the home page: recently updated posts and trending tags.
+import { formatSeoulDate } from '../lib/format-date';
+import { postUrl, type Post } from '../lib/posts';
+
+interface Props {
+  recent: { post: Post; modified: Date }[];
+  tags: { name: string; slug: string; count: number }[];
+}
+
+const { recent, tags } = Astro.props;
+---
+
+<aside class="side-panel" aria-label="Side panel">
+  <section>
+    <h2 class="side-heading">Recently Updated</h2>
+    <ul class="side-recent">
+      {
+        recent.map(({ post, modified }) => (
+          <li>
+            <a href={postUrl(post)}>{post.data.title}</a>
+            <time class="side-date" datetime={modified.toISOString()}>
+              {formatSeoulDate(modified)}
+            </time>
+          </li>
+        ))
+      }
+    </ul>
+  </section>
+  <section>
+    <h2 class="side-heading">Trending Tags</h2>
+    <div class="side-tags">
+      {
+        tags.map((tag) => (
+          <a class="side-tag" href={`/tags/${tag.slug}/`}>
+            {tag.name}
+          </a>
+        ))
+      }
+    </div>
+  </section>
+</aside>
+
+<style>
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+  }
+
+  .side-heading {
+    margin: 0 0 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+
+  .side-recent {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+
+  .side-recent a {
+    display: block;
+    color: var(--text);
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+
+  .side-recent a:hover {
+    color: var(--accent);
+    text-decoration: none;
+  }
+
+  .side-date {
+    color: var(--text-muted);
+    font-size: 0.75rem;
+  }
+
+  .side-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .side-tag {
+    font-size: 0.75rem;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid var(--accent-shadow);
+    border-radius: 4px;
+    color: var(--accent);
+    transition: border-color 0.2s ease;
+  }
+
+  .side-tag:hover {
+    border-color: var(--accent);
+    text-decoration: none;
+  }
+</style>

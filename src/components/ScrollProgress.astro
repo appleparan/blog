@@ -1,0 +1,25 @@
+---
+---
+
+<div class="scroll-progress" id="scroll-progress" aria-hidden="true"></div>
+
+<script is:inline>
+(function () {
+  var bar = document.getElementById('scroll-progress');
+  if (!bar) return;
+
+  function update() {
+    var scrollTop = window.scrollY;
+    var docHeight = document.documentElement.scrollHeight - window.innerHeight;
+    if (docHeight <= 0) {
+      bar.style.width = '0%';
+      return;
+    }
+    var pct = (scrollTop / docHeight) * 100;
+    bar.style.width = pct + '%';
+  }
+
+  window.addEventListener('scroll', update, { passive: true });
+  update();
+})();
+</script>

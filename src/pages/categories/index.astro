@@ -1,0 +1,15 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import CategoryTree from '../../components/CategoryTree.astro';
+import { getPosts } from '../../lib/get-posts';
+import { categoryTree } from '../../lib/posts';
+
+const tree = categoryTree(await getPosts());
+---
+
+<BaseLayout title="Categories" currentPath="/categories/">
+  <div class="content-container">
+    <h1 class="index-title">Categories</h1>
+    <CategoryTree tree={tree} />
+  </div>
+</BaseLayout>

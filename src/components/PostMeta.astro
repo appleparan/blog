@@ -1,0 +1,30 @@
+---
+// Meta line above the post title: `date · 수정 <lastmod> · N분`.
+import { formatSeoulDate } from '../lib/format-date';
+
+interface Props {
+  date: Date;
+  lastmod: Date | null;
+  minutes: number;
+}
+
+const { date, lastmod, minutes } = Astro.props;
+
+const published = formatSeoulDate(date);
+// Show the edit date only when it falls on a later day than the publish date.
+const modified = lastmod ? formatSeoulDate(lastmod) : null;
+const showModified = modified !== null && modified !== published;
+---
+
+<span class="article-meta">
+  <time datetime={date.toISOString()}>{published}</time>
+  {
+    showModified && (
+      <>
+        {' · 수정 '}
+        <time datetime={lastmod!.toISOString()}>{modified}</time>
+      </>
+    )
+  }
+  {` · ${minutes}분`}
+</span>

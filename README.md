@@ -1,96 +1,126 @@
-<!-- markdownlint-disable-next-line -->
-<div align="center">
+# Jongsu Liam Kim | Blog
 
-  <!-- markdownlint-disable-next-line -->
-  # Chirpy Jekyll Theme
+Source of <https://blog.liam.kim>. The site is built with
+[Astro](https://astro.build) and MDX, and deployed to GitHub Pages by
+`.github/workflows/deploy.yml` on every push to `main`.
 
-  A minimal, responsive, and feature-rich Jekyll theme for technical writing.
+## Set up
 
-  [![CI](https://img.shields.io/github/actions/workflow/status/cotes2020/jekyll-theme-chirpy/ci.yml?logo=github)][ci]&nbsp;
-  [![Codacy Badge](https://img.shields.io/codacy/grade/4e556876a3c54d5e8f2d2857c4f43894?logo=codacy)][codacy]&nbsp;
-  [![GitHub license](https://img.shields.io/github/license/cotes2020/jekyll-theme-chirpy?color=goldenrod)][license]&nbsp;
-  [![Gem Version](https://img.shields.io/gem/v/jekyll-theme-chirpy?&logo=RubyGems&logoColor=ghostwhite&label=gem&color=orange)][gem]&nbsp;
-  [![Open in Dev Containers](https://img.shields.io/badge/Dev_Containers-Open-deepskyblue?logo=linuxcontainers)][open-container]
+You need [Bun](https://bun.sh) and Node.js 22.12 or later.
 
-  [**Live Demo** →][demo]
-
-  [![Devices Mockup](https://chirpy-img.netlify.app/commons/devices-mockup.png)][demo]
-
-</div>
-
-## How to use it (Development)
-
-1. Open in dev container 
-2. bundle install
 ```shell
-bundle install
-```
-3. Open live server
-```shell
-bundle exec jekyll serve
+bun install
+bunx husky   # once: installs the commit-msg hook
 ```
 
-## Features
+Run `bunx husky` yourself: `bun install` does not run the `prepare`
+script (checked with Bun 1.4.2).
 
-- Dark Theme
-- Localized UI language
-- Pinned Posts on Home Page
-- Hierarchical Categories
-- Trending Tags
-- Table of Contents
-- Last Modified Date
-- Syntax Highlighting
-- Mathematical Expressions
-- Mermaid Diagrams & Flowcharts
-- Dark Mode Images
-- Embed Media
-- Comment Systems
-- Built-in Search
-- Atom Feeds
-- PWA
-- Web Analytics
-- SEO & Performance Optimization
+## Commands
 
-## Documentation
+| Command           | What it does                                           |
+| ----------------- | ------------------------------------------------------ |
+| `bun run dev`     | Start the dev server at `http://localhost:4321`.       |
+| `bun run build`   | Build the site into `dist/`.                           |
+| `bun run preview` | Serve the built `dist/` folder.                        |
+| `bun run test`    | Run the tests once. Run `bun run build` first.         |
+| `bun run lint`    | Lint with oxlint.                                      |
+| `bun run format`  | Format with oxfmt. `bun run format:check` only checks. |
 
-To learn how to use, develop, and upgrade the project, please refer to the [Wiki][wiki].
+## Write a post
 
-## Contributing
+Add a file `src/content/posts/YYYY-MM-DD-Title.mdx`. The post URL is
+`/posts/YYYY/MM/Title/`: the year and month come from `date` in
+Asia/Seoul time, and `Title` is the file name without the date, with
+its case kept.
 
-Contributions (_pull requests_, _issues_, and _discussions_) are what make the open-source community such an amazing place
-to learn, inspire, and create. Any contributions you make are greatly appreciated.
-For details, see the "[Contributing Guidelines][contribute-guide]".
+```mdx
+---
+title: My Post
+date: 2026-10-23 10:00:00 +0900
+categories: [Deep Learning, LLM]
+tags: [transformer, attention]
+mermaid: true # optional
+draft: false # optional
+bibliography: 2026-10-23-My-Post.bib
+description: One sentence for link previews.
+image: /assets/images/post/2026-10-23-My-Post/cover.png
+---
+```
 
-## Credits
+| Field          | Meaning                                                               |
+| -------------- | --------------------------------------------------------------------- |
+| `title`        | Required. The post title.                                             |
+| `date`         | Required. Publish date with a time zone offset.                       |
+| `categories`   | Category path, top level first. Every level gets a page.              |
+| `tags`         | Tag list.                                                             |
+| `math`         | Optional, no effect. Math (`$...$`, `$$...$$`) renders in every post. |
+| `mermaid`      | Optional, default `false`. `true` renders ` ```mermaid ` code blocks. |
+| `draft`        | `true` shows the post in `bun run dev` only. The build leaves it out. |
+| `bibliography` | File name of the post's `.bib` file in `src/content/bibliography/`.   |
+| `description`  | Summary for meta tags. Without it, the start of the post is used.     |
+| `image`        | Preview image for social cards.                                       |
 
-### Contributors
+Put images in `public/assets/images/post/<post-file-name>/` and link
+them as `/assets/images/post/<post-file-name>/<image>`.
 
-Thanks to [all the contributors][contributors] involved in the development of the project!
+### Citations
 
-[![all-contributors](https://contrib.rocks/image?repo=cotes2020/jekyll-theme-chirpy&columns=16)][contributors]
-<sub> — Made with [contrib.rocks](https://contrib.rocks)</sub>
+Put the BibTeX file in `src/content/bibliography/` and name it in the
+`bibliography` field. Cite with `[@key]` (or `[@key1; @key2]`). The
+reference list is added at the end of the post.
 
-### Third-Party Assets
+### Components
 
-This project is built on the [Jekyll][jekyllrb] ecosystem and some [great libraries][lib], and is developed using [VS Code][vscode] as well as tools provided by [JetBrains][jetbrains] under a non-commercial open-source software license.
+Import a component at the top of the post, after the front matter.
 
-The avatar and favicon for the project's website are from [ClipartMAX][clipartmax].
+```mdx
+import Figure from '../../components/Figure.astro';
+import Quote from '../../components/Quote.astro';
+import { YouTube } from '@astro-community/astro-embed-youtube';
+
+<Figure
+  src="/assets/images/post/2026-10-23-My-Post/01-plot.png"
+  caption="A plot"
+  align="center"
+  background="#fff"
+/>
+
+<Figure
+  src="/assets/images/post/2026-10-23-My-Post/02-diagram.png"
+  caption={
+    <>
+      <a href="https://example.com">Source</a>
+    </>
+  }
+  alt="Diagram"
+/>
+
+<Quote cite="bibkey">Quoted text. The footer shows the citation for `bibkey`.</Quote>
+
+<YouTube id="https://www.youtube.com/watch?v=VIDEO_ID" />
+```
+
+- `Figure`: `src` is required. `caption` is text, or a JSX fragment
+  when it has links. `align` is `center` (default), `left`, or
+  `right`. `background` fills transparent images. `alt` defaults to a
+  text caption.
+- `Quote`: `cite` is a BibTeX key from the post's bibliography.
+- `YouTube`: `id` is a video URL or ID.
+
+### Widgets
+
+An interactive widget is an Astro component. Put it in
+`src/components/`, import it in the post like the components above,
+and use the `--fig-*` color variables from `src/styles/global.css` so
+it follows the light and dark themes.
+
+## Git history
+
+Do not squash-merge branches into `main`. A post's last-modified date
+comes from `git log --follow` on its file, so the history must keep
+each file rename.
 
 ## License
 
-This project is published under [MIT License][license].
-
-[gem]: https://rubygems.org/gems/jekyll-theme-chirpy
-[ci]: https://github.com/cotes2020/jekyll-theme-chirpy/actions/workflows/ci.yml?query=event%3Apush+branch%3Amaster
-[codacy]: https://app.codacy.com/gh/cotes2020/jekyll-theme-chirpy/dashboard?utm_source=gh&utm_medium=referral&utm_content=&utm_campaign=Badge_grade
-[license]: https://github.com/cotes2020/jekyll-theme-chirpy/blob/master/LICENSE
-[open-container]: https://vscode.dev/redirect?url=vscode://ms-vscode-remote.remote-containers/cloneInVolume?url=https://github.com/cotes2020/jekyll-theme-chirpy
-[jekyllrb]: https://jekyllrb.com/
-[clipartmax]: https://www.clipartmax.com/middle/m2i8b1m2K9Z5m2K9_ant-clipart-childrens-ant-cute/
-[demo]: https://cotes2020.github.io/chirpy-demo/
-[wiki]: https://github.com/cotes2020/jekyll-theme-chirpy/wiki
-[contribute-guide]: https://github.com/cotes2020/jekyll-theme-chirpy/blob/master/docs/CONTRIBUTING.md
-[contributors]: https://github.com/cotes2020/jekyll-theme-chirpy/graphs/contributors
-[lib]: https://github.com/cotes2020/chirpy-static-assets
-[vscode]: https://code.visualstudio.com/
-[jetbrains]: https://www.jetbrains.com/?from=jekyll-theme-chirpy
+See [LICENSE](LICENSE).

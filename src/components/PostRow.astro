@@ -1,0 +1,25 @@
+---
+import { formatSeoulDate } from '../lib/format-date';
+import { postUrl, type Post } from '../lib/posts';
+
+interface Props {
+  post: Post;
+}
+
+const { post } = Astro.props;
+---
+
+<a class="lecture-item" href={postUrl(post)}>
+  <span class="lecture-item-date">{formatSeoulDate(post.data.date)}</span>
+  <span class="lecture-item-title">{post.data.title}</span>
+</a>
+
+<style>
+  /* The global phone rule indents the date to line up with a lecture number. Rows here
+     have no number and put the date first, so drop the indent. */
+  @media (max-width: 768px) {
+    .lecture-item-date {
+      padding-left: 0;
+    }
+  }
+</style>

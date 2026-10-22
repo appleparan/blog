@@ -1,0 +1,15 @@
+---
+// Registers the service worker in production builds only, so `bun run dev` is unaffected.
+---
+
+{
+  import.meta.env.PROD && (
+    <script is:inline>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('/sw.min.js', { scope: '/' });
+        });
+      }
+    </script>
+  )
+}

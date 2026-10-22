@@ -1,0 +1,207 @@
+---
+// Post page, after the course LectureLayout: left TOC, article header, body, and
+// prev/next links, plus share buttons, related posts, and the comment slot.
+import BaseLayout from './BaseLayout.astro';
+import TableOfContents from '../components/TableOfContents.astro';
+import PostMeta from '../components/PostMeta.astro';
+import Share from '../components/Share.astro';
+import CopyCode from '../components/CopyCode.astro';
+import Mermaid from '../components/Mermaid.astro';
+import { siteConfig } from '../config';
+import { excerpt } from '../lib/excerpt';
+import { formatSeoulDate } from '../lib/format-date';
+import { postUrl, slugify, type Post } from '../lib/posts';
+import type { TocHeading } from '../lib/toc-headings';
+
+interface Props {
+  post: Post;
+  headings: TocHeading[];
+  /** The next older post. */
+  prev: Post | null;
+  /** The next newer post. */
+  next: Post | null;
+  related: Post[];
+  lastmod: Date | null;
+  minutes: number;
+}
+
+const { post, headings, prev, next, related, lastmod, minutes } = Astro.props;
+const { title, description, date, categories, tags, mermaid, image } = post.data;
+const url = postUrl(post);
+const hasToc = headings.some((h) => h.depth >= 2 && h.depth <= 4);
+---
+
+<BaseLayout
+  title={title}
+  description={description ?? excerpt(post.body ?? '', 160)}
+  currentPath={url}
+  image={image}
+  article={{ published: date, modified: lastmod ?? date }}
+>
+  <div class:list={[hasToc && 'lecture-grid']}>
+    <TableOfContents headings={headings} />
+    <div class="content-container">
+      <article>
+        <header class="article-header">
+          <PostMeta date={date} lastmod={lastmod} minutes={minutes} />
+          <h1 class="article-title">{title}</h1>
+          {
+            (categories.length > 0 || tags.length > 0) && (
+              <div class="post-chips">
+                {categories.map((c) => (
+                  <a class="post-chip post-chip-category" href={`/categories/${slugify(c)}/`}>
+                    {c}
+                  </a>
+                ))}
+                {tags.map((t) => (
+                  <a class="post-chip" href={`/tags/${slugify(t)}/`}>
+                    #{t}
+                  </a>
+                ))}
+              </div>
+            )
+          }
+        </header>
+
+        <div class="article-body">
+          <slot />
+        </div>
+
+        <Share title={title} url={new URL(url, siteConfig.url).href} />
+
+        {
+          (prev || next) && (
+            <nav class="prev-next-nav" aria-label="Post navigation">
+              {prev ? (
+                <a href={postUrl(prev)} class="prev-next-link prev">
+                  <span class="prev-next-label">&larr; 이전</span>
+                  <span class="prev-next-title">{prev.data.title}</span>
+                </a>
+              ) : (
+                <div />
+              )}
+              {next ? (
+                <a href={postUrl(next)} class="prev-next-link next">
+                  <span class="prev-next-label">다음 &rarr;</span>
+                  <span class="prev-next-title">{next.data.title}</span>
+                </a>
+              ) : (
+                <div />
+              )}
+            </nav>
+          )
+        }
+
+        {
+          related.length > 0 && (
+            <section class="related-posts" aria-labelledby="related-heading">
+              <h2 id="related-heading" class="related-title">
+                관련 글
+              </h2>
+              <ul>
+                {related.map((p) => (
+                  <li>
+                    <a href={postUrl(p)}>{p.data.title}</a>
+                    <time datetime={p.data.date.toISOString()}>{formatSeoulDate(p.data.date)}</time>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )
+        }
+
+        {
+          siteConfig.comments.provider && (
+            <section id="comments" class="comments" data-provider={siteConfig.comments.provider} />
+          )
+        }
+      </article>
+    </div>
+  </div>
+  <CopyCode />
+  {mermaid && <Mermaid />}
+</BaseLayout>
+
+<style>
+  .post-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    margin-top: 0.85rem;
+  }
+
+  .post-chip {
+    font-size: 0.75rem;
+    padding: 0.1rem 0.5rem;
+    border: 1px solid var(--accent-shadow);
+    border-radius: 4px;
+    color: var(--text-muted);
+    transition:
+      color 0.2s ease,
+      border-color 0.2s ease;
+  }
+
+  .post-chip-category {
+    color: var(--accent);
+  }
+
+  .post-chip:hover {
+    color: var(--accent);
+    border-color: var(--accent);
+    text-decoration: none;
+  }
+
+  .related-posts {
+    margin-top: 2.5rem;
+  }
+
+  .related-title {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0 0 0.75rem;
+  }
+
+  .related-posts ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .related-posts li {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.5rem 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.9rem;
+  }
+
+  .related-posts time {
+    flex-shrink: 0;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+</style>
+
+<style is:global>
+  /* rehype-citation's bibliography: number column, then the entry. */
+  .article-body #refs {
+    font-size: 0.9rem;
+  }
+
+  .article-body #refs .csl-entry {
+    display: flex;
+    gap: 0.75rem;
+    margin-bottom: 0.6rem;
+    line-height: 1.6;
+  }
+
+  .article-body #refs .csl-left-margin {
+    flex-shrink: 0;
+    min-width: 2rem;
+    color: var(--text-muted);
+  }
+</style>

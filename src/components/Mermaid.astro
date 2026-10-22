@@ -1,0 +1,52 @@
+---
+// Renders ```mermaid blocks on the client. Shiki leaves them as raw
+// <pre><code class="language-mermaid"> (see markdown.syntaxHighlight.excludeLangs).
+---
+
+<script>
+  type Block = { pre: HTMLElement; source: string };
+
+  const blocks: Block[] = [
+    ...document.querySelectorAll<HTMLElement>(
+      'pre[data-language="mermaid"], pre:has(> code.language-mermaid)',
+    ),
+  ].map((pre) => ({ pre, source: pre.textContent ?? '' }));
+
+  const theme = (): 'dark' | 'default' =>
+    document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'default';
+
+  // Each call bumps the generation. A run that a newer run (a later theme change) has
+  // overtaken stops writing, so the latest theme wins.
+  let generation = 0;
+
+  async function render(): Promise<void> {
+    if (blocks.length === 0) return;
+    const run = ++generation;
+    const { default: mermaid } = await import('mermaid');
+    if (run !== generation) return;
+    mermaid.initialize({ startOnLoad: false, theme: theme() });
+    for (const [i, block] of blocks.entries()) {
+      try {
+        const { svg } = await mermaid.render(`mermaid-${run}-${i}`, block.source);
+        if (run !== generation) return;
+        block.pre.innerHTML = svg;
+        block.pre.classList.add('mermaid-rendered');
+      } catch (error) {
+        console.error('Mermaid render failed', error);
+      }
+    }
+  }
+
+  render();
+  new MutationObserver(render).observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ['data-theme'],
+  });
+</script>
+
+<style is:global>
+  .article-body pre.mermaid-rendered {
+    background: transparent;
+    text-align: center;
+  }
+</style>

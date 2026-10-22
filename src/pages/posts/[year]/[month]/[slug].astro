@@ -1,0 +1,39 @@
+---
+import { render, type CollectionEntry } from 'astro:content';
+import PostLayout from '../../../../layouts/PostLayout.astro';
+import { getPosts } from '../../../../lib/get-posts';
+import { lastModified } from '../../../../lib/lastmod';
+import { adjacentPosts, postUrl, relatedPosts } from '../../../../lib/posts';
+import { readingTime } from '../../../../lib/reading-time';
+import { tocHeadings } from '../../../../lib/toc-headings';
+
+export async function getStaticPaths() {
+  const posts = await getPosts();
+  return posts.map((post) => {
+    const [, , year, month, slug] = postUrl(post).split('/');
+    const { prev, next } = adjacentPosts(post, posts);
+    return {
+      params: { year, month, slug },
+      props: { post, prev, next, related: relatedPosts(post, posts) },
+    };
+  });
+}
+
+const { post, prev, next, related } = Astro.props;
+// getPosts() returns collection entries typed with the structural Post shape.
+const entry = post as CollectionEntry<'posts'>;
+const { Content, headings } = await render(entry);
+const lastmod = entry.filePath ? lastModified(entry.filePath) : null;
+---
+
+<PostLayout
+  post={post}
+  headings={tocHeadings(headings, post.body ?? '')}
+  prev={prev}
+  next={next}
+  related={related}
+  lastmod={lastmod}
+  minutes={readingTime(post.body ?? '')}
+>
+  <Content />
+</PostLayout>
