@@ -3,7 +3,6 @@ import mdx from '@astrojs/mdx';
 import sitemap from '@astrojs/sitemap';
 import { unified } from '@astrojs/markdown-remark';
 import tailwindcss from '@tailwindcss/vite';
-import viteCompression from 'vite-plugin-compression';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeCitation from 'rehype-citation';
@@ -22,16 +21,7 @@ export default defineConfig({
     swVersion(),
   ],
   vite: {
-    plugins: [
-      tailwindcss(),
-      viteCompression({
-        algorithm: 'gzip',
-        threshold: 1024,
-        // sw.min.js is rewritten after the build (build id), so a gzip copy would go stale.
-        filter: (file) =>
-          /\.(js|mjs|json|css|html)$/i.test(file) && !/(^|\/)sw\.min\.js$/.test(file),
-      }),
-    ],
+    plugins: [tailwindcss()],
   },
   markdown: {
     // Astro 7 defaults to the Satteri processor, which does not run remark/rehype

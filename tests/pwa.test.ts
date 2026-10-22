@@ -25,6 +25,10 @@ describe('service worker', () => {
     }
     expect(sw).toMatch(/const CACHE = "blog-[\w.-]+"/);
   });
+
+  it('ships no precompressed .gz copies (GitHub Pages never serves them)', () => {
+    expect(walk('dist').filter((f) => f.endsWith('.gz'))).toEqual([]);
+  });
 });
 
 describe('manifest', () => {
