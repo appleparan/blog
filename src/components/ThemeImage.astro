@@ -1,0 +1,22 @@
+---
+interface Props {
+  darkSrc: string;
+  lightSrc: string;
+  alt?: string;
+  class?: string;
+}
+
+const { darkSrc, lightSrc, alt = '', class: className = '' } = Astro.props;
+---
+
+<img src={lightSrc} alt={alt} class:list={[className, 'theme-img-light']} />
+<img src={darkSrc} alt={alt} class:list={[className, 'theme-img-dark']} />
+
+<style is:global>
+  [data-theme='dark'] .theme-img-light { display: none; }
+  [data-theme='dark'] .theme-img-dark { display: block; }
+  [data-theme='light'] .theme-img-light { display: block; }
+  [data-theme='light'] .theme-img-dark { display: none; }
+  /* Default (before JS runs): show light */
+  .theme-img-dark { display: none; }
+</style>

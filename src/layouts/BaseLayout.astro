@@ -1,0 +1,85 @@
+---
+import { siteConfig } from '../config';
+import Navbar from '../components/Navbar.astro';
+import Footer from '../components/Footer.astro';
+import ScrollProgress from '../components/ScrollProgress.astro';
+import BackToTop from '../components/BackToTop.astro';
+import SearchModal from '../components/SearchModal.astro';
+// KaTeX CSS comes from the installed package so it matches the renderer version.
+import 'katex/dist/katex.min.css';
+import '../styles/global.css';
+
+interface Props {
+  title?: string;
+  description?: string;
+  currentPath?: string;
+}
+
+const {
+  title,
+  description = siteConfig.description,
+  currentPath = '/',
+} = Astro.props;
+
+const pageTitle = title ? `${title} | ${siteConfig.title}` : siteConfig.title;
+---
+
+<!doctype html>
+<html lang={siteConfig.lang}>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{pageTitle}</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" href="/assets/img/favicons/favicon-32x32.png" type="image/png" sizes="32x32" />
+    <link rel="icon" href="/assets/img/favicons/favicon-16x16.png" type="image/png" sizes="16x16" />
+    <link rel="apple-touch-icon" href="/assets/img/favicons/apple-touch-icon.png" />
+
+    <!-- Fonts: Roboto Mono (code) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Theme init (prevent FOUC) -->
+    <script is:inline>
+      (function () {
+        var t = localStorage.getItem('theme');
+        if (!t)
+          t = window.matchMedia('(prefers-color-scheme: dark)').matches
+            ? 'dark'
+            : 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      })();
+    </script>
+  </head>
+  <body>
+    <ScrollProgress />
+    <Navbar currentPath={currentPath} />
+    <SearchModal />
+
+    <main>
+      <slot />
+    </main>
+
+    <Footer />
+    <BackToTop />
+
+    <!-- Theme toggle script -->
+    <script is:inline>
+      document.addEventListener('DOMContentLoaded', function () {
+        var btn = document.querySelector('.theme-toggle');
+        if (!btn) return;
+        btn.addEventListener('click', function () {
+          var current = document.documentElement.getAttribute('data-theme');
+          var next = current === 'dark' ? 'light' : 'dark';
+          document.documentElement.setAttribute('data-theme', next);
+          localStorage.setItem('theme', next);
+        });
+      });
+    </script>
+  </body>
+</html>

@@ -1,0 +1,111 @@
+---
+// Task 8 fills this from the posts collection.
+const searchData: { title: string; week: number; date: string; url: string }[] = [];
+---
+
+<div class="search-overlay" id="search-overlay">
+  <div class="search-modal">
+    <div class="search-input-wrapper">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="11" cy="11" r="8"></circle>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+      </svg>
+      <input
+        type="text"
+        class="search-input"
+        id="search-input"
+        placeholder="글 검색..."
+        autocomplete="off"
+      />
+    </div>
+    <div class="search-results" id="search-results"></div>
+    <div class="search-hint">
+      <span><kbd>Esc</kbd> 닫기</span>
+      <span><kbd>⌘K</kbd> 검색</span>
+    </div>
+  </div>
+</div>
+
+<script is:inline define:vars={{ searchData }}>
+(function () {
+  var overlay = document.getElementById('search-overlay');
+  var input = document.getElementById('search-input');
+  var results = document.getElementById('search-results');
+  var searchBtn = document.getElementById('search-btn');
+  var data = searchData;
+
+  function open() {
+    overlay.classList.add('active');
+    setTimeout(function () { input.focus(); }, 50);
+  }
+
+  function close() {
+    overlay.classList.remove('active');
+    input.value = '';
+    results.innerHTML = '';
+  }
+
+  function renderResults(query) {
+    if (!query.trim()) {
+      results.innerHTML = '';
+      return;
+    }
+
+    var q = query.toLowerCase();
+    var matches = data.filter(function (item) {
+      return (
+        item.title.toLowerCase().indexOf(q) !== -1 ||
+        ('week ' + item.week).indexOf(q) !== -1
+      );
+    });
+
+    if (matches.length === 0) {
+      results.innerHTML = '<div class="search-empty">검색 결과가 없습니다</div>';
+      return;
+    }
+
+    results.innerHTML = matches
+      .map(function (item) {
+        return (
+          '<a href="' + item.url + '" class="search-result-item">' +
+          '<div class="search-result-title">' + escapeHtml(item.title) + '</div>' +
+          '<div class="search-result-meta">Week ' + item.week + ' · ' + escapeHtml(item.date) + '</div>' +
+          '</a>'
+        );
+      })
+      .join('');
+  }
+
+  function escapeHtml(str) {
+    var div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  if (searchBtn) {
+    searchBtn.addEventListener('click', open);
+  }
+
+  overlay.addEventListener('click', function (e) {
+    if (e.target === overlay) close();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      if (overlay.classList.contains('active')) {
+        close();
+      } else {
+        open();
+      }
+    }
+    if (e.key === 'Escape' && overlay.classList.contains('active')) {
+      close();
+    }
+  });
+
+  input.addEventListener('input', function () {
+    renderResults(input.value);
+  });
+})();
+</script>

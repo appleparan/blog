@@ -1,0 +1,1248 @@
+@import 'tailwindcss';
+@import 'pretendard-std/dist/web/static/pretendard-std.css';
+
+/* Make Tailwind's dark: variant follow the site's data-theme toggle
+   (default prefers-color-scheme would ignore the manual toggle). */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* ===== al-folio Theme Variables ===== */
+:root {
+  /* Background */
+  --bg: #fafaf8;
+  --bg-surface: #f8f9fa;
+  --bg-code: rgba(181, 9, 172, 0.05);
+  --bg-diagram: #fafaf8;
+  --bg-table-head: #f8f9fa;
+  --bg-navbar: rgba(250, 250, 248, 0.95);
+  --bg-search: #fafaf8;
+  --bg-search-item-hover: #f8f9fa;
+
+  /* Text */
+  --text: #000000;
+  --text-heading: #000000;
+  --text-muted: #828282;
+  --text-blockquote: #828282;
+
+  /* Accent — al-folio purple (#b509ac) */
+  --accent: #b509ac;
+  --accent-light: #b509ac;
+  --accent-shadow: rgba(181, 9, 172, 0.1);
+
+  /* Links */
+  --link: #b509ac;
+  --link-hover: #b509ac;
+
+  /* Borders */
+  --border: rgba(0, 0, 0, 0.1);
+  --border-blockquote: #b509ac;
+
+  /* Code text color */
+  --code-color: #b509ac;
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+
+  /* Progress bar */
+  --progress: #b509ac;
+
+  /* Back to top */
+  --back-to-top-bg: rgba(0, 0, 0, 0.4);
+
+  /* Figure and widget palette — see AGENTS.md "Figure and Widget Style" */
+  --fig-text: #2C2C2A;
+  --fig-text-2: #5F5E5A;
+  --fig-line: #888780;
+  --fig-line-soft: #B4B2A9;
+  --fig-fill: #F1EFE8;
+  --fig-surface: #FFFFFF;
+  --fig-blue: #378ADD;
+  --fig-blue-ink: #185FA5;
+  --fig-blue-tint: #DCEBFA;
+  --fig-amber: #EF9F27;
+  --fig-amber-ink: #854F0B;
+  --fig-amber-tint: #FAEEDA;
+  --fig-coral: #D85A30;
+  --fig-coral-tint: #FBE3D6;
+  --fig-teal: #1D9E75;
+  --fig-teal-ink: #0F6E56;
+  --fig-teal-tint: #E1F5EE;
+  --fig-purple: #534AB7;
+  --fig-purple-ink: #3C3489;
+  --fig-purple-tint: #EEEDFE;
+  --fig-red: #C0392B;
+  --fig-red-tint: #F3D9D9;
+  --fig-font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  color-scheme: light;
+}
+
+[data-theme='dark'] {
+  /* Background */
+  --bg: #1c1c1d;
+  --bg-surface: #212529;
+  --bg-code: #2c3237;
+  --bg-diagram: #cbd5e1;
+  --bg-table-head: #2d2d2d;
+  --bg-navbar: rgba(28, 28, 29, 0.95);
+  --bg-search: #212529;
+  --bg-search-item-hover: #2d2d2d;
+
+  /* Text — al-folio uses grey-color-light (#828282 + 40% lighter ≈ #d2d2d2) */
+  --text: #d2d2d2;
+  --text-heading: #d2d2d2;
+  --text-muted: #828282;
+  --text-blockquote: #828282;
+
+  /* Accent — al-folio cyan (#2698ba) for dark mode */
+  --accent: #2698ba;
+  --accent-light: #2698ba;
+  --accent-shadow: rgba(38, 152, 186, 0.15);
+
+  /* Links */
+  --link: #2698ba;
+  --link-hover: #2698ba;
+
+  /* Borders */
+  --border: #424246;
+  --border-blockquote: #2698ba;
+
+  /* Code text color */
+  --code-color: #2698ba;
+
+  /* Scrollbar */
+  --scrollbar-thumb: rgba(255, 255, 255, 0.2);
+
+  /* Progress bar */
+  --progress: #2698ba;
+
+  /* Back to top */
+  --back-to-top-bg: rgba(255, 255, 255, 0.5);
+  --back-to-top-color: #000000;
+
+  /* Figure and widget palette (dark) */
+  --fig-text: #D3D1C7;
+  --fig-text-2: #B4B2A9;
+  --fig-line: #888780;
+  --fig-line-soft: #6F6E68;
+  --fig-fill: #444441;
+  --fig-surface: #1F1E1B;
+  --fig-blue: #85B7EB;
+  --fig-blue-ink: #85B7EB;
+  --fig-blue-tint: #2A3A4D;
+  --fig-amber: #FAC775;
+  --fig-amber-ink: #FAC775;
+  --fig-amber-tint: #4A3A22;
+  --fig-coral: #F0997B;
+  --fig-coral-tint: #4A2E22;
+  --fig-teal: #5DCAA5;
+  --fig-teal-ink: #5DCAA5;
+  --fig-teal-tint: #233B34;
+  --fig-purple: #AFA9EC;
+  --fig-purple-ink: #AFA9EC;
+  --fig-purple-tint: #332D4D;
+  --fig-red: #E07A6A;
+  --fig-red-tint: #4A2A2A;
+
+  color-scheme: dark;
+}
+
+/* Light mode on HDR: the near-white page glares too, so lower the page
+   background. Raster images are dimmed to match (white about #f0f0f0) in the
+   Images section. This block must stay outside @layer so it overrides :root. */
+@media (dynamic-range: high) {
+  :root:not([data-theme='dark']) {
+    --bg: #f0f0ee;
+    --bg-surface: #eeeff0;
+    --bg-diagram: #f0f0ee;
+    --bg-table-head: #eeeff0;
+    --bg-navbar: rgba(240, 240, 238, 0.95);
+    --bg-search: #f0f0ee;
+    --bg-search-item-hover: #e8e9ea;
+  }
+}
+
+/* ===== Base ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Pretendard Std', 'Pretendard', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    Helvetica, Arial, sans-serif;
+  font-weight: 300;
+  font-size: 1rem;
+  line-height: 1.75;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition:
+    background 0.3s ease,
+    color 0.3s ease;
+}
+
+a {
+  color: var(--link);
+  text-decoration: none;
+  transition: color 0.2s ease;
+}
+
+a:hover {
+  color: var(--link-hover);
+  text-decoration: underline;
+}
+
+/* ===== Scroll Progress Bar ===== */
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0%;
+  height: 3px;
+  background: var(--progress);
+  z-index: 9999;
+  transition: width 0.1s linear;
+}
+
+/* ===== Navbar (al-folio style) ===== */
+.navbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--bg-navbar);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease;
+}
+
+.navbar-inner {
+  max-width: 930px;
+  margin: 0 auto;
+  padding: 0.75rem 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.navbar-brand {
+  font-family: 'Pretendard Std', 'Pretendard', sans-serif;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--text-heading);
+  letter-spacing: -0.02em;
+}
+
+.navbar a:hover {
+  text-decoration: none;
+}
+
+.navbar-brand:hover {
+  color: var(--accent);
+}
+
+.navbar-links {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.navbar-link {
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--text);
+  text-transform: lowercase;
+  letter-spacing: 0.02em;
+}
+
+.navbar-link:hover,
+.navbar-link.active {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* Theme toggle */
+.theme-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 1rem;
+  padding: 0.25rem;
+  line-height: 1;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+}
+
+.theme-toggle:hover {
+  color: var(--accent);
+}
+
+.theme-toggle .icon-sun {
+  display: none;
+}
+.theme-toggle .icon-moon {
+  display: inline;
+}
+
+[data-theme='dark'] .theme-toggle .icon-sun {
+  display: inline;
+}
+[data-theme='dark'] .theme-toggle .icon-moon {
+  display: none;
+}
+
+/* Search toggle */
+.search-toggle {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 1rem;
+  padding: 0.25rem;
+  line-height: 1;
+  transition: color 0.2s ease;
+  display: flex;
+  align-items: center;
+}
+
+.search-toggle:hover {
+  color: var(--accent);
+}
+
+/* ===== Search Modal ===== */
+.search-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 200;
+  display: none;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 10vh;
+}
+
+.search-overlay.active {
+  display: flex;
+}
+
+.search-modal {
+  background: var(--bg-search);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  width: 90%;
+  max-width: 560px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
+}
+
+.search-input-wrapper {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.search-input-wrapper svg {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.search-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 1rem;
+  color: var(--text);
+  font-family: inherit;
+}
+
+.search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.search-results {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 0.5rem 0;
+}
+
+.search-result-item {
+  display: block;
+  padding: 0.75rem 1.25rem;
+  color: var(--text);
+  transition: background 0.15s ease;
+}
+
+.search-result-item:hover {
+  background: var(--bg-search-item-hover);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.search-result-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-heading);
+}
+
+.search-result-meta {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.search-empty {
+  padding: 2rem 1.25rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.search-hint {
+  padding: 0.5rem 1.25rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  display: flex;
+  gap: 1rem;
+}
+
+.search-hint kbd {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: 0.25rem;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  font-family: inherit;
+}
+
+/* ===== Lecture Grid (ToC + Content) ===== */
+.lecture-grid {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  max-width: calc(930px + 250px + 2rem);
+  margin: 0 auto;
+  gap: 0;
+}
+
+/* Allow grid items to shrink below their min-content size — without this,
+   wide tables/widgets/SVGs force the whole layout wider than the viewport. */
+.lecture-grid > * {
+  min-width: 0;
+}
+
+.lecture-grid .content-container {
+  margin: 0;
+  max-width: 930px;
+}
+
+/* ===== Table of Contents Sidebar ===== */
+.toc-sidebar {
+  position: sticky;
+  top: 85px;
+  max-height: calc(100vh - 100px);
+  overflow-y: auto;
+  padding: 2.5rem 1.5rem 2rem 0;
+  border-right: 1px solid var(--border);
+  font-size: 0.8rem;
+  align-self: start;
+}
+
+.toc-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-muted);
+  margin: 0 0 0.75rem;
+  padding-left: 0.75rem;
+  border: none;
+}
+
+.toc-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.toc-item a {
+  display: block;
+  padding: 0.25rem 0.75rem;
+  color: var(--text-muted);
+  text-decoration: none;
+  line-height: 1.4;
+  border-left: 2px solid transparent;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.toc-item a:hover {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.toc-h2 a {
+  font-weight: 500;
+  color: var(--text);
+}
+
+.toc-h3 a {
+  padding-left: 1.5rem;
+  font-size: 0.75rem;
+}
+
+.toc-h4 a {
+  padding-left: 2.25rem;
+  font-size: 0.72rem;
+}
+
+.toc-item.toc-active > a {
+  color: var(--accent);
+  border-left-color: var(--accent);
+  font-weight: 500;
+}
+
+/* ToC sidebar scrollbar */
+.toc-sidebar::-webkit-scrollbar {
+  width: 3px;
+}
+
+.toc-sidebar::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+/* Mobile ToC toggle button and backdrop are hidden on desktop */
+.toc-toggle,
+.toc-backdrop {
+  display: none;
+}
+
+/* Present ToC as a bottom sheet on narrow screens */
+@media (max-width: 999px) {
+  .lecture-grid {
+    grid-template-columns: 1fr;
+    max-width: 930px;
+  }
+
+  .toc-toggle {
+    display: flex;
+    position: fixed;
+    bottom: 30px;
+    left: 30px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--back-to-top-bg);
+    color: var(--back-to-top-color, #ffffff);
+    border: none;
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    z-index: 300;
+  }
+
+  .toc-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      opacity 0.3s ease,
+      visibility 0.3s ease;
+    z-index: 400;
+  }
+
+  .toc-backdrop.toc-open {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .toc-sidebar {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 70vh;
+    overflow-y: auto;
+    background: var(--bg);
+    border-top: 1px solid var(--border);
+    border-right: none;
+    border-radius: 12px 12px 0 0;
+    padding: 1.25rem 1.5rem 2rem;
+    margin: 0;
+    transform: translateY(100%);
+    visibility: hidden;
+    transition:
+      transform 0.3s ease,
+      visibility 0.3s ease;
+    z-index: 410;
+  }
+
+  .toc-sidebar.toc-open {
+    transform: translateY(0);
+    visibility: visible;
+  }
+
+  body.toc-locked {
+    overflow: hidden;
+  }
+}
+
+/* ===== Main Content Container ===== */
+.content-container {
+  max-width: 930px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+/* ===== Index Page ===== */
+.index-header {
+  margin-bottom: 2.5rem;
+}
+
+.index-title {
+  font-family: 'Pretendard Std', 'Pretendard', sans-serif;
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--text-heading);
+  margin: 0 0 0.5rem;
+  line-height: 1.2;
+}
+
+.index-subtitle {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  margin: 0;
+}
+
+.lecture-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.index-note {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 1.5rem 0 0;
+}
+
+.lecture-item {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.875rem 0;
+  border-bottom: 1px solid var(--border);
+  transition: background 0.15s ease;
+}
+
+.lecture-item:first-child {
+  border-top: 1px solid var(--border);
+}
+
+.lecture-item:hover {
+  text-decoration: none;
+}
+
+.lecture-item-week {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  min-width: 3.5rem;
+  flex-shrink: 0;
+}
+
+.lecture-item-title {
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--text);
+  flex: 1;
+  transition: color 0.15s ease;
+}
+
+.lecture-item:hover .lecture-item-title {
+  color: var(--accent);
+}
+
+.lecture-item-date {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* ===== About Page ===== */
+.about-body {
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.about-body > p {
+  margin: 0 0 1.5rem;
+}
+
+.about-credits {
+  margin: 0 0 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.about-credit {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 0.875rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.about-credit dt {
+  font-family: 'Roboto Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  min-width: 3.5rem;
+  flex-shrink: 0;
+}
+
+.about-credit dd {
+  margin: 0;
+  font-size: 1rem;
+}
+
+/* ===== Article (Lecture Detail) ===== */
+.article-header {
+  margin-bottom: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.article-meta {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.article-title {
+  font-family: 'Pretendard Std', 'Pretendard', sans-serif;
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--text-heading);
+  margin: 0;
+}
+
+/* Article prose rules live in the base layer so that Tailwind utilities
+   written in MDX (h-*, mt-*, max-w-[...]) override them. */
+@layer base {
+  /* ===== Article Body — Prose Typography ===== */
+  .article-body h1,
+  .article-body h2,
+  .article-body h3,
+  .article-body h4 {
+    scroll-margin-top: 90px;
+  }
+
+  .article-body h1 {
+    font-family: 'Pretendard Std', 'Pretendard', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    margin-top: 3rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.3rem;
+    border-bottom: 1px solid var(--border);
+    line-height: 1.3;
+    color: var(--text-heading);
+  }
+
+  .article-body h2 {
+    font-family: 'Pretendard Std', 'Pretendard', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-top: 2.5rem;
+    margin-bottom: 0.75rem;
+    color: var(--text-heading);
+  }
+
+  .article-body h3 {
+    font-size: 1.3rem;
+    font-weight: 600;
+    margin-top: 2rem;
+    margin-bottom: 0.5rem;
+    color: var(--text-heading);
+  }
+
+  .article-body h4 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin-top: 1.5rem;
+    margin-bottom: 0.4rem;
+    color: var(--text-heading);
+  }
+
+  .article-body p {
+    margin-bottom: 1.1rem;
+  }
+
+  .article-body ul,
+  .article-body ol {
+    margin-left: 1.5rem;
+    margin-bottom: 1.1rem;
+  }
+
+  /* Tailwind preflight resets list-style to none; restore markers in article content */
+  .article-body ul {
+    list-style: disc;
+  }
+
+  .article-body ul ul {
+    list-style: circle;
+  }
+
+  .article-body ol {
+    list-style: decimal;
+  }
+
+  .article-body li {
+    margin-bottom: 0.3rem;
+  }
+
+  .article-body strong {
+    font-weight: 700;
+    color: var(--text-heading);
+  }
+
+  .article-body hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 2.5rem 0;
+  }
+
+  /* Code blocks */
+  .article-body pre {
+    margin: 1.25rem 0;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    background-color: var(--bg-code);
+    padding: 6px 12px;
+  }
+
+  .article-body code {
+    font-family: 'Roboto Mono', 'Fira Code', monospace;
+    font-size: 0.85rem;
+    color: var(--code-color);
+  }
+
+  .article-body :not(pre) > code {
+    background: var(--bg-code);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.85em;
+  }
+
+  .article-body pre code {
+    color: inherit;
+  }
+
+  /* Tables */
+  .article-body table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1.25rem 0;
+    font-size: 0.9rem;
+  }
+
+  .article-body th,
+  .article-body td {
+    border: 1px solid var(--border);
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+  }
+
+  .article-body th {
+    background: var(--bg-table-head);
+    font-weight: 600;
+  }
+
+  /* Images */
+  .article-body img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 0.5rem;
+  }
+
+  /* Raster images (slide captures) mostly have a pure white background. In
+   dark mode that white glares next to #d2d2d2 body text, and more so on HDR
+   displays, so dim them: about #e0e0e0 on SDR, about #cccccc on HDR.
+   Light mode on SDR is unchanged.
+   .diagram-bg images already sit on a grey backdrop and are left as is.
+   dynamic-range-limit keeps any HDR-tagged image at SDR white. */
+.article-body img {
+  dynamic-range-limit: standard;
+}
+
+[data-theme='dark'] .article-body img:is([src$='.png'], [src$='.gif']):not(.diagram-bg) {
+  filter: brightness(0.88);
+}
+
+@media (dynamic-range: high) {
+  [data-theme='dark'] .article-body img:is([src$='.png'], [src$='.gif']):not(.diagram-bg) {
+    filter: brightness(0.8);
+  }
+
+  /* Light mode on HDR: see the --bg override after the theme variables. */
+  :root:not([data-theme='dark'])
+    .article-body
+    img:is([src$='.png'], [src$='.gif']):not(.diagram-bg) {
+    filter: brightness(0.94);
+  }
+}
+
+/* Backdrop for transparent diagram PNGs — softens the white in dark mode. */
+  .diagram-bg {
+    background-color: var(--bg-diagram);
+  }
+
+  /* Blockquotes */
+  .article-body blockquote {
+    border-left: 3px solid var(--border-blockquote);
+    padding: 0.3em 1em;
+    margin: 1em 0;
+    font-size: 0.9rem;
+    color: var(--text-blockquote);
+  }
+
+  .article-body blockquote p:last-child {
+    margin-bottom: 0;
+  }
+
+  /* KaTeX */
+  .article-body .katex-display {
+    margin: 1.25rem 0;
+    overflow-x: auto;
+    text-align: center;
+  }
+
+  [data-theme='dark'] .article-body .katex {
+    color: var(--text);
+  }
+
+  /* Grid */
+  .article-body .grid {
+    margin: 1rem 0;
+  }
+}
+
+/* ===== Prev/Next Navigation ===== */
+.prev-next-nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: stretch;
+  gap: 1rem;
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.prev-next-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+  max-width: 48%;
+}
+
+.prev-next-link:hover {
+  border-color: var(--accent);
+  background: var(--bg-surface);
+}
+
+.prev-next-link:hover,
+.lecture-item:hover,
+.footer-social a:hover,
+.search-result-item:hover {
+  text-decoration: none;
+}
+
+.prev-next-link.next {
+  margin-left: auto;
+  text-align: right;
+}
+
+.prev-next-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.prev-next-title {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-heading);
+}
+
+/* ===== Back to Top ===== */
+.back-to-top {
+  position: fixed;
+  bottom: 30px;
+  right: 30px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--back-to-top-bg);
+  color: var(--back-to-top-color, #ffffff);
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1rem;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.3s ease,
+    visibility 0.3s ease,
+    background 0.2s ease;
+  z-index: 10;
+}
+
+.back-to-top.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.back-to-top:hover {
+  background: var(--accent-light);
+}
+
+/* ===== Footer (al-folio style) ===== */
+.site-footer {
+  border-top: 1px solid var(--border);
+  padding: 2rem 0;
+  margin-top: 3rem;
+  transition:
+    border-color 0.3s ease,
+    background 0.3s ease;
+}
+
+.footer-inner {
+  max-width: 930px;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.footer-social {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.footer-social a {
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+
+.footer-social a:hover {
+  color: var(--accent);
+}
+
+.footer-copyright {
+  color: var(--text-muted);
+}
+
+.footer-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.footer-build {
+  font-size: 0.75rem;
+  font-family: var(--fig-font-mono);
+  color: var(--text-muted);
+}
+
+.footer-build a {
+  color: inherit;
+}
+
+.footer-build a:hover {
+  color: var(--accent);
+}
+
+/* ===== Scrollbar ===== */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 3px;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 768px) {
+  .content-container {
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .index-title {
+    font-size: 1.75rem;
+  }
+
+  .article-title {
+    font-size: 1.5rem;
+  }
+
+  .lecture-item {
+    flex-wrap: wrap;
+    gap: 0.25rem;
+  }
+
+  .lecture-item-date {
+    width: 100%;
+    padding-left: 4.5rem;
+  }
+
+  .prev-next-nav {
+    flex-direction: column;
+  }
+
+  .prev-next-link {
+    max-width: 100%;
+  }
+
+  .prev-next-link.next {
+    text-align: left;
+  }
+
+  .footer-inner {
+    flex-direction: column;
+    gap: 1rem;
+    text-align: center;
+  }
+
+  .search-modal {
+    width: 95%;
+    margin-top: 5vh;
+  }
+
+}
+
+@layer base {
+  @media (max-width: 768px) {
+    /* ----- Mobile overflow containment -----
+       Goal: keep non-image content inside the viewport. Wide content (tables,
+       custom diagrams, SVG widgets) gets a horizontal scroll inside its own
+       box rather than pushing the whole page sideways. */
+
+    .article-body {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    /* Tables: scroll horizontally instead of forcing the page wider.
+       Disable the article-body's overflow-wrap inside cells so words/numbers
+       stay intact and the user scrolls the table sideways. */
+    .article-body table {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+    .article-body table th,
+    .article-body table td {
+      overflow-wrap: normal;
+      word-break: keep-all;
+      white-space: nowrap;
+    }
+
+    /* Code blocks already have overflow-x: auto, but make sure they cannot
+       exceed the article width. */
+    .article-body pre {
+      max-width: 100%;
+    }
+
+    /* Custom interactive widgets and inline-styled diagrams: contain them
+       with horizontal scroll on mobile so they cannot widen the page. */
+    .article-body .lr-widget,
+    .article-body .bp-widget,
+    .article-body .npu-mh-diagram,
+    .article-body .torchrun-visualizer,
+    .article-body .attention-tiling-diagram,
+    .article-body .memory-hierarchy-diagram,
+    .article-body .prefill-decode-diagram,
+    .article-body > div[style*='display:grid'],
+    .article-body > div[style*='display: grid'],
+    .article-body > div[style*='display:flex'],
+    .article-body > div[style*='display: flex'] {
+      max-width: 100%;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    /* SVGs (diagram widgets) shouldn't exceed the article width. */
+    .article-body svg {
+      max-width: 100%;
+      height: auto;
+    }
+
+    /* Display-math (KaTeX) blocks can be wider than the viewport — let them
+       scroll horizontally inside their own box. */
+    .article-body .katex-display {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+  }
+}
+
+/* ===== Shared widget button (interactive figures) ===== */
+.fig-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+.fig-btn:hover { background: var(--accent-shadow); }
+.fig-btn:disabled { opacity: 0.4; cursor: default; }
+.fig-btn svg { width: 14px; height: 14px; fill: currentColor; flex-shrink: 0; }
