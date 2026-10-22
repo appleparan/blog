@@ -1,0 +1,57 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { siteConfig } from '../config';
+
+const { avatar, author, social } = siteConfig;
+const links = [
+  { label: 'GitHub', href: social.github },
+  { label: 'X', href: social.x },
+  { label: 'LinkedIn', href: social.linkedin },
+  { label: 'Email', href: `mailto:${social.email}` },
+].filter((link) => !link.href.endsWith(':undefined') && link.href !== 'mailto:');
+---
+
+<BaseLayout title="About" currentPath="/about/">
+  <div class="content-container">
+    <div class="index-header">
+      <img class="about-avatar" src={avatar} alt={author} width="96" height="96" />
+      <h1 class="index-title">About</h1>
+      <p class="index-subtitle">{author}</p>
+    </div>
+
+    <div class="about-body">
+      <h2>About the blog</h2>
+      <p>
+        A Personal Blog on Machine Learning, Programming, Data Science, and Science.
+        Opinions expressed are solely my own and do not express the views or opinions of my employer.
+      </p>
+
+      <h2>Contact</h2>
+      <p>
+        Find me at
+        <a href="https://liam.kim" target="_blank" rel="noopener noreferrer">liam.kim</a>.
+      </p>
+      <p class="about-links">
+        {links.map((link) => (
+          <a href={link.href} target="_blank" rel="noopener noreferrer">{link.label}</a>
+        ))}
+      </p>
+    </div>
+  </div>
+</BaseLayout>
+
+<style>
+  .about-avatar {
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    object-fit: cover;
+    margin-bottom: 1rem;
+  }
+
+  .about-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+  }
+</style>
