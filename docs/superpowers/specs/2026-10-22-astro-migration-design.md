@@ -173,8 +173,11 @@ Diffusion, Vision]` produces `/categories/deep-learning/`,
   page still shows the parent/child tree.
 - `_site/redirects.json` is `{}`. No old URL form needs a redirect.
 - `feed.xml` (from jekyll-feed) and `atom.xml` (a custom template) both
-  exist and differ. Both URLs stay. The new site serves the same Atom feed
-  at both paths (Claude's call).
+  exist and differ. Both URLs stay. The new site serves the same Atom
+  entries at both paths (Claude's call). Each path keeps the entry `id`
+  style that its live feed used: `/feed.xml` ids end with `/`, and
+  `/atom.xml` ids do not. Subscribers therefore do not see old entries
+  again as new.
 - `_posts/2026-10-12-Inside-vLLM.md` has `draft: true`. It is not part of
   the URL parity check, and it appears only in dev builds. It has
   `categories: [LLM Inference, vLLM]`, so `llm-inference` and `vllm`
