@@ -26,6 +26,8 @@
     let popover: HTMLElement | null = null;
     let current: HTMLAnchorElement | null = null;
     let hideTimer: number | undefined;
+    // Set while Escape returns focus to the link, so the focus handler does not reopen it.
+    let restoringFocus = false;
 
     const entryFor = (link: HTMLAnchorElement): HTMLElement | null =>
       document.getElementById(decodeURIComponent(link.hash.slice(1)));
@@ -114,7 +116,7 @@
       }
       // Keyboard focus opens it. A tap also focuses on some browsers, so only :focus-visible counts.
       link.addEventListener('focus', () => {
-        if (link.matches(':focus-visible')) show(link);
+        if (!restoringFocus && link.matches(':focus-visible')) show(link);
       });
       link.addEventListener('blur', () => {
         if (!popover?.matches(':hover')) scheduleHide();
@@ -138,7 +140,9 @@
       if (event.key !== 'Escape' || !current) return;
       const link = current;
       hide();
+      restoringFocus = true;
       link.focus({ preventScroll: true });
+      restoringFocus = false;
     });
 
     document.addEventListener('pointerdown', (event) => {
