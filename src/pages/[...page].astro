@@ -39,7 +39,7 @@ const currentPath = pageHref(page.currentPage);
   <div class="content-container">
     <h1 class="sr-only">{siteConfig.title}</h1>
     <div class="home-grid">
-      <main>
+      <div class="home-posts">
         {page.data.map((post) => <PostCard post={post} />)}
         <Pagination
           current={page.currentPage}
@@ -47,7 +47,7 @@ const currentPath = pageHref(page.currentPage);
           prev={page.currentPage > 1 ? pageHref(page.currentPage - 1) : undefined}
           next={page.currentPage < page.lastPage ? pageHref(page.currentPage + 1) : undefined}
         />
-      </main>
+      </div>
       <SidePanel recent={recent} tags={trendingTags(all)} />
     </div>
   </div>
