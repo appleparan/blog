@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 // Usage: bun scripts/capture-taxonomy.ts <postsDir> <outFile>
 // Freezes the category and tag names of published Jekyll posts, so tests survive the removal of _posts/.
 import { readdirSync, readFileSync, writeFileSync } from 'node:fs';

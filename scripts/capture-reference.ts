@@ -1,3 +1,4 @@
+/// <reference types="bun" />
 // Usage: bun scripts/capture-reference.ts <siteDir> <outFile> <postsDir>
 // Records every URL and per-post media counts of a built Jekyll site, so the Astro build can be compared to it.
 import { readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
