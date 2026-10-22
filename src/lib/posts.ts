@@ -140,9 +140,16 @@ export function relatedPosts(post: Post, posts: Post[], limit = 3): Post[] {
     .map((x) => x.p);
 }
 
+/** Oldest first; posts with the same date are ordered by `id`, so the order never depends on input order. */
+export function compareByDate(a: Post, b: Post): number {
+  const diff = a.data.date.getTime() - b.data.date.getTime();
+  if (diff !== 0) return diff;
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+}
+
 /** `prev` is the next older post, `next` the next newer one. */
 export function adjacentPosts(post: Post, posts: Post[]): { prev: Post | null; next: Post | null } {
-  const sorted = [...posts].sort((a, b) => a.data.date.getTime() - b.data.date.getTime());
+  const sorted = [...posts].sort(compareByDate);
   const i = sorted.findIndex((p) => p.id === post.id);
   if (i < 0) return { prev: null, next: null };
   return { prev: sorted[i - 1] ?? null, next: sorted[i + 1] ?? null };

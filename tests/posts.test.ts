@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   adjacentPosts,
   categoryIndex,
+  compareByDate,
   categoryTree,
   postSlug,
   postUrl,
@@ -134,5 +135,21 @@ describe('relations', () => {
     expect(adjacentPosts(b, all)).toEqual({ prev: a, next: c });
     expect(adjacentPosts(a, all).prev).toBeNull();
     expect(adjacentPosts(d, all).next).toBeNull();
+  });
+
+  it('orders posts with the same date by id, whatever the input order', () => {
+    const x = mk('2017-07-17-A', '2017-07-17T12:00:00+09:00');
+    const y = mk('2017-07-17-B', '2017-07-17T12:00:00+09:00');
+    const older = mk('2017-07-01-Old', '2017-07-01T12:00:00+09:00');
+    const newer = mk('2017-08-01-New', '2017-08-01T12:00:00+09:00');
+    for (const input of [
+      [older, x, y, newer],
+      [newer, y, x, older],
+    ]) {
+      expect(adjacentPosts(x, input)).toEqual({ prev: older, next: y });
+      expect(adjacentPosts(y, input)).toEqual({ prev: x, next: newer });
+    }
+    expect([y, x].sort(compareByDate)).toEqual([x, y]);
+    expect([x, y].sort((a, b) => compareByDate(b, a))).toEqual([y, x]);
   });
 });
