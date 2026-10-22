@@ -193,13 +193,13 @@
     },
     "/posts/2024/03/Logit-Sigmoid-Softmax/": {
       "images": 5,
-      "math": 67,
+      "math": 196,
       "citations": 1,
       "references": 2
     },
     "/posts/2024/03/What-Is-K-Q-V-in-Transformer/": {
       "images": 12,
-      "math": 6,
+      "math": 63,
       "citations": 7,
       "references": 7
     },
@@ -217,31 +217,31 @@
     },
     "/posts/2024/05/Tensor-Program-2/": {
       "images": 2,
-      "math": 302,
+      "math": 419,
       "citations": 8,
       "references": 8
     },
     "/posts/2025/01/Attention-Mechanism-and-KV-Cache/": {
       "images": 8,
-      "math": 143,
+      "math": 236,
       "citations": 6,
       "references": 6
     },
     "/posts/2025/10/Preventing-Overfitting-With-Norms-and-BN/": {
       "images": 3,
-      "math": 46,
+      "math": 268,
       "citations": 4,
       "references": 4
     },
     "/posts/2025/10/SVD/": {
       "images": 4,
-      "math": 27,
+      "math": 250,
       "citations": 1,
       "references": 1
     },
     "/posts/2025/11/VAE-to-DDPMs/": {
       "images": 5,
-      "math": 165,
+      "math": 402,
       "citations": 2,
       "references": 2
     }

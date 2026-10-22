@@ -2,7 +2,7 @@
 // Records every URL and per-post media counts of a built Jekyll site, so the Astro build can be compared to it.
 import { readdirSync, readFileSync, writeFileSync, statSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
-import { parse } from 'node-html-parser';
+import { parse, type HTMLElement } from 'node-html-parser';
 
 const [siteDir, outFile, postsDir] = process.argv.slice(2);
 if (!siteDir || !outFile || !postsDir) {
@@ -58,6 +58,16 @@ function count(html: string, pattern: RegExp): number {
   return (html.match(pattern) ?? []).length;
 }
 
+// MathJax delimiters left literal by kramdown: `$$…$$` (display) and `$…$` (inline).
+const DOLLAR_MATH = /\$\$[\s\S]+?\$\$|\$[^$]+?\$/g;
+
+/** Text MathJax scans for `$` math: the article without `code` and `pre`. */
+function mathText(article: HTMLElement): string {
+  const copy = parse(article.outerHTML);
+  for (const el of copy.querySelectorAll('pre, code')) el.remove();
+  return copy.textContent;
+}
+
 const posts: Record<string, { images: number; math: number; citations: number; references: number }> = {};
 for (const url of urls.filter((u) => /^\/posts\/\d{4}\/\d{2}\/[^/]+\/$/.test(u))) {
   const root = parse(readFileSync(join(siteDir, url, 'index.html'), 'utf8'));
@@ -67,8 +77,9 @@ for (const url of urls.filter((u) => /^\/posts\/\d{4}\/\d{2}\/[^/]+\/$/.test(u))
   const targets = new Set(article.querySelectorAll('a.citation').map((a) => a.getAttribute('href')));
   posts[url] = {
     images: article.querySelectorAll('img').length,
-    // Chirpy renders math client-side with MathJax: count \( and \[ openers.
-    math: count(html, /\\\(|\\\[/g),
+    // Chirpy renders math client-side with MathJax: kramdown's \( and \[ openers plus the
+    // `$…$` spans kramdown left literal, which MathJax also renders.
+    math: count(html, /\\\(|\\\[/g) + count(mathText(article), DOLLAR_MATH),
     citations: targets.size,
     references: article.querySelectorAll('ol.bibliography li').length,
   };
