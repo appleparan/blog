@@ -43,3 +43,13 @@ import { siteConfig } from '../config';
     </div>
   </div>
 </footer>
+
+<style>
+  /* Phone width: leave room under the footer for the fixed back-to-top and TOC buttons
+     (40px tall, 30px from the bottom), so at the end of a page they cover nothing. */
+  @media (max-width: 768px) {
+    .site-footer {
+      padding-bottom: 5.5rem;
+    }
+  }
+</style>

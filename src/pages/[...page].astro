@@ -36,7 +36,7 @@ const currentPath = pageHref(page.currentPage);
 ---
 
 <BaseLayout currentPath={currentPath}>
-  <div class="content-container home-container">
+  <div class="content-container">
     <h1 class="sr-only">{siteConfig.title}</h1>
     <div class="home-grid">
       <main>
@@ -54,14 +54,11 @@ const currentPath = pageHref(page.currentPage);
 </BaseLayout>
 
 <style>
-  .home-container {
-    max-width: 1100px;
-  }
-
+  /* The container keeps the global 930px width so the grid lines up with the navbar. */
   .home-grid {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 240px;
-    gap: 2.5rem;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 2rem;
     align-items: start;
   }
 
