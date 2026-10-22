@@ -1,0 +1,22 @@
+---
+// Analytics slot: renders nothing until `siteConfig.analytics` names a provider.
+import { siteConfig } from '../config';
+
+const { plausibleDomain, goatcounterCode } = siteConfig.analytics as Record<string, string | undefined>;
+---
+
+{
+  plausibleDomain && (
+    <script is:inline defer data-domain={plausibleDomain} src="https://plausible.io/js/script.js" />
+  )
+}
+{
+  goatcounterCode && (
+    <script
+      is:inline
+      async
+      data-goatcounter={`https://${goatcounterCode}.goatcounter.com/count`}
+      src="https://gc.zgo.at/count.js"
+    />
+  )
+}

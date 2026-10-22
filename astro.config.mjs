@@ -1,17 +1,24 @@
 import { defineConfig } from 'astro/config';
 import mdx from '@astrojs/mdx';
+import sitemap from '@astrojs/sitemap';
 import { unified } from '@astrojs/markdown-remark';
 import tailwindcss from '@tailwindcss/vite';
 import viteCompression from 'vite-plugin-compression';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeCitation from 'rehype-citation';
+import { sitemapAlias } from './src/integrations/sitemap-alias';
 import { remarkQuoteCite } from './src/lib/remark-quote-cite';
 import { rehypeReferencesHeading } from './src/lib/rehype-references-heading';
 
 export default defineConfig({
   compressHTML: true,
-  integrations: [mdx()],
+  site: 'https://blog.liam.kim',
+  integrations: [
+    mdx(),
+    sitemap({ filter: (page) => !/\/404(\.html|\/)?$/.test(page) }),
+    sitemapAlias(),
+  ],
   vite: {
     plugins: [tailwindcss(), viteCompression({ algorithm: 'gzip', threshold: 1024 })],
   },

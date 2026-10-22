@@ -8,6 +8,7 @@ import Share from '../components/Share.astro';
 import CopyCode from '../components/CopyCode.astro';
 import Mermaid from '../components/Mermaid.astro';
 import { siteConfig } from '../config';
+import { excerpt } from '../lib/excerpt';
 import { formatSeoulDate } from '../lib/format-date';
 import { postUrl, slugify, type Post } from '../lib/posts';
 import type { TocHeading } from '../lib/toc-headings';
@@ -25,12 +26,18 @@ interface Props {
 }
 
 const { post, headings, prev, next, related, lastmod, minutes } = Astro.props;
-const { title, description, date, categories, tags, mermaid } = post.data;
+const { title, description, date, categories, tags, mermaid, image } = post.data;
 const url = postUrl(post);
 const hasToc = headings.some((h) => h.depth >= 2 && h.depth <= 4);
 ---
 
-<BaseLayout title={title} description={description} currentPath={url}>
+<BaseLayout
+  title={title}
+  description={description ?? excerpt(post.body ?? '', 160)}
+  currentPath={url}
+  image={image}
+  article={{ published: date, modified: lastmod ?? date }}
+>
   <div class:list={[hasToc && 'lecture-grid']}>
     <TableOfContents headings={headings} />
     <div class="content-container">

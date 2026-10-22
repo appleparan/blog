@@ -5,6 +5,7 @@ import Footer from '../components/Footer.astro';
 import ScrollProgress from '../components/ScrollProgress.astro';
 import BackToTop from '../components/BackToTop.astro';
 import SearchModal from '../components/SearchModal.astro';
+import Analytics from '../components/Analytics.astro';
 // KaTeX CSS comes from the installed package so it matches the renderer version.
 import 'katex/dist/katex.min.css';
 import '../styles/global.css';
@@ -13,15 +14,36 @@ interface Props {
   title?: string;
   description?: string;
   currentPath?: string;
+  /** Open Graph image path or URL; defaults to the avatar. */
+  image?: string;
+  /** Marks the page as an article and adds BlogPosting JSON-LD. */
+  article?: { published: Date; modified: Date };
 }
 
 const {
   title,
   description = siteConfig.description,
   currentPath = '/',
+  image,
+  article,
 } = Astro.props;
 
 const pageTitle = title ? `${title} | ${siteConfig.title}` : siteConfig.title;
+const absolute = (path: string) => new URL(path, siteConfig.url).href;
+const canonical = absolute(currentPath);
+const ogImage = absolute(image ?? siteConfig.avatar);
+const jsonLd = article && {
+  '@context': 'https://schema.org',
+  '@type': 'BlogPosting',
+  headline: title,
+  description,
+  datePublished: article.published.toISOString(),
+  dateModified: article.modified.toISOString(),
+  author: { '@type': 'Person', name: siteConfig.author },
+  url: canonical,
+  mainEntityOfPage: canonical,
+  ...(image && { image: ogImage }),
+};
 ---
 
 <!doctype html>
@@ -31,6 +53,24 @@ const pageTitle = title ? `${title} | ${siteConfig.title}` : siteConfig.title;
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <title>{pageTitle}</title>
+    <link rel="canonical" href={canonical} />
+    <link rel="alternate" type="application/atom+xml" title={siteConfig.title} href="/feed.xml" />
+
+    <meta property="og:type" content={article ? 'article' : 'website'} />
+    <meta property="og:site_name" content={siteConfig.title} />
+    <meta property="og:title" content={pageTitle} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={canonical} />
+    <meta property="og:image" content={ogImage} />
+    <meta property="og:locale" content={siteConfig.lang} />
+    {article && <meta property="article:published_time" content={article.published.toISOString()} />}
+    {article && <meta property="article:modified_time" content={article.modified.toISOString()} />}
+    <meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
+    <meta name="twitter:title" content={pageTitle} />
+    <meta name="twitter:description" content={description} />
+    <meta name="twitter:image" content={ogImage} />
+    {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd).replace(/</g, '\\u003c')} />}
+    <Analytics />
     <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="icon" href="/assets/img/favicons/favicon-32x32.png" type="image/png" sizes="32x32" />
     <link rel="icon" href="/assets/img/favicons/favicon-16x16.png" type="image/png" sizes="16x16" />
