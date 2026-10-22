@@ -10,6 +10,7 @@ import { sitemapAlias } from './src/integrations/sitemap-alias';
 import { swVersion } from './src/integrations/sw-version';
 import { remarkQuoteCite } from './src/lib/remark-quote-cite';
 import { rehypeReferencesHeading } from './src/lib/rehype-references-heading';
+import { rehypeCitationBacklinks } from './src/lib/rehype-citation-backlinks';
 
 export default defineConfig({
   compressHTML: true,
@@ -36,6 +37,7 @@ export default defineConfig({
           rehypeCitation,
           { path: 'src/content/bibliography', csl: 'ieee.csl', linkCitations: true },
         ],
+        rehypeCitationBacklinks,
         rehypeReferencesHeading,
       ],
     }),

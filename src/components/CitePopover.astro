@@ -1,0 +1,215 @@
+---
+// Shows the bibliography entry in a popover when a reader points at, focuses, or taps a citation
+// number in `.article-body`. Does nothing on pages without `#refs`.
+//
+// The popover has role="tooltip" and is linked to the citation by aria-describedby while open.
+// One pattern serves hover, focus and tap. The popover only repeats what `#bib-<key>` already
+// says, and the citation link itself stays the real way to reach the entry, so a tooltip fits
+// better than a dialog: a dialog would need focus management that a hover card cannot offer.
+---
+
+<script>
+  import { computePopoverPosition } from '../lib/popover-position';
+
+  const HIDE_DELAY_MS = 150;
+  const MAX_WIDTH_PX = 420;
+  const VIEWPORT_MARGIN_PX = 8;
+  const POPOVER_ID = 'cite-popover';
+
+  const refs = document.getElementById('refs');
+  const links = [
+    ...document.querySelectorAll<HTMLAnchorElement>('.article-body a[href^="#bib-"]'),
+  ].filter((a) => !a.closest('#refs'));
+
+  if (refs && links.length > 0) {
+    const canHover = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
+    let popover: HTMLElement | null = null;
+    let current: HTMLAnchorElement | null = null;
+    let hideTimer: number | undefined;
+    // Set while Escape returns focus to the link, so the focus handler does not reopen it.
+    let restoringFocus = false;
+
+    const entryFor = (link: HTMLAnchorElement): HTMLElement | null => {
+      try {
+        return document.getElementById(decodeURIComponent(link.hash.slice(1)));
+      } catch {
+        return null; // Malformed % escape in the hash: no entry to show.
+      }
+    };
+
+    function build(link: HTMLAnchorElement, entry: HTMLElement): HTMLElement {
+      const pop = document.createElement('div');
+      pop.id = POPOVER_ID;
+      pop.className = 'cite-popover';
+      pop.setAttribute('role', 'tooltip');
+
+      const number = entry.querySelector('.csl-left-margin')?.textContent?.trim();
+      const body = entry.querySelector('.csl-right-inline')?.cloneNode(true) as HTMLElement | null;
+      // The clone must not repeat ids, which would break links and anchors on the page.
+      body?.querySelectorAll('[id]').forEach((el) => el.removeAttribute('id'));
+
+      const text = document.createElement('div');
+      text.className = 'cite-popover-entry';
+      if (number) {
+        const num = document.createElement('span');
+        num.className = 'cite-popover-number';
+        num.textContent = number;
+        text.append(num);
+      }
+      if (body) text.append(body);
+
+      const go = document.createElement('a');
+      go.className = 'cite-popover-go';
+      go.href = link.hash;
+      go.textContent = '참고문헌에서 보기 ↓';
+      go.addEventListener('click', () => hide());
+
+      pop.append(text, go);
+      // Limitation of the tooltip pattern: a tooltip is not focusable, so its links stay out of the
+      // tab order (mouse and touch can click them). Keyboard users follow the citation link itself,
+      // which already goes to the entry.
+      pop.querySelectorAll('a').forEach((a) => a.setAttribute('tabindex', '-1'));
+      pop.style.maxWidth = `min(${MAX_WIDTH_PX}px, calc(100vw - ${2 * VIEWPORT_MARGIN_PX}px))`;
+      pop.addEventListener('mouseenter', cancelHide);
+      pop.addEventListener('mouseleave', scheduleHide);
+      return pop;
+    }
+
+    function place(link: HTMLAnchorElement, pop: HTMLElement): void {
+      const rect = link.getBoundingClientRect();
+      const { left, top, placement } = computePopoverPosition(
+        rect,
+        { width: pop.offsetWidth, height: pop.offsetHeight },
+        { width: document.documentElement.clientWidth, height: window.innerHeight },
+      );
+      // Absolute coordinates keep the popover beside the link when the page scrolls (touch).
+      pop.style.left = `${left + window.scrollX}px`;
+      pop.style.top = `${top + window.scrollY}px`;
+      pop.dataset.placement = placement;
+    }
+
+    function cancelHide(): void {
+      window.clearTimeout(hideTimer);
+    }
+
+    function scheduleHide(): void {
+      cancelHide();
+      hideTimer = window.setTimeout(hide, HIDE_DELAY_MS);
+    }
+
+    function hide(): void {
+      cancelHide();
+      current?.removeAttribute('aria-describedby');
+      popover?.remove();
+      popover = null;
+      current = null;
+    }
+
+    function show(link: HTMLAnchorElement): void {
+      cancelHide();
+      if (current === link && popover) return;
+      const entry = entryFor(link);
+      if (!entry) return;
+      hide();
+      popover = build(link, entry);
+      current = link;
+      document.body.append(popover);
+      link.setAttribute('aria-describedby', POPOVER_ID);
+      place(link, popover);
+    }
+
+    for (const link of links) {
+      if (canHover) {
+        link.addEventListener('mouseenter', () => show(link));
+        link.addEventListener('mouseleave', scheduleHide);
+      }
+      // Keyboard focus opens it. A tap also focuses on some browsers, so only :focus-visible counts.
+      link.addEventListener('focus', () => {
+        if (!restoringFocus && link.matches(':focus-visible')) show(link);
+      });
+      link.addEventListener('blur', () => {
+        if (!popover?.matches(':hover')) scheduleHide();
+      });
+      link.addEventListener('click', (event) => {
+        if (canHover) {
+          hide();
+          return;
+        }
+        // Touch: the first tap shows the entry; a second tap on the same link follows it.
+        if (current !== link) {
+          event.preventDefault();
+          show(link);
+        } else {
+          hide();
+        }
+      });
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape' || !current) return;
+      const link = current;
+      hide();
+      restoringFocus = true;
+      link.focus({ preventScroll: true });
+      restoringFocus = false;
+    });
+
+    document.addEventListener('pointerdown', (event) => {
+      const target = event.target as Node;
+      if (popover && !popover.contains(target) && !current?.contains(target)) hide();
+    });
+
+    // A fixed hover card would drift from its link while scrolling, so desktop closes it.
+    // Touch keeps it: it scrolls with the page and the reader may be reading it.
+    // Capture phase also catches inner scroll containers (tables, KaTeX blocks).
+    document.addEventListener('scroll', () => canHover && hide(), { capture: true, passive: true });
+    // Mobile browsers fire resize when the URL bar collapses, so close only on a width change.
+    let lastWidth = window.innerWidth;
+    window.addEventListener('resize', () => {
+      if (window.innerWidth === lastWidth) return;
+      lastWidth = window.innerWidth;
+      hide();
+    });
+  }
+</script>
+
+<style is:global>
+  .cite-popover {
+    position: absolute;
+    z-index: 60;
+    box-sizing: border-box;
+    padding: 0.6rem 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-surface);
+    color: var(--text);
+    font-size: 0.85rem;
+    line-height: 1.55;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    overflow-wrap: anywhere;
+  }
+
+  [data-theme='dark'] .cite-popover {
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  }
+
+  .cite-popover-entry {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .cite-popover-number {
+    flex-shrink: 0;
+    color: var(--text-muted);
+  }
+
+  .cite-popover a {
+    color: var(--accent);
+  }
+
+  .cite-popover-go {
+    display: inline-block;
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+  }
+</style>
