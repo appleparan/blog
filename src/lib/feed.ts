@@ -2,8 +2,22 @@ import { siteConfig } from '../config';
 import { excerpt } from './excerpt';
 import { postUrl, type Post } from './posts';
 
-const FEED_PATH = '/feed.xml';
 const SUMMARY_LENGTH = 200;
+
+/**
+ * How entry and feed ids look. `url` uses the page URL as is (`/feed.xml`, as jekyll-feed did).
+ * `chirpy` drops the trailing slash and uses the bare site as the feed id (`/atom.xml`, as the
+ * Chirpy theme did), so existing subscribers do not see every entry as new.
+ */
+export type IdStyle = 'url' | 'chirpy';
+
+export interface FeedOptions {
+  /** Path of the feed itself, for the `self` link. */
+  path: string;
+  idStyle: IdStyle;
+}
+
+const DEFAULT_OPTIONS: FeedOptions = { path: '/feed.xml', idStyle: 'url' };
 
 /** Escapes text for use in XML element content and attribute values. */
 export function escapeXml(text: string): string {
@@ -23,8 +37,10 @@ export function buildAtom(
   posts: Post[],
   site: string,
   lastmods: ReadonlyMap<string, Date | null> = new Map(),
+  { path, idStyle }: FeedOptions = DEFAULT_OPTIONS,
 ): string {
-  const abs = (path: string) => new URL(path, site).href;
+  const abs = (p: string) => new URL(p, site).href;
+  const idOf = (url: string) => (idStyle === 'chirpy' ? url.replace(/\/+$/, '') : url);
   const updatedOf = (post: Post) => lastmods.get(post.id) ?? post.data.date;
   const feedUpdated = posts.reduce<Date | null>((latest, p) => {
     const d = updatedOf(p);
@@ -38,7 +54,7 @@ export function buildAtom(
       '  <entry>',
       `    <title>${escapeXml(post.data.title)}</title>`,
       `    <link href="${escapeXml(url)}"/>`,
-      `    <id>${escapeXml(url)}</id>`,
+      `    <id>${escapeXml(idOf(url))}</id>`,
       `    <published>${post.data.date.toISOString()}</published>`,
       `    <updated>${updatedOf(post).toISOString()}</updated>`,
       summary ? `    <summary>${escapeXml(summary)}</summary>` : '',
@@ -54,9 +70,9 @@ export function buildAtom(
     `<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="${siteConfig.lang}">`,
     `  <title>${escapeXml(siteConfig.title)}</title>`,
     `  <subtitle>${escapeXml(siteConfig.description)}</subtitle>`,
-    `  <link rel="self" type="application/atom+xml" href="${abs(FEED_PATH)}"/>`,
+    `  <link rel="self" type="application/atom+xml" href="${abs(path)}"/>`,
     `  <link rel="alternate" type="text/html" href="${abs('/')}"/>`,
-    `  <id>${abs('/')}</id>`,
+    `  <id>${idOf(abs('/'))}</id>`,
     `  <updated>${(feedUpdated ?? new Date(0)).toISOString()}</updated>`,
     `  <author><name>${escapeXml(siteConfig.author)}</name></author>`,
     ...entries,

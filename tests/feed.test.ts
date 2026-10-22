@@ -41,13 +41,46 @@ describe('buildAtom', () => {
     expect(xml).toContain('<category term="a b"/>');
     expect(xml).toContain('<category term="c"/>');
   });
+
+  it('uses the URL with its trailing slash as the id by default', () => {
+    expect(xml).toContain('<id>https://blog.liam.kim/</id>');
+  });
+
+  it('writes Chirpy ids without a trailing slash and keeps the real URL in the link', () => {
+    const chirpy = buildAtom([post()], 'https://blog.liam.kim', new Map(), {
+      path: '/atom.xml',
+      idStyle: 'chirpy',
+    });
+    expect(chirpy).toContain('<id>https://blog.liam.kim/posts/2024/03/Tom-and-Jerry</id>');
+    expect(chirpy).toContain('<link href="https://blog.liam.kim/posts/2024/03/Tom-and-Jerry/"');
+    expect(chirpy).toContain('<id>https://blog.liam.kim</id>');
+    expect(chirpy).toContain('href="https://blog.liam.kim/atom.xml"');
+  });
 });
 
 describe('built site', () => {
-  it('serves the same Atom feed at /feed.xml and /atom.xml', () => {
+  it('serves the same entries at /feed.xml and /atom.xml, each with its old id style', () => {
     const feed = readFileSync('dist/feed.xml', 'utf8');
+    const atom = readFileSync('dist/atom.xml', 'utf8');
     expect(feed.startsWith('<?xml')).toBe(true);
-    expect(readFileSync('dist/atom.xml', 'utf8')).toBe(feed);
+    expect(atom.startsWith('<?xml')).toBe(true);
+    const links = (xml: string) => [...xml.matchAll(/<link href="([^"]+)"\/>/g)].map((m) => m[1]);
+    const ids = (xml: string) => [...xml.matchAll(/<id>([^<]+)<\/id>/g)].map((m) => m[1]);
+    expect(links(feed).length).toBeGreaterThan(0);
+    expect(links(atom)).toEqual(links(feed));
+    for (const url of links(feed)) expect(url).toMatch(/^https:\/\/blog\.liam\.kim\/posts\/.+\/$/);
+    // jekyll-feed ids end with `/`; Chirpy ids (atom.xml) do not, and the feed id is the bare site.
+    expect(ids(feed)).toEqual(['https://blog.liam.kim/', ...links(feed)]);
+    expect(ids(atom)).toEqual([
+      'https://blog.liam.kim',
+      ...links(feed).map((url) => url.replace(/\/$/, '')),
+    ]);
+    expect(feed).toContain('href="https://blog.liam.kim/feed.xml"');
+    expect(atom).toContain('href="https://blog.liam.kim/atom.xml"');
+    // Apart from ids and the self link, the two feeds are the same.
+    const strip = (xml: string) =>
+      xml.replace(/<id>[^<]*<\/id>/g, '').replace(/\/(feed|atom)\.xml"/, '');
+    expect(strip(atom)).toBe(strip(feed));
   });
 
   it('writes the sitemap index and a copy at /sitemap.xml', () => {
