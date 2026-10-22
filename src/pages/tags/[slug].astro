@@ -1,0 +1,25 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import PostRow from '../../components/PostRow.astro';
+import { getPosts } from '../../lib/get-posts';
+import { tagIndex } from '../../lib/posts';
+
+export async function getStaticPaths() {
+  const index = tagIndex(await getPosts());
+  return [...index.entries()].map(([slug, { name, posts }]) => ({
+    params: { slug },
+    props: { name, posts },
+  }));
+}
+
+const { name, posts } = Astro.props;
+---
+
+<BaseLayout title={`#${name}`} currentPath="/tags/">
+  <div class="content-container">
+    <h1>{name}</h1>
+    <div class="lecture-list">
+      {posts.map((post) => <PostRow post={post} />)}
+    </div>
+  </div>
+</BaseLayout>

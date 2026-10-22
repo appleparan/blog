@@ -1,0 +1,15 @@
+---
+import { formatSeoulDate } from '../lib/format-date';
+import { postUrl, type Post } from '../lib/posts';
+
+interface Props {
+  post: Post;
+}
+
+const { post } = Astro.props;
+---
+
+<a class="lecture-item" href={postUrl(post)}>
+  <span class="lecture-item-date">{formatSeoulDate(post.data.date)}</span>
+  <span class="lecture-item-title">{post.data.title}</span>
+</a>

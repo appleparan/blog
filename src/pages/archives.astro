@@ -1,0 +1,27 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import PostRow from '../components/PostRow.astro';
+import { getPosts } from '../lib/get-posts';
+import { seoulYearMonth, type Post } from '../lib/posts';
+
+// getPosts() is newest first, so years and posts within a year stay in that order.
+const byYear = new Map<string, Post[]>();
+for (const post of await getPosts()) {
+  const { year } = seoulYearMonth(post.data.date);
+  byYear.set(year, [...(byYear.get(year) ?? []), post]);
+}
+---
+
+<BaseLayout title="Archives" currentPath="/archives/">
+  <div class="content-container">
+    <h1>Archives</h1>
+    {[...byYear.entries()].map(([year, posts]) => (
+      <section>
+        <h2 class="archive-year">{year}</h2>
+        <div class="lecture-list">
+          {posts.map((post) => <PostRow post={post} />)}
+        </div>
+      </section>
+    ))}
+  </div>
+</BaseLayout>

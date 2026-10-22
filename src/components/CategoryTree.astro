@@ -1,0 +1,57 @@
+---
+import type { categoryTree } from '../lib/posts';
+
+interface Props {
+  tree: ReturnType<typeof categoryTree>;
+}
+
+const { tree } = Astro.props;
+---
+
+<ul class="category-tree">
+  {tree.map((parent) => (
+    <li>
+      <a href={`/categories/${parent.slug}/`}>{parent.name}</a>
+      <span class="category-count">{parent.count}</span>
+      {parent.children.length > 0 && (
+        <ul>
+          {parent.children.map((child) => (
+            <li>
+              <a href={`/categories/${child.slug}/`}>{child.name}</a>
+              <span class="category-count">{child.count}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </li>
+  ))}
+</ul>
+
+<style>
+  .category-tree,
+  .category-tree ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .category-tree > li {
+    margin-bottom: 1rem;
+    font-weight: 500;
+  }
+
+  .category-tree ul {
+    margin: 0.4rem 0 0 1.25rem;
+    font-weight: 400;
+  }
+
+  .category-tree ul li {
+    margin: 0.25rem 0;
+  }
+
+  .category-count {
+    margin-left: 0.5rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+  }
+</style>
