@@ -1,19 +1,10 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { parse } from 'node-html-parser';
 import { describe, expect, it } from 'vitest';
+import { draftPosts, publishedPosts } from './helpers/source-posts';
 
 // Reads the built site, so run `bun run build` before `bun run test`.
 const html = (path: string) => readFileSync(`dist${path}`, 'utf8');
-const frontMatter = (file: string) =>
-  readFileSync(`src/content/posts/${file}`, 'utf8').split(/^---$/m)[1] ?? '';
-const titleOf = (file: string) =>
-  frontMatter(file)
-    .match(/^title:\s*(.+)$/m)?.[1]
-    ?.trim()
-    .replace(/^(["'])(.*)\1$/, '$2') ?? '';
-const isDraft = (file: string) => /^draft:\s*true\s*$/m.test(frontMatter(file));
-
-const postFiles = readdirSync('src/content/posts').filter((f) => /\.mdx?$/.test(f));
 const searchData = (): { title: string; url: string }[] => {
   const root = parse(html('/index.html'));
   return JSON.parse(root.querySelector('#search-data')!.text);
@@ -43,13 +34,13 @@ describe('404 page', () => {
 });
 
 describe('search data', () => {
-  it('holds every published post title and no draft title', () => {
-    const titles = searchData().map((d) => d.title);
-    const published = postFiles.filter((f) => !isDraft(f)).map(titleOf);
-    const drafts = postFiles.filter(isDraft).map(titleOf);
-    expect(published).toHaveLength(20);
-    for (const t of published) expect(titles).toContain(t);
-    for (const t of drafts) expect(titles).not.toContain(t);
+  it('holds one entry per published post and no draft', () => {
+    const entries = searchData();
+    expect(entries).toHaveLength(publishedPosts.length);
+    expect(entries.map((d) => d.url).sort()).toEqual(publishedPosts.map((p) => p.url).sort());
+    const titles = entries.map((d) => d.title);
+    for (const p of publishedPosts) expect(titles).toContain(p.data.title);
+    for (const p of draftPosts) expect(titles).not.toContain(p.data.title);
   });
 
   it('links each entry to a post URL', () => {

@@ -1,9 +1,13 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { parse } from 'node-html-parser';
 import { describe, expect, it } from 'vitest';
+import { siteConfig } from '../src/config';
+import { draftPosts, homePagePath, pageCount, publishedPosts } from './helpers/source-posts';
 
 // Reads the built site, so run `bun run build` before `bun run test`.
-// 20 published posts (2 drafts are dev-only), 10 per page: `/` and `/page/2/`, no `/page/3/`.
+// Counts come from the post sources: `postsPerPage` per page, page 1 at `/`, then `/page/N/`.
+const pages = Array.from({ length: pageCount }, (_, i) => homePagePath(i + 1));
+const lastPage = pages[pages.length - 1];
 const page = (path: string) => parse(readFileSync(`dist${path}index.html`, 'utf8'));
 const cardUrls = (path: string) =>
   page(path)
@@ -11,22 +15,25 @@ const cardUrls = (path: string) =>
     .map((a) => a.getAttribute('href'));
 
 describe('home page', () => {
-  it('lists 10 cards on / and 10 on /page/2/, and has no /page/3/', () => {
-    expect(cardUrls('/')).toHaveLength(10);
-    expect(cardUrls('/page/2/')).toHaveLength(10);
-    expect(existsSync('dist/page/3/index.html')).toBe(false);
+  const allCards = () => pages.flatMap(cardUrls);
+
+  it('fills every page but the last, and builds no page after the last', () => {
+    expect(pageCount).toBeGreaterThan(0);
+    for (const path of pages.slice(0, -1))
+      expect(cardUrls(path), path).toHaveLength(siteConfig.postsPerPage);
+    expect(cardUrls(lastPage).length).toBeGreaterThan(0);
+    expect(cardUrls(lastPage).length).toBeLessThanOrEqual(siteConfig.postsPerPage);
+    expect(existsSync(`dist/page/${pageCount + 1}/index.html`)).toBe(false);
   });
 
-  it('puts the newest published post first and never repeats a post across pages', () => {
-    expect(cardUrls('/')[0]).toBe('/posts/2025/11/VAE-to-DDPMs/');
-    const all = [...cardUrls('/'), ...cardUrls('/page/2/')];
-    expect(new Set(all).size).toBe(20);
+  it('lists every published post once, newest first', () => {
+    expect(cardUrls('/')[0]).toBe(publishedPosts[0].url);
+    expect(allCards()).toEqual(publishedPosts.map((p) => p.url));
   });
 
   it('shows no draft posts', () => {
-    const all = [...cardUrls('/'), ...cardUrls('/page/2/')].join(' ');
-    expect(all).not.toContain('Inside-vLLM');
-    expect(all).not.toContain('EBM-to-NCSN');
+    const cards = new Set(allCards());
+    for (const draft of draftPosts) expect(cards.has(draft.url), draft.url).toBe(false);
   });
 
   it('shows meta and an excerpt on every card', () => {
@@ -45,17 +52,16 @@ describe('home page', () => {
   });
 
   it('links pagination between the pages', () => {
-    expect(page('/').querySelector('.pagination a[rel="next"]')?.getAttribute('href')).toBe(
-      '/page/2/',
-    );
-    expect(page('/page/2/').querySelector('.pagination a[rel="prev"]')?.getAttribute('href')).toBe(
-      '/',
-    );
-    expect(page('/page/2/').querySelector('.pagination a[rel="next"]')).toBeNull();
+    pages.forEach((path, i) => {
+      const prev = page(path).querySelector('.pagination a[rel="prev"]')?.getAttribute('href');
+      const next = page(path).querySelector('.pagination a[rel="next"]')?.getAttribute('href');
+      expect(prev, path).toBe(pages[i - 1]);
+      expect(next, path).toBe(pages[i + 1]);
+    });
   });
 
   it('shows excerpts without holes left by removed citations or math', () => {
-    const excerpts = ['/', '/page/2/'].flatMap((path) =>
+    const excerpts = pages.flatMap((path) =>
       page(path)
         .querySelectorAll('.post-card-excerpt')
         .map((p) => p.textContent),

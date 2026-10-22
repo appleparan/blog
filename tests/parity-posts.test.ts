@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { parse } from 'node-html-parser';
 import { describe, expect, it } from 'vitest';
+import { publishedPosts } from './helpers/source-posts';
 
 // Reads the built site, so run `bun run build` before `bun run test`.
 interface Counts {
@@ -51,11 +52,16 @@ describe('post pages match the Jekyll site', () => {
     expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
   });
 
-  it('builds no post page that Jekyll did not publish', () => {
+  it('builds a page for each published post source and no other post page', () => {
     const built = readdirSync('dist/posts', { recursive: true, encoding: 'utf8' })
       .filter((f) => f.endsWith('index.html'))
       .map((f) => `/posts/${f.replace(/index\.html$/, '')}`)
       .sort();
-    expect(built).toEqual(Object.keys(reference.posts).sort());
+    expect(built).toEqual(publishedPosts.map((p) => p.url).sort());
+  });
+
+  it('still publishes every post the Jekyll site published', () => {
+    const sources = new Set(publishedPosts.map((p) => p.url));
+    expect(Object.keys(reference.posts).filter((url) => !sources.has(url))).toEqual([]);
   });
 });
