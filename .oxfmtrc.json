@@ -5,10 +5,8 @@
     "dist/",
     "src/content/posts/*.mdx",
     "src/content/bibliography/",
-    "tests/fixtures/",
     "src/styles/global.css",
-    "public/",
-    "IMPLEMENTATION_PLAN.md"
+    "public/"
   ],
   "overrides": [
     {
