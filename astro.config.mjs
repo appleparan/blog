@@ -4,6 +4,7 @@ import sitemap from '@astrojs/sitemap';
 import { unified } from '@astrojs/markdown-remark';
 import tailwindcss from '@tailwindcss/vite';
 import remarkMath from 'remark-math';
+import remarkCjkFriendly from 'remark-cjk-friendly';
 import rehypeKatex from 'rehype-katex';
 import rehypeCitation from 'rehype-citation';
 import { sitemapAlias } from './src/integrations/sitemap-alias';
@@ -28,7 +29,9 @@ export default defineConfig({
     // Astro 7 defaults to the Satteri processor, which does not run remark/rehype
     // plugins. remark-math and rehype-katex need the unified processor.
     processor: unified({
-      remarkPlugins: [remarkMath, remarkQuoteCite],
+      // CommonMark does not close `**일반화(generalization)**라는`; this lets Korean
+      // text follow emphasis that ends with punctuation.
+      remarkPlugins: [remarkMath, remarkCjkFriendly, remarkQuoteCite],
       rehypePlugins: [
         rehypeKatex,
         // The .bib file name comes from each post's `bibliography` front matter,
