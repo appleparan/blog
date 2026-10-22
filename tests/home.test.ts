@@ -53,4 +53,14 @@ describe('home page', () => {
     );
     expect(page('/page/2/').querySelector('.pagination a[rel="next"]')).toBeNull();
   });
+
+  it('shows excerpts without holes left by removed citations or math', () => {
+    const excerpts = ['/', '/page/2/'].flatMap((path) =>
+      page(path)
+        .querySelectorAll('.post-card-excerpt')
+        .map((p) => p.textContent),
+    );
+    expect(excerpts.length).toBeGreaterThan(0);
+    expect(excerpts.filter((text) => text.includes('()') || text.includes('  '))).toEqual([]);
+  });
 });
