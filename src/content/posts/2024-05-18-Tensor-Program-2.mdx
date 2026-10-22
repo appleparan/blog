@@ -379,7 +379,7 @@ d x^l_\alpha &\stackrel{\text{def}}{=} (W^{l+1 \mathsf{T}}dh^{l+1})_\alpha \\
 $$
 
 전부가 i.i.d.라서 central limit theorem을 사용하면 좋겠지만, $$h^{l+1}_\beta$$는 모든 $\gamma$에 대해 $$W^{l+1}_{\beta \gamma}$$에 의존하기 때문에 i.i.d. 를 만족하지 못한다.
-그러나, [@poole2016exponential]와 [@poole2schoenholz2016deep016exponential]에 따르면, 이 의존성은 무시해도 된다고 한다. 이는 mean field theory에서 뉴런의 크기 $n^l$이 크다면, weight와 bias는 독립적으로 작용하여 이전 레이어의 영향을 받지 않고 $h$는 이런 $W$와 $b$의 weighted sum이라고 표현할 수 있기 때문이다.
+그러나, [@poole2016exponential]와 [@schoenholz2016deep]에 따르면, 이 의존성은 무시해도 된다고 한다. 이는 mean field theory에서 뉴런의 크기 $n^l$이 크다면, weight와 bias는 독립적으로 작용하여 이전 레이어의 영향을 받지 않고 $h$는 이런 $W$와 $b$의 weighted sum이라고 표현할 수 있기 때문이다.
 
 이를 통해 [@yang2020tensor]에서는 다음과 같은 아주 재미있는 Heuristic을 사용하게 된다. [@schoenholz2016deep]의 Section 4와  [@yang2017mean]의 Axiom 3.2를 참고하면 되겠다. Forward와 Backward pass의 weight가 서로 독립적이라니 이 얼마나 재밌는 가정이지 않은가!
 
