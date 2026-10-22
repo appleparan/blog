@@ -204,4 +204,17 @@ const hasToc = headings.some((h) => h.depth >= 2 && h.depth <= 4);
     min-width: 2rem;
     color: var(--text-muted);
   }
+
+  /* Display math scrolls sideways only when it is wider than the column.
+     KaTeX draws a few px outside its box: struts above and below, and a 2px
+     `.vlist-s` span in equation tags at the right edge. With only
+     `overflow-x: auto`, that spill shows scrollbars on equations that fit.
+     The padding keeps the spill inside the box, and `overflow-y: hidden`
+     stops the vertical scrollbar. The smaller margin keeps the old spacing. */
+  .article-body .katex-display {
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0.5em 0.25em;
+    margin: 0.75rem 0;
+  }
 </style>
