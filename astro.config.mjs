@@ -22,7 +22,12 @@ export default defineConfig({
     swVersion(),
   ],
   vite: {
-    plugins: [tailwindcss(), viteCompression({ algorithm: 'gzip', threshold: 1024 })],
+    plugins: [tailwindcss(), viteCompression({
+        algorithm: 'gzip',
+        threshold: 1024,
+        // sw.min.js is rewritten after the build (build id), so a gzip copy would go stale.
+        filter: (file) => /\.(js|mjs|json|css|html)$/i.test(file) && !/(^|\/)sw\.min\.js$/.test(file),
+      })],
   },
   markdown: {
     // Astro 7 defaults to the Satteri processor, which does not run remark/rehype

@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { gunzipSync } from "node:zlib";
 import { describe, expect, it } from "vitest";
 import { siteConfig } from "../src/config";
 
@@ -16,6 +17,12 @@ describe("service worker", () => {
     expect(sw).not.toContain("__BUILD_ID__");
     expect(sw).toContain("skipWaiting");
     expect(sw).toContain("clients.claim");
+    const copies = readdirSync("dist").filter((f) => f.startsWith("sw.min.js"));
+    for (const f of copies) {
+      const raw = readFileSync(join("dist", f));
+      const text = f.endsWith(".gz") ? gunzipSync(raw).toString() : raw.toString();
+      expect(text, f).not.toContain("__BUILD_ID__");
+    }
     expect(sw).toMatch(/const CACHE = "blog-[\w.-]+"/);
   });
 });
@@ -49,9 +56,9 @@ describe("manifest", () => {
     expect(missing).toEqual([]);
   });
 
-  it("registers the worker only through the production script", () => {
+  it("registers the worker from the built pages", () => {
     const home = readFileSync("dist/index.html", "utf8");
-    expect(home).toContain("/sw.min.js");
+    expect(home).toContain("serviceWorker.register('/sw.min.js'");
   });
 });
 
