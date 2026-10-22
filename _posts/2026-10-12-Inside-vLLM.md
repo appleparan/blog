@@ -1,0 +1,41 @@
+---
+layout: post
+title: Inside vLLM 뜯어보기
+author: jongsukim
+date: 2026-10-21 02:00:00 +0900
+categories: [LLM Inference, vLLM]
+tags:
+  - LLM Inference
+  - vLLM
+math: true
+mermaid: false
+draft: true
+---
+
+## Introduction
+
+예전에 [Inside vLLM: Anatomy of a High-Throughput LLM Inference System](https://vllm.ai/blog/2025-09-05-anatomy-of-vllm)를 읽고 그렇구나 하고 넘겼는데, 막상 내가 얘기하려고 하니까 말을 못하겠다. 너무 부끄러웠지만, 이럴때는 이렇게 글로 정리하면 절대 까먹지 않는다.
+게다가 위 글은 2025년 가을의 글이고 그 뒤로 vLLM이 Model Runner v2도 나오고 너무 많이 바뀌었다. 그래서 2026년 10월 v0.32.0 기준으로 업데이트를 해보고자 한다.
+
+특히 대 LLM 시대를 맞이하여, 오랜만에 소스를 직접 까보면서 보면 절대 잊을리가 없을 것 같다.
+
+## 시작
+
+`vllm serve`를 한다고 하자. `vllm/entrypoints/cli/main.py`를 통해 `vllm/entrypoints/cli/serve.py`로 실행하게 된다.
+외부 LB라던가 Multiport같은 특수한 옵션을 주지 않는다면, Single API Server가 올라오게 된다.
+
+```python
+args.api_server_count = None
+uvloop.run(run_server(args))
+```
+
+Single API 서버는 `setup_server` 후 `run_server_worker`를 실행한다. [`vllm/entrypoints/launchers/api_server/entry.py`](https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/launchers/api_server/entry.py#L164)
+
+`setup_server`는 로깅 셋업, parser plugin 로드, argument 검증 후 포트(소켓)을 열게 된다.
+실질적으로 메인역할을 하는건 `run_server_worker`이다.
+`run_server_worker`: `setup_server`로 연 소켓을 받아서 엔진 클라이언트(`AsyncLLM`)를 만들고, FastAPI 앱을 구성한 뒤 `uvicorn`으로 서빙한다. 물론 종료 처리도 이 함수가 처리한다.
+
+
+
+
+
