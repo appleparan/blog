@@ -10,8 +10,11 @@ You need [Bun](https://bun.sh) and Node.js 22.12 or later.
 
 ```shell
 bun install
-bunx husky   # once: installs the commit-msg hook (bun install does not run `prepare`)
+bunx husky   # once: installs the commit-msg hook
 ```
+
+Run `bunx husky` yourself: `bun install` does not run the `prepare`
+script (checked with Bun 1.4.2).
 
 ## Commands
 
@@ -37,27 +40,26 @@ title: My Post
 date: 2026-10-23 10:00:00 +0900
 categories: [Deep Learning, LLM]
 tags: [transformer, attention]
-math: true
-mermaid: false
-draft: false
+mermaid: true # optional
+draft: false # optional
 bibliography: 2026-10-23-My-Post.bib
 description: One sentence for link previews.
 image: /assets/images/post/2026-10-23-My-Post/cover.png
 ---
 ```
 
-| Field          | Meaning                                                                 |
-| -------------- | ----------------------------------------------------------------------- |
-| `title`        | Required. The post title.                                               |
-| `date`         | Required. Publish date with a time zone offset.                         |
-| `categories`   | Category path, top level first. Every level gets a page.                |
-| `tags`         | Tag list.                                                               |
-| `math`         | Marks posts with math. Math (`$...$`, `$$...$$`) renders in every post. |
-| `mermaid`      | `true` loads Mermaid for ` ```mermaid ` code blocks.                    |
-| `draft`        | `true` shows the post in `bun run dev` only. The build leaves it out.   |
-| `bibliography` | File name of the post's `.bib` file in `src/content/bibliography/`.     |
-| `description`  | Summary for meta tags. Without it, the start of the post is used.       |
-| `image`        | Preview image for social cards.                                         |
+| Field          | Meaning                                                               |
+| -------------- | --------------------------------------------------------------------- |
+| `title`        | Required. The post title.                                             |
+| `date`         | Required. Publish date with a time zone offset.                       |
+| `categories`   | Category path, top level first. Every level gets a page.              |
+| `tags`         | Tag list.                                                             |
+| `math`         | Optional, no effect. Math (`$...$`, `$$...$$`) renders in every post. |
+| `mermaid`      | Optional, default `false`. `true` renders ` ```mermaid ` code blocks. |
+| `draft`        | `true` shows the post in `bun run dev` only. The build leaves it out. |
+| `bibliography` | File name of the post's `.bib` file in `src/content/bibliography/`.   |
+| `description`  | Summary for meta tags. Without it, the start of the post is used.     |
+| `image`        | Preview image for social cards.                                       |
 
 Put images in `public/assets/images/post/<post-file-name>/` and link
 them as `/assets/images/post/<post-file-name>/<image>`.
