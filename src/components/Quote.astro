@@ -1,0 +1,24 @@
+---
+// Block quote with its source in the footer. remark-quote-cite passes
+// `[@cite]` as the `cite` slot, which rehype-citation renders as a number link.
+interface Props {
+  /** BibTeX key; remark-quote-cite reads it from the MDX source. */
+  cite: string;
+}
+---
+
+<blockquote class="quote">
+  <slot />
+  <footer><slot name="cite" /></footer>
+</blockquote>
+
+<style>
+  footer {
+    margin-top: 0.5rem;
+    text-align: right;
+  }
+
+  footer :global(p) {
+    margin: 0;
+  }
+</style>

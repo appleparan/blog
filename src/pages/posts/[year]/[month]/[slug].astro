@@ -1,0 +1,30 @@
+---
+// Minimal post route. Task 5 replaces the layout around <Content />.
+import { render, type CollectionEntry } from 'astro:content';
+import BaseLayout from '../../../../layouts/BaseLayout.astro';
+import Mermaid from '../../../../components/Mermaid.astro';
+import { getPosts } from '../../../../lib/get-posts';
+import { postUrl } from '../../../../lib/posts';
+
+export async function getStaticPaths() {
+  const posts = await getPosts();
+  return posts.map((post) => {
+    const [, , year, month, slug] = postUrl(post).split('/');
+    return { params: { year, month, slug }, props: { post } };
+  });
+}
+
+const { post } = Astro.props;
+// getPosts() returns collection entries typed with the structural Post shape.
+const { Content } = await render(post as CollectionEntry<'posts'>);
+---
+
+<BaseLayout title={post.data.title} description={post.data.description} currentPath={postUrl(post)}>
+  <div class="content-container">
+    <article class="article-body">
+      <h1>{post.data.title}</h1>
+      <Content />
+    </article>
+  </div>
+  {post.data.mermaid && <Mermaid />}
+</BaseLayout>

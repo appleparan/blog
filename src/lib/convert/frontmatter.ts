@@ -10,15 +10,16 @@ export function usedComponents(body: string): string[] {
 }
 
 /**
- * Keeps every front matter field as written, adds `bibliography: <F>.bib` when the post cites,
- * and returns the front matter block followed by the MDX imports.
+ * Keeps every front matter field as written except `layout` (MDX would import it as a layout
+ * module), adds `bibliography: <F>.bib` when the post cites, and returns the front matter block
+ * followed by the MDX imports.
  */
 export function convertFrontmatter(
   fm: string,
   bibFile: string | null,
   components: string[] = [],
 ): string {
-  const lines = [fm.replace(/\s+$/, '')];
+  const lines = [fm.replace(/^layout:.*\n?/m, '').replace(/\s+$/, '')];
   if (bibFile) lines.push(`bibliography: ${bibFile}.bib`);
   const header = `---\n${lines.join('\n')}\n---\n`;
   if (components.length === 0) return header;

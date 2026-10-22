@@ -3,7 +3,12 @@ import { glob } from "astro/loaders";
 import { z } from "astro/zod";
 
 const posts = defineCollection({
-  loader: glob({ pattern: "**/*.mdx", base: "./src/content/posts" }),
+  loader: glob({
+    pattern: "**/*.mdx",
+    base: "./src/content/posts",
+    // Keep the file name's case: the default id is slugified (lowercased), but post URLs keep case.
+    generateId: ({ entry }) => entry.replace(/\.mdx$/, ""),
+  }),
   schema: z.object({
     title: z.string(),
     date: z.coerce.date(),

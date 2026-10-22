@@ -133,6 +133,10 @@ describe('convertFrontmatter', () => {
       "---\ntitle: T\ndraft: true\nbibliography: F.bib\n---\n\nimport Figure from '../../components/Figure.astro';\nimport { YouTube } from '@astro-community/astro-embed-youtube';\n",
     );
   });
+
+  it('drops the Jekyll layout, which MDX would import as a module', () => {
+    expect(convertFrontmatter('layout: post\ntitle: T', null)).toBe('---\ntitle: T\n---\n');
+  });
 });
 
 describe('convertPost', () => {
