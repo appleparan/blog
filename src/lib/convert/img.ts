@@ -17,6 +17,15 @@ function toJsx(html: string): string {
     .replace(/[{}]/g, (c) => (c === '{' ? '&#123;' : '&#125;'));
 }
 
+/** Plain text of an HTML caption, for the image's alt text. */
+function plainText(html: string): string {
+  return html
+    .replace(/<br\s*\/?>/g, ' ')
+    .replace(/<[^>]*>/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 function toAttr(value: string): string {
   return `"${value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`;
 }
@@ -27,7 +36,10 @@ function toBackground(style: string): string {
   return m[1];
 }
 
-/** `{% img … %}` becomes `<Figure … />`. The `class` attribute is dropped. */
+/**
+ * `{% img … %}` becomes `<Figure … />`. The `class` attribute is dropped. An HTML caption
+ * becomes a JSX fragment, so its plain text is passed as `alt` (Figure derives it otherwise).
+ */
 export function convertImg(body: string): string {
   return outsideCode(body, (text) =>
     text.replace(IMG, (_, raw: string) => {
@@ -35,11 +47,11 @@ export function convertImg(body: string): string {
       if (!a.src) throw new Error(`img tag without src: ${raw}`);
       const props = [`src=${toAttr(a.src)}`];
       if (a.caption) {
-        props.push(
-          HAS_HTML.test(a.caption)
-            ? `caption={<>${toJsx(a.caption)}</>}`
-            : `caption=${toAttr(a.caption)}`,
-        );
+        if (HAS_HTML.test(a.caption)) {
+          props.push(`caption={<>${toJsx(a.caption)}</>}`, `alt=${toAttr(plainText(a.caption))}`);
+        } else {
+          props.push(`caption=${toAttr(a.caption)}`);
+        }
       }
       if (a.align) props.push(`align=${toAttr(a.align)}`);
       if (a.style) props.push(`background=${toAttr(toBackground(a.style))}`);

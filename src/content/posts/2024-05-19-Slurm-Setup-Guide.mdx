@@ -1,5 +1,4 @@
 ---
-layout: post
 title: Slurm Setup Guide
 author: jongsukim
 date: 2024-05-19 00:01:00 +0900
@@ -9,6 +8,8 @@ tags:
   - Server Engineering
   - HPC
 ---
+
+import Figure from '../../components/Figure.astro';
 
 **2024년 5월 기준으로 설명한 글임을 명시한다.**
 
@@ -39,7 +40,7 @@ Job scheduler 중에서도 GPU 클러스터에서 가장 많이 사용하는 것
 
 slurm을 셋업하기 앞서, batch system의 전체적인 구조 및 workflow를 소개하고자 한다.
 
-{% img align="center" style='background-color: #fff' caption='<a href="https://hpc-wiki.info/hpc/File:Batch_System.png">Schematic of how users can access the batch system</a>' src='/assets/images/post/2024-05-10-Slurm-Setup-Guide/01-Schematic-Batch-System.png' %}
+<Figure src="/assets/images/post/2024-05-10-Slurm-Setup-Guide/01-Schematic-Batch-System.png" caption={<><a href="https://hpc-wiki.info/hpc/File:Batch_System.png">Schematic of how users can access the batch system</a></>} alt="Schematic of how users can access the batch system" align="center" background="#fff" />
 
 우선, 유저는 로그인 노드(login node) 혹은 메인 노드(main node)라는 서버에 접속해서 모든것을 수행한다. 유저는 계산 노드(computing node)에 접근할 수 없다.
 그리고 job script 파일을 통해 job scheduler에 계산 혹은 실험(job)을 submit하고 job scheduler는 유저가 작성한 job script 파일을 보고 스케줄링 시스템에 따라 적절한 계산노드에 job을 할당한다.
@@ -47,7 +48,7 @@ slurm을 셋업하기 앞서, batch system의 전체적인 구조 및 workflow�
 
 로그인 노드와 각 계산 노드는 당연히 동일한 유저가 있어야 하고, NAS 같이 별도의 파일서버가 있어서 파일 시스템도 공유해야 job 결과를 메인노드에서도 확인할 수 있게 된다. 이를 이해하기 위해서는 [공개 키 암호방식](https://ko.wikipedia.org/wiki/%EA%B3%B5%EA%B0%9C_%ED%82%A4_%EC%95%94%ED%98%B8_%EB%B0%A9%EC%8B%9D)에 대해서는 필수적으로 공부할 필요가 있다.
 
-{% img align="center" style='background-color: #fff' caption='<a href="https://hpc-wiki.info/hpc/File:Scheduler.png">Schematic of how a scheduler may distribute jobs onto nodes</a>' src='/assets/images/post/2024-05-10-Slurm-Setup-Guide/02-Scheduler.png' %}
+<Figure src="/assets/images/post/2024-05-10-Slurm-Setup-Guide/02-Scheduler.png" caption={<><a href="https://hpc-wiki.info/hpc/File:Scheduler.png">Schematic of how a scheduler may distribute jobs onto nodes</a></>} alt="Schematic of how a scheduler may distribute jobs onto nodes" align="center" background="#fff" />
 
 주의할 점은 Job scheduler는 단순히 비어있는 공간에 유저가 요청한 자원을 할당한다는 점이다. 만약에 Job schduler에는 1개의 GPU를 사용한다고 명시했는데, 코드 상에서 강제로 GPU를 2개 사용해버리면 다른 유저가 사용하고 있는 GPU를 같이 사용하게 돼서 문제가 생길 수 있다.
 

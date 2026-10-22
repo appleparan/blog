@@ -1,9 +1,3 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { compile } from '@mdx-js/mdx';
-import remarkParse from 'remark-parse';
-import remarkMath from 'remark-math';
-import { unified } from 'unified';
 import { describe, expect, it } from 'vitest';
 import {
   convertCite,
@@ -95,7 +89,13 @@ describe('convertImg', () => {
       `{% img align="center" style='background-color: #fff' caption='<a href="https://x.y">Batch</a>' src='/assets/a.png' %}`,
     );
     expect(out).toBe(
-      '<Figure src="/assets/a.png" caption={<><a href="https://x.y">Batch</a></>} align="center" background="#fff" />',
+      '<Figure src="/assets/a.png" caption={<><a href="https://x.y">Batch</a></>} alt="Batch" align="center" background="#fff" />',
+    );
+  });
+
+  it('gives HTML captions a plain-text alt', () => {
+    expect(convertImg(`{% img caption='<a href="u">A\n  "B"</a><br>C' src='/a.png' %}`)).toBe(
+      '<Figure src="/a.png" caption={<><a href="u">A\n  "B"</a><br />C</>} alt="A &quot;B&quot; C" />',
     );
   });
 
@@ -162,67 +162,5 @@ describe('convertPost', () => {
   it('refuses posts that cite two bibliography files', () => {
     const src = '---\ntitle: T\n---\n{% cite a --file F %} {% cite b --file G %}\n';
     expect(() => convertPost(src, 'x.md')).toThrow(/more than one/);
-  });
-});
-
-// Task 5 deletes _posts/, so this check skips itself once the Jekyll sources are gone.
-describe.skipIf(!existsSync('_posts'))('real posts', () => {
-  const files = existsSync('_posts') ? readdirSync('_posts').filter((f) => f.endsWith('.md')) : [];
-
-  it.each(files)('%s converts and compiles as MDX', async (file) => {
-    const mdx = convertPost(readFileSync(join('_posts', file), 'utf8'), file);
-    expect(mdx).not.toMatch(/\{%/);
-    await expect(compile(mdx, { remarkPlugins: [remarkMath] })).resolves.toBeDefined();
-  });
-});
-
-interface MdNode {
-  type: string;
-  children?: MdNode[];
-}
-
-function countDisplayMath(node: MdNode): number {
-  const own = node.type === 'math' ? 1 : 0;
-  return own + (node.children ?? []).reduce((n, c) => n + countDisplayMath(c), 0);
-}
-
-/** Display equations in kramdown: an own-line `$$` block, or a `$$` span that is a whole paragraph. */
-function countSourceDisplayMath(source: string): number {
-  const lines = source.split('\n');
-  let count = 0;
-  let open = false;
-  lines.forEach((line, i) => {
-    const t = line.trim();
-    if (open) {
-      open = !t.includes('$$');
-      return;
-    }
-    if (!t.startsWith('$$')) return;
-    const startsParagraph = i === 0 || lines[i - 1].trim() === '';
-    const closesHere = t.length > 2 && t.indexOf('$$', 2) !== -1;
-    // A one-line span is display only when it is the whole paragraph.
-    const isWholeParagraph =
-      closesHere && t.endsWith('$$') && (i === lines.length - 1 || lines[i + 1].trim() === '');
-    if (closesHere) {
-      if (startsParagraph && isWholeParagraph) count += 1;
-      return;
-    }
-    open = true;
-    if (t === '$$' || startsParagraph) count += 1;
-  });
-  return count;
-}
-
-describe.skipIf(!existsSync('_posts'))('display math in real posts', () => {
-  const files = existsSync('_posts') ? readdirSync('_posts').filter((f) => f.endsWith('.md')) : [];
-
-  it.each(files)('%s keeps every display equation', (file) => {
-    const source = readFileSync(join('_posts', file), 'utf8');
-    const mdx = convertPost(source, file);
-    const tree = unified()
-      .use(remarkParse)
-      .use(remarkMath)
-      .parse(mdx.replace(/^---[\s\S]*?\n---\n/, ''));
-    expect(countDisplayMath(tree as MdNode)).toBe(countSourceDisplayMath(source));
   });
 });

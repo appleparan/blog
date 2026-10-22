@@ -1,5 +1,4 @@
 ---
-layout: post
 title: Singular Value Decomposition
 author: jongsukim
 date: 2025-10-08 01:00:00 +0900
@@ -10,12 +9,15 @@ tags:
   - Singular Value Decomposition
 math: true
 mermaid: false
+bibliography: 2025-10-08-SVD.bib
 ---
+
+import Figure from '../../components/Figure.astro';
 
 ## Introduction
 
 SVD(Singular Value Decomposition)는 LLM을 공부하다보면 참 이곳저곳에서 많이 나오는 알고리즘이다.
-특히 {% cite strang2019linear --file 2025-10-08-SVD %}에서도 **Data Science meets linear algebra in the SVD**라고 시작하고,
+특히 [@strang2019linear]에서도 **Data Science meets linear algebra in the SVD**라고 시작하고,
 [Low Level Technicals of LLMs: Daniel Han](https://youtu.be/pRM_P6UfdIc?t=411)에서도 그 중요성을 강조하고 있다.
 
 그래서 오늘은 SVD에 대해 좀 더 집중적으로 탐구해보고자 한다.
@@ -25,7 +27,7 @@ $$
 $$
 
 ## Basic problems of Linear Algebra
-{% cite strang2019linear --file 2025-10-08-SVD %}에서는 가장 기본적인 선형대수(Linear Algebra)의 문제로 다음 5가지를 꼽고 있다.
+[@strang2019linear]에서는 가장 기본적인 선형대수(Linear Algebra)의 문제로 다음 5가지를 꼽고 있다.
 * $\mathbf{A}\mathbf{x}=\mathbf{b}$
 * $\mathbf{A}\mathbf{x}=\lambda \mathbf{x}$
 * $\mathbf{A}\mathbf{v}= \sigma \mathbf{u}$
@@ -329,15 +331,13 @@ SVD(Singular Value Decomposition)는 모든 행렬을 회전과 스케일링으�
 2x2 행렬은 평면의 점을 선형 변환(linear transformation)하는 연산자로 볼 수 있다.
 (A) 늘이기(stretching), (B) 줄이기 (compression), ((C) 회전(rotation), (D) 반사(reflection), (E) 전단(shear)으로 나타낼 수 있다.
 
-{% img align="center" style='background-color: #fff'
-caption='<a href="https://gregorygundersen.com/blog/2018/12/10/svd/">
-Our original square under different types of transformations: (A) stretched, (B) compressed, (C) rotated, (D) reflected or flipped, and (E) sheared</a>' src="/assets/images/post/2025-10-08-SVD-in-detail/01-matrix-linear-transformations.png" %}
+<Figure src="/assets/images/post/2025-10-08-SVD-in-detail/01-matrix-linear-transformations.png" caption={<><a href="https://gregorygundersen.com/blog/2018/12/10/svd/">
+Our original square under different types of transformations: (A) stretched, (B) compressed, (C) rotated, (D) reflected or flipped, and (E) sheared</a></>} alt="Our original square under different types of transformations: (A) stretched, (B) compressed, (C) rotated, (D) reflected or flipped, and (E) sheared" align="center" background="#fff" />
 
 만약 선형이 아니라면, 다음 그림에서 (A)는 (C)처럼 변할 것이다. ((B)는 선형 변환)
 
-{% img align="center" style='background-color: #fff'
-caption='<a href="https://gregorygundersen.com/blog/2018/12/10/svd/">
-(A) Our original square under a linear transformation M (B) and a nonlinear transformation M′(C).</a>' src="/assets/images/post/2025-10-08-SVD-in-detail/02-nonlinear-transformation.png" %}
+<Figure src="/assets/images/post/2025-10-08-SVD-in-detail/02-nonlinear-transformation.png" caption={<><a href="https://gregorygundersen.com/blog/2018/12/10/svd/">
+(A) Our original square under a linear transformation M (B) and a nonlinear transformation M′(C).</a></>} alt="(A) Our original square under a linear transformation M (B) and a nonlinear transformation M′(C)." align="center" background="#fff" />
 
 ### Geometrical interpretations of SVD
 
@@ -354,9 +354,8 @@ caption='<a href="https://gregorygundersen.com/blog/2018/12/10/svd/">
 (E) 전단(shear)는 직각 구조(Orthogonality)를 깨뜨려 길이와 각도를 바꾸기 때문에, 단순한 회전이나 스케일링보다 다루기 까다롭다.
 하지만 **모든 Shear 변환도 다음과 같이 Rotation + Scaling + Rotation의 조합으로 표현**할 수 있다.
 
-{% img align="center" style='background-color: #fff'
-caption='<a href="https://en.wikipedia.org/wiki/Singular_value_decomposition">
-Illustration of the singular value decomposition UΣV⁎ of a real 2 × 2 matrix M.</a>' src="/assets/images/post/2025-10-08-SVD-in-detail/03-SVD-geometric-interpretation.png" %}
+<Figure src="/assets/images/post/2025-10-08-SVD-in-detail/03-SVD-geometric-interpretation.png" caption={<><a href="https://en.wikipedia.org/wiki/Singular_value_decomposition">
+Illustration of the singular value decomposition UΣV⁎ of a real 2 × 2 matrix M.</a></>} alt="Illustration of the singular value decomposition UΣV⁎ of a real 2 × 2 matrix M." align="center" background="#fff" />
 
 요약하자면, 모든 행렬(matrix)는 선형 변환이라고 할 수 있고, 이는 Scaling과 Rotation의 조합으로 표현될 수 있다.
 그리고 SVD는 임의의 행렬을 ‘회전-스케일링-회전’의 조합으로 분해하는 강력한 방법이다.
@@ -402,9 +401,8 @@ $$
 
 Matrix form으로는 다음과 같다.
 
-{% img align="center" style='background-color: #fff'
-caption='<a href="https://gregorygundersen.com/blog/2018/12/10/svd/">
-The canonical diagram of the SVD decomposition of a matrix M</a>' src="/assets/images/post/2025-10-08-SVD-in-detail/04-schematic-SVD.png" %}
+<Figure src="/assets/images/post/2025-10-08-SVD-in-detail/04-schematic-SVD.png" caption={<><a href="https://gregorygundersen.com/blog/2018/12/10/svd/">
+The canonical diagram of the SVD decomposition of a matrix M</a></>} alt="The canonical diagram of the SVD decomposition of a matrix M" align="center" background="#fff" />
 
 참고로 $\mathbf{V}$와 $\mathbf{U}$는 orthogonal하므로,
 $\mathbf{V}^\mathsf{T}=\mathbf{V}^{-1}$와 $\mathbf{U}^\mathsf{T}=\mathbf{U}^{-1}$를 만족한다.
@@ -454,7 +452,7 @@ SVD는 과연 모든 matrix에 존재하는가?에 대한 증명을 우선하고
 
 우선 Symmetric matrix $\mathbf{S} \in \mathcal{R}^{n \times n}$ 에 대해서 위에서 살펴봤던 Orthogonal Diagonalization (for symmetric matrices)이 성립한다.
 실은 이것을 Spectrum theorem이라고 한다.
-$$\mathbf{S} = \mathbf{Q \Lambda} \mathbf{Q}^{\mathsf{T}}$$
+$\mathbf{S} = \mathbf{Q \Lambda} \mathbf{Q}^{\mathsf{T}}$
 
 이 증명의 큰 틀은 임의의 $\mathbf{M} \in \mathbb{R}^{m \times n}$를 spectrum theorem을 적용하여 SVD form을 구하는 것이다.
 
@@ -470,7 +468,9 @@ $$
 
 Positive semidefinite matrix는 diagnoalize되며 spectrum theorem에 의해 eigenvalue decomposition이 가능하다.
 
-$$\mathbf{\mathbf{M}^\mathsf{T} \mathbf{M}} = \mathbf{\mathbf{V} \mathbf{\Lambda}} \mathbf{\mathbf{V}}^{\mathsf{T}} = \sum_{i=1}^n \lambda_i v_i v_i^{\mathsf{T}} = = \sum_{i=1}^n (\sigma_i)^2 v_i v_i^{\mathsf{T}}$$
+$$
+\mathbf{\mathbf{M}^\mathsf{T} \mathbf{M}} = \mathbf{\mathbf{V} \mathbf{\Lambda}} \mathbf{\mathbf{V}}^{\mathsf{T}} = \sum_{i=1}^n \lambda_i v_i v_i^{\mathsf{T}} = = \sum_{i=1}^n (\sigma_i)^2 v_i v_i^{\mathsf{T}}
+$$
 
 이 때, $\mathbf{V}$의 컬럼은 $\mathbf{M}^\mathsf{T} \mathbf{M}$의 eigenvectors들이며 orthonormal matrix이고,
 $r \leq n$일 때, $r = \textrm{rank}(\mathbf{M}) = \textrm{rank}(\mathbf{M}^\mathsf{T} \mathbf{M})$이다.
@@ -615,4 +615,3 @@ $\mathbf{AB}$와 $\mathbf{BA}$는 같은 eigenvalue를 가지게 된다.
 * [SVD的导数](https://kexue.fm/archives/10878)
 * [Transformations in a Plane](https://bvanderlei.github.io/jupyter-guide-to-linear-algebra/Planar_Transformations.html)
 
-{% bibliography --cited --file 2025-10-08-SVD %}

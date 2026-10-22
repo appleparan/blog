@@ -1,5 +1,4 @@
 ---
-layout: post
 title: From VAEs to DDPMs
 author: jongsukim
 date: 2025-11-02 02:00:00 +0900
@@ -11,15 +10,18 @@ tags:
   - Bayesian Inference
 math: true
 mermaid: false
+bibliography: 2025-11-02-VAE-to-DDPMs.bib
 ---
+
+import Figure from '../../components/Figure.astro';
 
 ## Introduction
 
 최근에 올라온 이 책 저자가 저자라 그런지 너무나도 깔끔하고 아름답다.
-{% cite lai2025principles --file 2025-11-02-VAE-to-DDPMs %}
+[@lai2025principles]
 
 따라서 한번 챕터별로 정리하면서 읽어보려고 한다. 특히 현재 챕터는 다음 글이 같이 떠올랐고 같이 읽어보면 좋을 것 같다.
-{% cite dieleman2022diffusion --file 2025-11-02-VAE-to-DDPMs %}
+[@dieleman2022diffusion]
 
 ## Review of Bayesian Inference
 
@@ -46,7 +48,9 @@ $$
 
 * Posterior:
 
-    $$P(\theta \mid \mathcal{D})$$
+    $$
+    P(\theta \mid \mathcal{D})
+    $$
 
   * (원인 $\mid$ 결과)
   * 정의: 결과($\mathcal{D}$)를 관찰했을 때, 이 현상의 원인이 $\theta$일 확률.
@@ -55,7 +59,9 @@ $$
     * 훈련의 최종 목표
 * Likelihood:
 
-    $$P(\mathcal{D} \mid \theta)$$
+    $$
+    P(\mathcal{D} \mid \theta)
+    $$
 
   * (결과 $\mid$ 원인)
   * 정의: 원인이 $\theta$라고 가정할 때, 관찰한 결과($\mathcal{D}$)가 나타날 확률.
@@ -73,7 +79,9 @@ $$
   * 의미:
     * 모든 가능한 원인($\theta$)에 대해 가중 평균을 낸 값
 
-      $$P(\mathcal{D}) = \int P(\mathcal{D} \mid \theta) P(\theta) d\theta$$
+      $$
+      P(\mathcal{D}) = \int P(\mathcal{D} \mid \theta) P(\theta) d\theta
+      $$
 
     * 실제로는 Posterior를 확률 분포로 만들기 위한 정규화 상수
     * 계산이 매우 어려워 MCMC 같은 샘플링 기법을 사용하여 계산
@@ -126,9 +134,9 @@ $$
 | :---------------- | :----------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **목적**          | 데이터($\mathcal{D}$)를 통해 **파라미터($\theta$)의 분포**를 학습                                      | 학습된 **파라미터 분포**를 사용해 **새 데이터($\mathcal{D}_{new}$)** 예측                                                                          |
 | **핵심 질문**     | "데이터를 보니, 모델 파라미터($\theta$)는 무엇일까?"                                                   | "지금까지의 데이터와 모델을 보니, 다음 데이터($D_{new}$)는 어떨까?"                                                                                |
-| **주요 수식**     | **Posterior** <br> $P(\theta \mid \mathcal{D}) \propto P(\mathcal{D} \mid \theta) P(\theta)$           | **Posterior Predictive** <br> $$P(\mathcal{D}_{new} \mid \mathcal{D}) = \int P(\mathcal{D}_{new} \mid \theta) P(\theta \mid \mathcal{D}) d\theta$$ |
-| **입력 (Input)**  | * Data ($\mathcal{D}$) <br> * Prior ($P(\theta)$) <br> * Likelihood ($P(\mathcal{D} \mid \theta)$)     | * **Posterior ($P(\theta \mid \mathcal{D})$)** (훈련의 결과물) <br> * Likelihood ($P(\mathcal{D}_{new} \mid \theta)$)                              |
-| **출력 (Output)** | **Posterior Distribution** <br> $P(\theta \mid \mathcal{D})$ <br> (파라미터 $\theta$에 대한 확률 분포) | **Posterior Predictive Distribution** <br> $$P(\mathcal{D}_{new} \mid \mathcal{D})$$ <br> (새 데이터 $\mathcal{D}_{new}$에 대한 확률 분포)         |
+| **주요 수식**     | **Posterior** <br /> $P(\theta \mid \mathcal{D}) \propto P(\mathcal{D} \mid \theta) P(\theta)$           | **Posterior Predictive** <br /> $$P(\mathcal{D}_{new} \mid \mathcal{D}) = \int P(\mathcal{D}_{new} \mid \theta) P(\theta \mid \mathcal{D}) d\theta$$ |
+| **입력 (Input)**  | * Data ($\mathcal{D}$) <br /> * Prior ($P(\theta)$) <br /> * Likelihood ($P(\mathcal{D} \mid \theta)$)     | * **Posterior ($P(\theta \mid \mathcal{D})$)** (훈련의 결과물) <br /> * Likelihood ($P(\mathcal{D}_{new} \mid \theta)$)                              |
+| **출력 (Output)** | **Posterior Distribution** <br /> $P(\theta \mid \mathcal{D})$ <br /> (파라미터 $\theta$에 대한 확률 분포) | **Posterior Predictive Distribution** <br /> $$P(\mathcal{D}_{new} \mid \mathcal{D})$$ <br /> (새 데이터 $\mathcal{D}_{new}$에 대한 확률 분포)         |
 
 ## Deep Generative Modeling (DGM)
 
@@ -214,9 +222,8 @@ $$
 
 ### Probabilistic Encoder and Decoder
 
-{% img align="center" style='background-color: #fff'
-caption='<a href="https://www.arxiv.org/abs/2510.21890">
-Illustration of a VAE</a>' src="/assets/images/post/2025-11-02-VAE-to-DDPMs/01-VAE.png" %}
+<Figure src="/assets/images/post/2025-11-02-VAE-to-DDPMs/01-VAE.png" caption={<><a href="https://www.arxiv.org/abs/2510.21890">
+Illustration of a VAE</a></>} alt="Illustration of a VAE" align="center" background="#fff" />
 
 #### Construction of Decoder (Generator)
 
@@ -439,17 +446,15 @@ DDPM(Denoising Diffusion Probabilistic Models)은 이를 해결하기 위해 Enc
   * Decoder에서는 parameterized된 $$p_{\phi}(\mathbf{x}_{i_1} \mid\mathbf{x}_{i})$$을 통해 노이즈 주입을 **reverse**하는 과정을 배우게 된다.
   * VAE에서 한번에 denoising하는 것보다는 훨씬 더 controllable하다.
 
-{% img align="center" style='background-color: #fff'
-caption='<a href="https://www.arxiv.org/abs/2510.21890">
-Illustration of a DDPM</a>' src="/assets/images/post/2025-11-02-VAE-to-DDPMs/02-DDPM.png" %}
+<Figure src="/assets/images/post/2025-11-02-VAE-to-DDPMs/02-DDPM.png" caption={<><a href="https://www.arxiv.org/abs/2510.21890">
+Illustration of a DDPM</a></>} alt="Illustration of a DDPM" align="center" background="#fff" />
 
 ### The forward pass (Fixed Encoder)
 
 앞서 말했던 것처럼 forward process는 다음 그림과 같이 단계적으로 노이즈를 추가해서 심플한 prior $p_{\text{prior}} := \mathcal{N}(\mathbf{0, I})$으로 만드는 과정이다.
 
-{% img align="center" style='background-color: #fff'
-caption='<a href="https://www.arxiv.org/abs/2510.21890">
-Illustration of a DDPM forward process</a>' src="/assets/images/post/2025-11-02-VAE-to-DDPMs/03-DDPM-forward.png" %}
+<Figure src="/assets/images/post/2025-11-02-VAE-to-DDPMs/03-DDPM-forward.png" caption={<><a href="https://www.arxiv.org/abs/2510.21890">
+Illustration of a DDPM forward process</a></>} alt="Illustration of a DDPM forward process" align="center" background="#fff" />
 
 #### Fixed Gaussian Kernels
 
@@ -458,7 +463,8 @@ Illustration of a DDPM forward process</a>' src="/assets/images/post/2025-11-02-
 아래의 식은 **$$\mathbf{x}_{i-1}$$이 주어졌을 때 $$\mathbf{x}_i$$가 나타날 확률은, $x_i$를 확률 변수로 하고 ($$\sqrt{1-\beta_i^2} \mathbf{x}_{i-1}$$)를 평균으로 $$(\beta_i^2 \mathbf{I})$$를 공분산으로 갖는 정규분포를 따른다**라는 의미를 가진다.
 반면 뒤에 나오는 $,$는 확률 변수가 여러 개임을 뜻한다. 예를 들어 $$p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0)$$는 $$\mathbf{x}_{i}, \mathbf{x}_0$$ 두 확률변수가 주어졌을 때의 $$\mathbf{x}_{i-1}$$의 조건부 확률을 뜻한다.
 
-$$\begin{align}
+$$
+\begin{align}
 p(\mathbf{x}_i \mid \mathbf{x}_{i-1}) := \mathcal{N}(\mathbf{x}_i ; \sqrt{1-\beta_i^2} \mathbf{x}_{i-1}, \beta_i^2 \mathbf{I})
 \end{align}
 $$
@@ -468,7 +474,8 @@ $$
 $\beta_i \in \lbrace 0, 1 \rbrace$는 step $i$에 주입되는 Gaussian noise의 양을 결정한다.
 만약 $\alpha_i := \sqrt{1-\beta^2}$라고 가정하면 다음과 같이 단순히 iterative하게 노이즈 주입하는 식인 것일 뿐이다.
 
-$$\begin{align}
+$$
+\begin{align}
 \mathbf{x}_i = \alpha_i \mathbf{x}_{i-1} + \beta_i \mathbf{\epsilon}_i
 \end{align}
 $$
@@ -488,7 +495,8 @@ $$
 
 마찬가지로 위에서 iterative하게 표현한 식도 $\mathbf{x}_0$에 대해서 다음과 같이 쓸 수 있다.
 
-$$\begin{align}
+$$
+\begin{align}
 \mathbf{x}_i = \bar{\alpha}_i \mathbf{x}_0 + (1-\bar{\alpha}_i^2) \mathbf{\epsilon}_i, \quad \mathbf{\epsilon}_i \sim \mathcal{N}(\mathbf{0}, \mathbf{I})
 \end{align}
 $$
@@ -514,9 +522,8 @@ $$
 Encoder는 고정된 스케줄이니 모델이라고 할 수는 없지만 실제 DDPM의 코어는 모델로 learnable한 Decoder에 있다.
 다음 그림과 같이 $x_{L} \sim p_{\text{prior}}$로부터 시작해서 denoise과정을 통해 일관성 있고(coherent) 의미있는(meaningful) 데이터 분포를 도출하는 것이 Decoder의 목적이다.
 
-{% img align="center" style='background-color: #fff'
-caption='<a href="https://www.arxiv.org/abs/2510.21890">
-Illustration of a DDPM forward process</a>' src="/assets/images/post/2025-11-02-VAE-to-DDPMs/04-DDPM-reverse.png" %}
+<Figure src="/assets/images/post/2025-11-02-VAE-to-DDPMs/04-DDPM-reverse.png" caption={<><a href="https://www.arxiv.org/abs/2510.21890">
+Illustration of a DDPM forward process</a></>} alt="Illustration of a DDPM forward process" align="center" background="#fff" />
 
 즉 **복잡한 분포 $$\mathbf{x}_i \sim p_i (\mathbf{x})$$를 고려할 때, 정확하게 혹은 최소한 효과적으로 reverse transition kernel $$p(\mathbf{x}_{i-1} \mid \mathbf{x}_{i})$$를 근사할 수 있는가?**라는 질문으로 문제를 정의할 수 있다.
 
@@ -732,7 +739,7 @@ $$
 
 이것을 바탕으로 다음과 같은  Reverse Conditional Transition Kerne에 대한 Lemma를 도출할 수 있다.
 
-$$p(\mathbf{x}_{i-1} \mid \mathbf{x}_i, \mathbf{x})$$는 다음과 같이 closed Gaussian form으로 표현된다.
+$p(\mathbf{x}_{i-1} \mid \mathbf{x}_i, \mathbf{x})$는 다음과 같이 closed Gaussian form으로 표현된다.
 
 $$
 \begin{align}
@@ -807,7 +814,8 @@ $$
 
 이걸로 $$\mathbf{\mu}(\mathbf{x}_i, \mathbf{x}, i )$$를 $$\mathbf{\mu}(\mathbf{x}_i, \mathbf{x}_0, i )$$로 바꾼 다음 다시 전개해보자. 이 때 목표로 하는 것은 $\mathbf{x}_0$을 $\mathbf{x}_i, \mathbf{\epsilon}$으로 치환하는 것이다. 따라서 $$\mathbf{x}_i$$ 식을 $$\mathbf{x}_0$$에 대해서 다시 정리한다.
 
-$$\begin{align*}
+$$
+\begin{align*}
 \mathbf{x}_0 = \dfrac{1}{\bar{\alpha}_i} \left( \mathbf{x}_i - \sqrt{1 - \bar{\alpha}_i^2} \mathbf{\epsilon}\right)
 \end{align*}
 $$
@@ -887,7 +895,7 @@ $$
 \end{equation}
 $$
 
-$$\mathbf{x}_i$$는
+$\mathbf{x}_i$는
 
 $$
 \begin{equation}
@@ -919,9 +927,6 @@ L2 regression의 기본 성질에 따라, 모델은 $\mathbf{\epsilon}$자체를
 그러나, DDPM은 이걸 refine하는 과정을 추가하여 high to low방식으로 noise를 추가하여 초반에는 global한 structure를 후반에는 detail을 추가하는 방식으로 해결하였다. 그러나 이 과정은 iterative하기 때문에 필연적으로 느린 생성 속도를 유발하게 된다.
 요즘은 이 생성속도를 해결하기 위한 수치해석적 방법을 결합한 생성방법이 존재하며, 다른 챕터에서 그것을 다루고 있다.
 
-{% img align="center" style='background-color: #fff'
-caption='<a href="https://www.arxiv.org/abs/2510.21890">
-Illustration of DDPM sampling with clean prediction</a>' src="/assets/images/post/2025-11-02-VAE-to-DDPMs/05-DDPM-sampling.png" %}
+<Figure src="/assets/images/post/2025-11-02-VAE-to-DDPMs/05-DDPM-sampling.png" caption={<><a href="https://www.arxiv.org/abs/2510.21890">
+Illustration of DDPM sampling with clean prediction</a></>} alt="Illustration of DDPM sampling with clean prediction" align="center" background="#fff" />
 
-## Reference
-{% bibliography --cited --file 2025-11-02-VAE-to-DDPMs %}

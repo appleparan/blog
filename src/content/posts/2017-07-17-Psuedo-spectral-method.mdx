@@ -1,5 +1,4 @@
 ---
-layout: post
 title: Navier Stokes Equation Solver for Homogeneous Isotropic Turbulence
 author: jongsukim
 date: 2017-07-17 12:00:00 +0900
@@ -8,7 +7,10 @@ tags:
   - turbulence
   - pseudo-spectral method
 math: true
+bibliography: 2017-07-17-Psuedo-spectral-method.bib
 ---
+
+import Quote from '../../components/Quote.astro';
 
 (This content is originally written by [Kyongmin Yeo](https://scholar.google.com/citations?user=8fMRupoAAAAJ&hl)'s manual)
 
@@ -47,9 +49,11 @@ $$
 The Navier-Stoke sequations in **rotational form** can be obatained.
 The reason is explained in the paper, *Numerical Simulation of Incompressible Flows Within Simple Boundaries. I. Galerkin (Spectral) Representations*.
 
-{% quote Orszag1971a --file 2017-07-17-Psuedo-spectral-method %}
-The reason is that pseudospectral approximation to the rotation, rather than Reynolds stress, form of the nonlinear terms of the Navier~Stokes equations semiconserves (cf. {% cite Orszag1971 --file 2017-07-17-Psuedo-spectral-method %}, Numerical simulation of incompressible flows within simple boundaries: Accuracy, Section 3) energy so that aliasing errors, although present, can not directly cause unconditional nonlinear instability
-{% endquote %}
+<Quote cite="Orszag1971a">
+
+The reason is that pseudospectral approximation to the rotation, rather than Reynolds stress, form of the nonlinear terms of the Navier~Stokes equations semiconserves (cf. [@Orszag1971], Numerical simulation of incompressible flows within simple boundaries: Accuracy, Section 3) energy so that aliasing errors, although present, can not directly cause unconditional nonlinear instability
+
+</Quote>
 
 $$
 \begin{align}
@@ -95,7 +99,7 @@ $$
 \end{align}
 $$
 
-where \\( \kappa \\) is a wavenumber. Final Navier Stokes equation is obtained without pressure term
+where $ \kappa $ is a wavenumber. Final Navier Stokes equation is obtained without pressure term
 
 $$
 \begin{align}
@@ -123,7 +127,7 @@ f(t) \dfrac{d \hat{u}}{dt} + \left(\dfrac{d e^{\nu \kappa^2 t}}{dt}\right)\hat{u
 \end{align}
 $$
 
-this can be more simpler by introducing new term \\(\widehat{NL}\\)
+this can be more simpler by introducing new term $\widehat{NL}$
 
 $$
 \begin{equation}
@@ -134,10 +138,10 @@ $$
 ### Time Discretization by RK3 method
 
 For low-storage RK3 method (2-register, 3-stage, 3rd order), the coefficients are given by following table
-{% cite Lundbladh:1999vy --file 2017-07-17-Psuedo-spectral-method %}, {% cite Yu1992  --file 2017-07-17-Psuedo-spectral-method  %}, {% cite Wray1990 --file 2017-07-17-Psuedo-spectral-method %}
+[@Lundbladh:1999vy], [@Yu1992], [@Wray1990]
 
 
-| order   | \\(a_n\\) | \\(b_n\\) | \\(c_n\\) |
+| order   | $a_n$ | $b_n$ | $c_n$ |
 |---------|-----------|-----------|-----------|
 | 1st     | 8/15      |  0        | 0         |
 | 2nd     | 5/12      |-17/60     |8/15       |
@@ -183,7 +187,7 @@ LHS = \dfrac{\hat{u}^{n+1}_i e^{\nu \kappa^2 (t+a_n \Delta t + b_n \Delta t)} - 
 \end{align}
 $$
 
-Discretization of RHS  (denoting RHS as \\( G \\))
+Discretization of RHS  (denoting RHS as $ G $)
 
 $$
 \begin{aligned}
@@ -192,7 +196,7 @@ RHS &= \widehat{NL}^n e^{\nu \kappa^2 t} \\
 \end{aligned}
 $$
 
-Compensating \\( e^{\nu \kappa^2 t} \\) on both sides
+Compensating $ e^{\nu \kappa^2 t} $ on both sides
 
 $$
 \begin{align}
@@ -228,6 +232,3 @@ $$
 \end{align}
 $$
 
-## References
-
-{% bibliography --cited --file 2017-07-17-Psuedo-spectral-method %}

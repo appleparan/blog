@@ -1,5 +1,4 @@
 ---
-layout: post
 title: Logit, Sigmoid, Softmax, and Cross-Entropy
 author: jongsukim
 date: 2024-03-09 20:00:00 +0900
@@ -18,7 +17,13 @@ tags:
   - KL Divergence
   - Information Theory
 math: true
+bibliography: 2024-03-09-Logit-Sigmoid-Softmax.bib
+# Jekyll listed the whole .bib here ({% bibliography %} without --cited).
+noCite: ['@*']
 ---
+
+import Figure from '../../components/Figure.astro';
+import Quote from '../../components/Quote.astro';
 
 ## Introduction
 개인적으로 정리도 할 겸 그리고 다른 포스트에서 이 부분을 설명할 때 글이 너무 길어져서 분리해서 작성하는 포스트이다. 최대한 직관적으로 적어보려고 노력하였다.
@@ -68,7 +73,7 @@ $$
 \end{equation}
 $$
 
-{% img align="center" class="align-items-center" caption='<a href="https://en.wikipedia.org/wiki/Sigmoid_function">Sigmoid function</a>' style='background-color: #fff' src='/assets/images/post/2024-03-09-Logit-Sigmoid-Softmax/01-sigmoid.svg' %}
+<Figure src="/assets/images/post/2024-03-09-Logit-Sigmoid-Softmax/01-sigmoid.svg" caption={<><a href="https://en.wikipedia.org/wiki/Sigmoid_function">Sigmoid function</a></>} alt="Sigmoid function" align="center" background="#fff" />
 
 sigmoid 함수를 통해 어떤 값 logit을($-\infty, \infty$) 확률의 범위인 ${0, 1}$사이로 한정(clamping) 혹은 압축할 수 있다. 그래서 sigmoid를 logitstic function이라고 하기도 한다.
 
@@ -123,11 +128,11 @@ softmax는 다중 분류 문제(MultiClass Classification Problem)에 사용된�
 
 이진 분류(Binary Classification)에서는 단순히 Yes/No로 판별할 확률만 알면 됐다. 아래 그림처럼 logits를 sigmoid함수에 통과시켜 확률을 얻은 뒤, 확률에 따라 자동차인지 아닌지 분류하면 되는 문제였다.
 
-{% img align="center" class="align-items-center" caption='<a href="https://wandb.ai/amanarora/Written-Reports/reports/Understanding-Logits-Sigmoid-Softmax-and-Cross-Entropy-Loss-in-Deep-Learning--Vmlldzo0NDMzNTU3">Logtistic Regression</a>' style='background-color: #fff' src='/assets/images/post/2024-03-09-Logit-Sigmoid-Softmax/02-sigmoid-logistic-regression.png' %}
+<Figure src="/assets/images/post/2024-03-09-Logit-Sigmoid-Softmax/02-sigmoid-logistic-regression.png" caption={<><a href="https://wandb.ai/amanarora/Written-Reports/reports/Understanding-Logits-Sigmoid-Softmax-and-Cross-Entropy-Loss-in-Deep-Learning--Vmlldzo0NDMzNTU3">Logtistic Regression</a></>} alt="Logtistic Regression" align="center" background="#fff" />
 
 그러나, 다중 분류 문제에서는 logits를 softmax에 통과시켜 각 클래스에 속할 확률을 구한 뒤, 가장 높은 확률의 클래스를 선택하는 문제로 변화하게 된다. 이런 문제를 Multinomial Logistic Regression 혹은 softmax regression이라고 한다.
 
-{% img align="center" class="align-items-center" caption='<a href="https://wandb.ai/amanarora/Written-Reports/reports/Understanding-Logits-Sigmoid-Softmax-and-Cross-Entropy-Loss-in-Deep-Learning--Vmlldzo0NDMzNTU3">Multinomial Logtistic Regression</a>' style='background-color: #fff' src='/assets/images/post/2024-03-09-Logit-Sigmoid-Softmax/03-softmax-multinomial-logistic-regression.png' %}
+<Figure src="/assets/images/post/2024-03-09-Logit-Sigmoid-Softmax/03-softmax-multinomial-logistic-regression.png" caption={<><a href="https://wandb.ai/amanarora/Written-Reports/reports/Understanding-Logits-Sigmoid-Softmax-and-Cross-Entropy-Loss-in-Deep-Learning--Vmlldzo0NDMzNTU3">Multinomial Logtistic Regression</a></>} alt="Multinomial Logtistic Regression" align="center" background="#fff" />
 
 ## Cross Entropy Loss
 
@@ -399,7 +404,7 @@ $$
 
 ### Information
 
-{% img align="center" class="align-items-center" caption='<a href="https://medium.com/swlh/a-deep-conceptual-guide-to-mutual-information-a5021031fad0">The path from an observation to the use of a model. Entropy oversees all these steps since they all relate back to the idea of surprisal.</a>' style='background-color: #fff' src='/assets/images/post/2024-03-09-Logit-Sigmoid-Softmax/04-Obervation-Entropy.webp' %}
+<Figure src="/assets/images/post/2024-03-09-Logit-Sigmoid-Softmax/04-Obervation-Entropy.webp" caption={<><a href="https://medium.com/swlh/a-deep-conceptual-guide-to-mutual-information-a5021031fad0">The path from an observation to the use of a model. Entropy oversees all these steps since they all relate back to the idea of surprisal.</a></>} alt="The path from an observation to the use of a model. Entropy oversees all these steps since they all relate back to the idea of surprisal." align="center" background="#fff" />
 
 사람은 항상 관찰하고 발견한다. 하지만, 둘은 같은 개념이 아니다. 발견은 관찰로부터 이루어진다.
 평소와 다른 무엇인가를 관찰했을 때 이를 발견이라고 할 수 있다.
@@ -412,12 +417,14 @@ $$
 
 자 이제 수학적으로 어떻게 접근해볼지 생각해보자.
 
-{% quote shannon1948mathematical --file 2024-03-09-Logit-Sigmoid-Softmax %}
+<Quote cite="shannon1948mathematical">
+
 he fundamental problem of communication is that of reproducing at one point either exactly or approximately a message selected at another point
 (Claude Shannon, 1948)
-{% endquote %}
 
-정보 과학을 설명하면 클로드 섀논이 빠질 수 없고, 섀논이 쓴 정보과학의 시작인 이 논문에 {% cite shannon1948mathematical --file 2024-03-09-Logit-Sigmoid-Softmax %} 등장하는 문장이다. 여기서 언급한대로 통신, 정보의 전달, 혹은 커뮤니케이션은 정보를 그대로 재현하거나, 아니면 다른 지점으로 옮겨서 대략적으로 재현하는 것에서 시작한다. 이 때, 메시지는 가능한 메시지의 집합으로부터 추출된 것을 의미한다.
+</Quote>
+
+정보 과학을 설명하면 클로드 섀논이 빠질 수 없고, 섀논이 쓴 정보과학의 시작인 이 논문에 [@shannon1948mathematical] 등장하는 문장이다. 여기서 언급한대로 통신, 정보의 전달, 혹은 커뮤니케이션은 정보를 그대로 재현하거나, 아니면 다른 지점으로 옮겨서 대략적으로 재현하는 것에서 시작한다. 이 때, 메시지는 가능한 메시지의 집합으로부터 추출된 것을 의미한다.
 
 말이 어렵다고 느껴지는가? 지금 설명하고 있는 "한국어"도 이 엔트로피란 개념을 전달하기 위한 메시지에 불과하다. 한국어 단어의 집합에서 추상적인 개념인 엔트로피를 설명하기 위해 필요한 단어들을 추출해서 전달한다고 보면 되는 것이다. 이 때 강의 전달력이 좋은 사람이라면 개념의 손실을 줄이고 제대로 설명할 수 있겠지만, 그렇지 않다면 뭐라고 설명하는지 알아듣기 힘들 것이다. 즉, 정보의 전달과정에서 일종의 압축이 필요하고, 그 와중에서 손실은 피할 수 없는 문제이다.
 
@@ -539,7 +546,7 @@ H(\mathbf{X, Y}) = H(\mathbf{X}) + H(\mathbf{Y}) - I(\mathbf{X}; \mathbf{Y})
 \end{equation}
 $$
 
-{% img align="center" class="align-items-center" caption='<a href="https://medium.com/swlh/a-deep-conceptual-guide-to-mutual-information-a5021031fad0">Venn diagram showing Mutual Information as the additive and subtractive relationships of information measures associated with correlated variables X and Y.</a>' style='background-color: #fff' src='/assets/images/post/2024-03-09-Logit-Sigmoid-Softmax/05-Information-Variables.webp' %}
+<Figure src="/assets/images/post/2024-03-09-Logit-Sigmoid-Softmax/05-Information-Variables.webp" caption={<><a href="https://medium.com/swlh/a-deep-conceptual-guide-to-mutual-information-a5021031fad0">Venn diagram showing Mutual Information as the additive and subtractive relationships of information measures associated with correlated variables X and Y.</a></>} alt="Venn diagram showing Mutual Information as the additive and subtractive relationships of information measures associated with correlated variables X and Y." align="center" background="#fff" />
 
 ### Cross Entropy
 
@@ -667,6 +674,3 @@ $$
 
 지금까지 Cross Entropy Loss를 이해하기 위해 odds부터 시작하여 기본적인 내용을 다뤄보았다. Cross Entropy는 단순 분류모델뿐만 아니라 LLM(Large Language Model)에서도 중요하게 쓰이는 개념이다. LLM의 기본적인 개념은 모델이 알고있는 단어들 중에서 가장 높은 확률의 다음 단어를 예측하는 모델이기 때문이다.
 
-## References
-
-{% bibliography --file 2024-03-09-Logit-Sigmoid-Softmax %}

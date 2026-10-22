@@ -1,5 +1,4 @@
 ---
-layout: post
 title: ANSYS Fluent Batch mode로 실행하기
 author: jongsukim
 date: 2020-10-14 12:00:00 +0900
@@ -190,7 +189,7 @@ ANSYS를 batch 모드로 실행하는 과정은 간략하게 다음과 같다.
     각자 서버마다 사정이 있으므로 나머지는 알아서 하면 되지만, 맨 마지막 줄은 반드시 저렇게 해야한다.
     * 3ddp : 3D Double Precision
     * -rsh : rsh 방식으로 remote connection 구축, 이건 서버마다 환경이 다르므로 바꿔도 된다. 디폴트는 ssh방식
-    * -t{cpus} : 굳이 이처럼 cpus변수 안만들고 직접 숫자 넣어줘도 된다. 다만 잡스케줄러의 코어수와는 맞춰주자.
+    * -t\{cpus\} : 굳이 이처럼 cpus변수 안만들고 직접 숫자 넣어줘도 된다. 다만 잡스케줄러의 코어수와는 맞춰주자.
     * -gu : GUI는 안쓰지만 그래픽은 쓰는 옵션. 일반적인 batch mode이면 `-g`를 써야하지만 residual plot때문에 그래픽이 필요하므로 `-gu`로 바꿔줬다.
     * `-i wst.in` : 위에서 저장한 journal file을 `wst.in`이라고 저장했다면, 여기서 실행할 때 'i'nput으로 넣어주는 것.
     * `> wst.output` : fluent 실행결과를 `wst.output`으로 저장하는 건데 어차피 SGE의 경우 job id에 따라 output이 따로 나오고, ANSYS transcript file(`.trn`)이 따로 생성되기 때문에 없애도 상관없을 것 같다.
