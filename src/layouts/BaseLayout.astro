@@ -6,6 +6,7 @@ import ScrollProgress from '../components/ScrollProgress.astro';
 import BackToTop from '../components/BackToTop.astro';
 import SearchModal from '../components/SearchModal.astro';
 import Analytics from '../components/Analytics.astro';
+import SwRegister from '../components/SwRegister.astro';
 // KaTeX CSS comes from the installed package so it matches the renderer version.
 import 'katex/dist/katex.min.css';
 import '../styles/global.css';
@@ -75,6 +76,9 @@ const jsonLd = article && {
     <link rel="icon" href="/assets/img/favicons/favicon-32x32.png" type="image/png" sizes="32x32" />
     <link rel="icon" href="/assets/img/favicons/favicon-16x16.png" type="image/png" sizes="16x16" />
     <link rel="apple-touch-icon" href="/assets/img/favicons/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#fafaf8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#1c1c1d" media="(prefers-color-scheme: dark)" />
 
     <!-- Fonts: Roboto Mono (code) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -107,6 +111,7 @@ const jsonLd = article && {
 
     <Footer />
     <BackToTop />
+    <SwRegister />
 
     <!-- Theme toggle script -->
     <script is:inline>

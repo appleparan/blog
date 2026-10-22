@@ -1,0 +1,16 @@
+{
+  "name": "Jongsu Liam Kim | Blog",
+  "short_name": "Liam Kim",
+  "description": "A record of my studies and insights on topics I enjoy, such as Deep Learning and High-Performance Computing (HPC).",
+  "lang": "ko",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "theme_color": "#fafaf8",
+  "background_color": "#fafaf8",
+  "icons": [
+    { "src": "/assets/img/favicons/android-chrome-192x192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/assets/img/favicons/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/assets/img/favicons/android-chrome-512x512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

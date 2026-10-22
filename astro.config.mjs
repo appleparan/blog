@@ -8,6 +8,7 @@ import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import rehypeCitation from 'rehype-citation';
 import { sitemapAlias } from './src/integrations/sitemap-alias';
+import { swVersion } from './src/integrations/sw-version';
 import { remarkQuoteCite } from './src/lib/remark-quote-cite';
 import { rehypeReferencesHeading } from './src/lib/rehype-references-heading';
 
@@ -18,6 +19,7 @@ export default defineConfig({
     mdx(),
     sitemap({ filter: (page) => !/\/404(\.html|\/)?$/.test(page) }),
     sitemapAlias(),
+    swVersion(),
   ],
   vite: {
     plugins: [tailwindcss(), viteCompression({ algorithm: 'gzip', threshold: 1024 })],
