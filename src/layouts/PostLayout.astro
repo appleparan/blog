@@ -7,6 +7,7 @@ import PostMeta from '../components/PostMeta.astro';
 import Share from '../components/Share.astro';
 import CopyCode from '../components/CopyCode.astro';
 import Mermaid from '../components/Mermaid.astro';
+import CitePopover from '../components/CitePopover.astro';
 import { siteConfig } from '../config';
 import { excerpt } from '../lib/excerpt';
 import { formatSeoulDate } from '../lib/format-date';
@@ -119,6 +120,7 @@ const hasToc = headings.some((h) => h.depth >= 2 && h.depth <= 4);
     </div>
   </div>
   <CopyCode />
+  <CitePopover />
   {mermaid && <Mermaid />}
 </BaseLayout>
 
@@ -203,6 +205,47 @@ const hasToc = headings.some((h) => h.depth >= 2 && h.depth <= 4);
     flex-shrink: 0;
     min-width: 2rem;
     color: var(--text-muted);
+  }
+
+  .article-body #refs .csl-right-inline {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* Back-links from rehype-citation-backlinks: return to the citation in the text. */
+  .article-body #refs .backlink {
+    flex-shrink: 0;
+    align-self: flex-start;
+    font-size: 0.8rem;
+    white-space: nowrap;
+    text-decoration: none;
+  }
+
+  /* The jump target: clear the sticky navbar and flash a highlight that fades out. */
+  .article-body .csl-entry,
+  .article-body [id^='citation--'] {
+    scroll-margin-top: 90px;
+  }
+
+  .article-body .csl-entry:target,
+  .article-body [id^='citation--']:target {
+    border-radius: 3px;
+    background: var(--accent-shadow);
+    animation: cite-target-fade 2.5s ease-out 0.3s forwards;
+  }
+
+  @keyframes cite-target-fade {
+    to {
+      background: transparent;
+    }
+  }
+
+  /* Reduced motion: keep a steady highlight while the target is selected, with no fade. */
+  @media (prefers-reduced-motion: reduce) {
+    .article-body .csl-entry:target,
+    .article-body [id^='citation--']:target {
+      animation: none;
+    }
   }
 
   /* Display math scrolls sideways only when it is wider than the column.
