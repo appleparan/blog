@@ -9,8 +9,6 @@ if (!siteDir || !outFile || !postsDir) {
   throw new Error('usage: capture-reference.ts <siteDir> <outFile> <postsDir>');
 }
 
-// Unpublished drafts: the site is built from the other posts only.
-const DRAFT_SLUGS = new Set(['Inside-vLLM']);
 const POSTS_PER_PAGE = 10;
 
 function walk(dir: string): string[] {
@@ -32,12 +30,13 @@ const expected = new Set<string>();
 let postCount = 0;
 for (const file of readdirSync(postsDir).filter((f) => /^\d{4}-\d{2}-\d{2}-.+\.md$/.test(f))) {
   const slug = file.replace(/^\d{4}-\d{2}-\d{2}-/, '').replace(/\.md$/, '');
-  if (DRAFT_SLUGS.has(slug)) continue;
   const front = Bun.YAML.parse(readFileSync(join(postsDir, file), 'utf8').split(/^---\s*$/m)[1]) as {
     date: string | Date;
+    draft?: boolean;
     categories?: string[];
     tags?: string[];
   };
+  if (front.draft === true) continue; // drafts are not published
   const date = new Date(front.date);
   // Jekyll builds the URL from the front matter date in the site timezone (+0900 here).
   const local = new Date(date.getTime() + 9 * 3600 * 1000).toISOString();

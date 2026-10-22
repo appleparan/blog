@@ -18,7 +18,6 @@
     "/categories/vision/",
     "/feed.xml",
     "/page/2/",
-    "/page/3/",
     "/posts/2017/07/Psuedo-spectral-method/",
     "/posts/2017/07/Tox-Workflow/",
     "/posts/2020/08/External-Forcing-Turbulence/",
@@ -39,7 +38,6 @@
     "/posts/2025/10/Preventing-Overfitting-With-Norms-and-BN/",
     "/posts/2025/10/SVD/",
     "/posts/2025/11/VAE-to-DDPMs/",
-    "/posts/2025/12/EBM-to-NCSN/",
     "/sitemap.xml",
     "/tags/",
     "/tags/6000-series/",
@@ -56,8 +54,6 @@
     "/tags/ddpm/",
     "/tags/developer-tools/",
     "/tags/diffusion-models/",
-    "/tags/ebm/",
-    "/tags/energy-based-model/",
     "/tags/environments/",
     "/tags/external-forcing/",
     "/tags/generalization/",
@@ -95,9 +91,7 @@
     "/tags/multiclass-classification/",
     "/tags/multinomial-logistic-regression/",
     "/tags/mup/",
-    "/tags/ncsn/",
     "/tags/neural-tangent-kernel/",
-    "/tags/noise-conditional-score-network/",
     "/tags/norm/",
     "/tags/programming/",
     "/tags/pseudo-spectral-method/",
@@ -250,12 +244,6 @@
       "math": 165,
       "citations": 2,
       "references": 2
-    },
-    "/posts/2025/12/EBM-to-NCSN/": {
-      "images": 5,
-      "math": 99,
-      "citations": 4,
-      "references": 4
     }
   }
 }
