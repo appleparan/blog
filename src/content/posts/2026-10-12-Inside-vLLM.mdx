@@ -1,5 +1,5 @@
 ---
-title: Inside vLLM 뜯어보기
+title: Inside vLLM 뜯어보기 (WIP)
 author: jongsukim
 date: 2026-10-21 02:00:00 +0900
 categories: [LLM Inference, vLLM]
@@ -8,15 +8,69 @@ tags:
   - vLLM
 math: true
 mermaid: false
-draft: true
 ---
+
+import Figure from '../../components/Figure.astro';
 
 ## Introduction
 
-예전에 [Inside vLLM: Anatomy of a High-Throughput LLM Inference System](https://vllm.ai/blog/2025-09-05-anatomy-of-vllm)를 읽고 그렇구나 하고 넘겼는데, 막상 내가 얘기하려고 하니까 말을 못하겠다. 너무 부끄러웠지만, 이럴때는 이렇게 글로 정리하면 절대 까먹지 않는다.
-게다가 위 글은 2025년 가을의 글이고 그 뒤로 vLLM이 Model Runner v2도 나오고 너무 많이 바뀌었다. 그래서 2026년 10월 v0.32.0 기준으로 업데이트를 해보고자 한다.
+예전에 Inside vLLM: Anatomy of a High-Throughput LLM Inference System을 읽고는 '아, 그렇구나' 하고 넘어간 적이 있다. 그런데 막상 누군가에게 설명하려니 말이 제대로 나오지 않았다. 분명 읽을 때는 이해했다고 생각했는데, 정작 내 언어로 설명할 수 없다는 사실이 꽤 부끄러웠다.
 
-특히 대 LLM 시대를 맞이하여, 오랜만에 소스를 직접 까보면서 보면 절대 잊을리가 없을 것 같다.
+이럴 때 가장 좋은 방법은 역시 직접 글로 정리해 보는 것이다. 코드를 따라가며 이해한 내용을 내 방식대로 풀어 쓰다 보면, 적어도 쉽게 잊어버리지는 않는다.
+
+게다가 위 글은 2025년 가을의 글이고 그 뒤로 vLLM이 Model Runner v2도 나오고, 그사이 vLLM에는 Model Runner V2를 비롯해 많은 변화가 있었다. 따라서 이번에는 2026년 10월, vLLM v0.32.0을 기준으로 내부 아키텍처를 다시 살펴보려 한다.
+
+특히 대 LLM 시대를 맞아, 실제 소스 코드를 하나씩 뜯어보면서 이해해보려고 한다. (v0.32.0 기준)
+
+## 큰 그림
+
+코드를 따라가기 전에 전체 구조부터 보고 가자. 그 전에 vLLM이 요청을 어떻게 처리하는지부터 알아야 한다. vLLM은 요청 단위가 아니라 step이라는 시간 단위로 일한다. 요청을 하나씩 끝까지 처리하지 않고, step을 돌리면서 step 한 번에 살아 있는 요청 전부를 한꺼번에 조금씩 진행시킨다. prefill 중인 요청은 prompt token을 한 조각 더 계산하고, decode 중인 요청은 다음 token을 하나 더 만든다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/00-step-timeline-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/00-step-timeline-dark.svg"
+  caption="가로는 step, 세로는 요청이다. 각 요청은 prefill을 마친 뒤 step마다 token 하나씩 decode한다. step 3은 A와 B의 decode token 1개씩과 C의 prefill token 100개를 forward 한 번에 계산한다."
+/>
+
+풀어 쓰면 이렇다.
+
+1. **Step은 엔진의 기본 실행 단위다.** CPU의 clock과 비슷하게 엔진의 실행 주기를 나타내며, 이하 모든 step은 이 단위를 의미한다.
+2. **매 step마다 엔진은 처리할 요청과 token을 선택한다.** 선택된 token들을 하나의 GPU forward pass로 처리하고, 요청마다 다음 token을 하나씩 생성한다.
+3. **하나의 요청은 여러 step에 걸쳐 처리된다.** 먼저 입력 token들을 처리하는 prefill을 수행하고, 이후 매 step에서 decode를 반복하며 출력 token을 생성한다.
+4. **한 step에는 여러 요청이 함께 처리될 수 있다.** 수백 개의 요청이 하나의 batch에 포함될 수 있으며, 긴 요청 하나가 GPU를 독점하지 않고 다른 요청들과 연산 자원을 공유한다.
+
+### vLLM 컴포넌트 
+
+이 step을 돌리는 vLLM 서버는 크게 세 컴포넌트로 나뉜다.
+
+- **API frontend**는 HTTP를 받고, chat template을 렌더링하고 token화하며, 결과 token ID를 text와 HTTP 응답으로 바꾼다. 
+    - 원래는 Python이었지만, Rust Frontend로 전환하기 위해 현재 구현되고 있다. 아직 몇 가지 기능들이 구현이 안된게 있으므로 이 글에서는 Python Frontend로 설명할 예정이다.
+- **EngineCore**는 request의 priority, token budget, KV cache block을 관리하고, 이번 step에 실행할 일을 scheduler가 고른다.
+- **Worker와 model runner**는 scheduler가 고른 일을 GPU forward와 sampling으로 처리한다. 실행 token은 요청별 가변 길이를 한 batch로 pack하지만, KV state는 별도 page/block으로 관리한다.
+
+아래 그림은 API server 하나와 EngineCore 하나를 쓰는 uni executor 경로다. 화살표는 요청과 결과가 이동하는 방향이고, GPU는 프로세스 밖의 장치로 표시했다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/01-big-picture-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/01-big-picture-dark.svg"
+  caption="vLLM serving 경로의 큰 그림. 연한 상자는 OS 프로세스, 실선 화살표는 요청, 점선 화살표는 결과가 돌아오는 방향이다. Scheduler와 Worker 사이의 두 화살표는 매 step마다 반복된다."
+/>
+
+그림에서 Scheduler와 Worker 사이를 도는 화살표가 앞서 말한 step이다. 한 step을 조금 더 자세히 보면 세 단계다.
+
+1. scheduler가 지금 살아 있는 요청들을 보고, 이번 step에 계산할 token을 고른다. 한 번에 쓸 수 있는 token 수(token budget)와 KV cache 자리가 한도다.
+2. worker가 고른 token들을 GPU에서 forward 한 번으로 계산하고, 요청마다 다음 token을 하나씩 뽑는다(sampling).
+    - 이때의 batch는 요청별로 길이를 맞춰 padding한 [요청 수 x 길이] 격자가 아니다. 요청마다 길이가 다른 token 조각을 그대로 한 줄로 이어 붙인 것이다. 예를 들어 A의 prefill 512개, B의 prefill 10개, C의 decode 1개면 523개짜리 token 줄 하나가 forward에 들어간다.
+    - 각 요청의 조각이 어디서 시작하고 끝나는지, 그 요청의 지난 KV cache가 어느 block에 있는지는 따로 넘겨주므로 attention은 요청을 섞지 않는다. sampling도 요청마다 자기 조각의 마지막 위치에서 한다.
+3. scheduler가 뽑힌 token을 각 요청에 기록하고, 끝난 요청은 내보낸다.
+
+prefill은 보통 한 step에 끝나지만, prompt가 길면 token budget에 맞춰 여러 step에 나눠서 한다(chunked prefill). 그래서 한 step의 batch에는 prefill 중인 요청과 decode 중인 요청이 섞여 있고, 위 예시의 A, B, C가 바로 그 모습이다.
+
+step마다 나온 token ID는 frontend로 돌아간다. streaming 요청이면 그때그때 SSE event가 되고, non-streaming 요청이면 완료된 뒤에 최종 JSON으로 만들어진다.
+
+참고로 API server 수와 EngineCore/model replica 수는 같은 값이 아니다. 예를 들어 `--api-server-count 2`와 DP=1이면 Python HTTP frontend 둘이 model replica 하나를 공유한다. 반대로 data parallelism은 engine과 replica를 늘리는 설정이다. 이 글은 위 그림대로 각각 하나인 경우만 다룬다.
+
+시작(프로세스를 띄우는 일)과 요청 처리(요청이 흘러가는 일)는 서로 다른 시간축이다. 그래서 글도 그 순서로 간다. 먼저 `vllm serve`가 어떤 프로세스를 어떻게 띄우는지 보고, 그다음 요청 하나가 위 그림을 어떻게 통과하는지 따라간다.
 
 ## 시작
 
