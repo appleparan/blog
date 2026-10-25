@@ -9,9 +9,11 @@ interface Props {
   /** Backdrop color for transparent images, e.g. `#fff`. */
   background?: string;
   alt?: string;
+  /** Dark-theme variant of `src`; when set, the two swap with the site theme toggle. */
+  darkSrc?: string;
 }
 
-const { src, caption, align = 'center', background, alt } = Astro.props;
+const { src, caption, align = 'center', background, alt, darkSrc } = Astro.props;
 const altText = alt ?? (typeof caption === 'string' ? caption : '');
 // Astro templates print a JSX value as `[object Object]`. Wrapped in a function component,
 // it is rendered by the `astro:jsx` renderer that the MDX integration registers.
@@ -19,7 +21,24 @@ const Caption = () => caption;
 ---
 
 <figure class:list={['figure', `figure-${align}`]}>
-  <img src={src} alt={altText} loading="lazy" style={background ? { background } : undefined} />
+  <img
+    src={src}
+    alt={altText}
+    loading="lazy"
+    class:list={[darkSrc && 'theme-img-light']}
+    style={background ? { background } : undefined}
+  />
+  {
+    darkSrc && (
+      <img
+        src={darkSrc}
+        alt={altText}
+        loading="lazy"
+        class="theme-img-dark"
+        style={background ? { background } : undefined}
+      />
+    )
+  }
   {
     caption && (
       <figcaption>{typeof caption === 'string' ? caption : <Caption />}</figcaption>
@@ -55,6 +74,19 @@ const Caption = () => caption;
 
   .figure-right img {
     margin-left: auto;
+  }
+
+  /* Light/dark pair: follow the site's data-theme toggle (default shows light). */
+  .theme-img-dark {
+    display: none;
+  }
+
+  :global([data-theme='dark']) .theme-img-light {
+    display: none;
+  }
+
+  :global([data-theme='dark']) .theme-img-dark {
+    display: block;
   }
 
   figcaption {
