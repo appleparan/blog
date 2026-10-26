@@ -89,7 +89,7 @@
   </g>
   <g>
     <line x1="40" y1="584" x2="600" y2="584" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
-    <text x="40" y="600" fill="#4f5d75" font-size="8" font-family="'Fira Code', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
+    <text x="40" y="600" fill="#4f5d75" font-size="8" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" letter-spacing="0.12em">LEGEND</text>
     <rect x="40" y="614" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
     <text x="60" y="622" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Init step</text>
     <rect x="124" y="614" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
