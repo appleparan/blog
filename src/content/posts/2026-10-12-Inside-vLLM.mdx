@@ -76,7 +76,7 @@ step마다 나온 token ID는 frontend로 돌아간다. streaming 요청이면 �
 
 ## 서버 초기화
 
-### 1. `vllm serve`가 서버 모드를 고른다
+### 1. `vllm serve`와 서버 모드 선택
 
 `vllm serve`를 한다고 하자. `vllm/entrypoints/cli/main.py`를 통해 `vllm/entrypoints/cli/serve.py`로 실행하게 된다.
 외부 LB라던가 Multiport같은 특수한 옵션을 주지 않는다면, Single API Server가 올라오게 된다.
@@ -88,7 +88,7 @@ uvloop.run(run_server(args))
 
 API server 수와 EngineCore 수는 따로 정한다. API server를 늘리면(예: `--api-server-count 2`) tokenize와 응답 직렬화 같은 frontend의 CPU 작업을 여러 프로세스가 나눠 지고, engine은 하나를 공유한다. data parallelism은 반대로 engine과 model replica를 늘린다. 이 글은 둘 다 하나인 구성만 다룬다.
 
-### 2. 소켓을 먼저 열고 worker를 부른다
+### 2. 소켓 bind와 `run_server_worker`
 
 Single API 서버는 `setup_server` 후 `run_server_worker`를 실행한다. [`vllm/entrypoints/launchers/api_server/entry.py`](https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/launchers/api_server/entry.py#L164)
 
@@ -96,39 +96,39 @@ Single API 서버는 `setup_server` 후 `run_server_worker`를 실행한다. [`v
 실질적으로 메인역할을 하는건 `run_server_worker`이다.
 `run_server_worker`: `setup_server`로 연 소켓을 받아서 엔진 클라이언트(`AsyncLLM`)를 만들고, FastAPI 앱을 구성한 뒤 `uvicorn`으로 서빙한다. 물론 종료 처리도 이 함수가 처리한다.
 
-### 3. CLI 인자가 `VllmConfig`가 된다
+### 3. CLI 인자에서 `VllmConfig`까지
 
-### 4. `AsyncLLM`이 EngineCore 프로세스를 띄운다
+### 4. `AsyncLLM`과 EngineCore 프로세스 생성
 
-### 5. EngineCore가 model, KV cache, scheduler를 준비한다
+### 5. EngineCore 준비: model, KV cache, scheduler
 
-### 6. route를 등록하고 Uvicorn이 요청을 받는다
+### 6. route 등록과 Uvicorn 실행
 
 ## 요청 처리
 
-### 요청은 계층마다 다른 객체가 된다
+### 계층별 요청 객체
 
-### 1. FastAPI router가 요청을 받는다
+### 1. FastAPI router의 요청 수신
 
-### 2. chat 요청이 token ID가 된다
+### 2. chat 요청의 token화
 
-### 3. `AsyncLLM`이 요청을 EngineCore로 보낸다
+### 3. `AsyncLLM`에서 EngineCore로의 전달
 
-### 4. scheduler가 이번 step의 token을 고른다
+### 4. scheduler의 step 구성
 
-### 5. worker가 forward와 sampling을 한다
+### 5. worker의 forward와 sampling
 
-### 6. token ID가 text와 응답이 된다
+### 6. detokenize와 응답 생성
 
-### 7. 끝난 요청은 KV block과 함께 정리된다
+### 7. 요청 종료와 KV block 정리
 
 ## 실행 batch와 KV cache
 
-### step 안에서는 필요한 token만 한 줄로 모은다
+### step 안의 token packing
 
-### block table이 token 위치를 KV cache 주소로 바꾼다
+### block table: token 위치에서 KV cache 주소로
 
-### block은 scheduler가 소유하고 재사용한다
+### scheduler의 block 소유와 재사용
 
 ### padding이 남는 곳: CUDA graph
 
