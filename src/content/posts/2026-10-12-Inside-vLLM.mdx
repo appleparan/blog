@@ -57,7 +57,7 @@ import Figure from '../../components/Figure.astro';
 <Figure
   src="/assets/images/post/2026-10-12-Inside-vLLM/01-big-picture-light.svg"
   darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/01-big-picture-dark.svg"
-  caption="vLLM serving 경로의 큰 그림. 연한 상자는 OS 프로세스, 실선 화살표는 요청, 점선 화살표는 결과가 돌아오는 방향이다. Scheduler와 Worker 사이의 두 화살표는 매 step마다 반복된다."
+  caption="API server 하나와 EngineCore 하나로 이루어진 vLLM 서버. 주황색 STEP LOOP가 매 step 반복되는 부분이다."
 />
 
 그림에서 Scheduler와 Worker 사이를 도는 화살표가 앞서 말한 step이다. 한 step을 조금 더 자세히 보면 세 단계다.
