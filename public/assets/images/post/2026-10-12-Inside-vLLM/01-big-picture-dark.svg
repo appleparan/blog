@@ -74,9 +74,9 @@
     <text x="468.0" y="176" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">AsyncLLM</text>
     <text x="468.0" y="190" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">engine client · ZMQ</text>
     <rect x="200" y="304" width="320" height="56" rx="6" fill="#2d3142"/>
-    <rect x="200" y="304" width="320" height="56" rx="6" fill="rgba(240,138,89,0.10)" stroke="#f08a59" stroke-width="1"/>
-    <rect x="208" y="312" width="36" height="12" rx="2" fill="transparent" stroke="#f08a59" stroke-opacity="0.5" stroke-width="0.8"/>
-    <text x="226.0" y="321" fill="#f08a59" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SCHED</text>
+    <rect x="200" y="304" width="320" height="56" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <rect x="208" y="312" width="36" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
+    <text x="226.0" y="321" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SCHED</text>
     <text x="360.0" y="336" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Scheduler</text>
     <text x="360.0" y="350" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">KV cache manager · token budget · priority</text>
     <rect x="200" y="408" width="320" height="56" rx="6" fill="#2d3142"/>
@@ -95,13 +95,11 @@
   <g>
     <line x1="40" y1="640" x2="600" y2="640" stroke="rgba(245,245,245,0.1)" stroke-width="0.8"/>
     <text x="40" y="656" fill="#bfc0c0" font-size="8" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" letter-spacing="0.12em">LEGEND</text>
-    <rect x="40" y="670" width="14" height="10" rx="2" fill="rgba(240,138,89,0.10)" stroke="#f08a59" stroke-width="1"/>
-    <text x="60" y="678" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Picks each step</text>
-    <line x1="148" y1="675" x2="176" y2="675" stroke="#6a95d8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
-    <text x="184" y="678" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">HTTP</text>
-    <line x1="232" y1="675" x2="260" y2="675" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <text x="268" y="678" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Request</text>
-    <line x1="324" y1="675" x2="352" y2="675" stroke="#bfc0c0" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-    <text x="360" y="678" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Result</text>
+    <line x1="40" y1="675" x2="68" y2="675" stroke="#6a95d8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+    <text x="76" y="678" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">HTTP</text>
+    <line x1="124" y1="675" x2="152" y2="675" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <text x="160" y="678" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Request</text>
+    <line x1="216" y1="675" x2="244" y2="675" stroke="#bfc0c0" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+    <text x="252" y="678" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Result</text>
   </g>
 </svg>
