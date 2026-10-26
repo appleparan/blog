@@ -90,14 +90,10 @@
   <g>
     <line x1="40" y1="584" x2="600" y2="584" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
     <text x="40" y="600" fill="#4f5d75" font-size="8" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" letter-spacing="0.12em">LEGEND</text>
-    <rect x="40" y="614" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-    <text x="60" y="622" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Init step</text>
-    <rect x="124" y="614" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
-    <text x="144" y="622" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Starts serving</text>
-    <line x1="228" y1="619" x2="256" y2="619" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <text x="262" y="622" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Next step</text>
-    <line x1="328" y1="619" x2="356" y2="619" stroke="#eb6c36" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-accent)"/>
-    <text x="362" y="622" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Engine ready</text>
+    <rect x="40" y="614" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+    <text x="60" y="622" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Starts serving</text>
+    <line x1="148" y1="619" x2="176" y2="619" stroke="#eb6c36" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-accent)"/>
+    <text x="182" y="622" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Engine ready</text>
   </g>
   </g>
 </svg>
