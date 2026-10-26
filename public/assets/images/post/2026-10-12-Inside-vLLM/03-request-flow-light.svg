@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 712" width="640" height="712"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 628" width="640" height="628"
      role="img" aria-labelledby="vllm-request-flow-light-title vllm-request-flow-light-desc">
   <title id="vllm-request-flow-light-title">vLLM request flow: from HTTP to GPU and back</title>
   <desc id="vllm-request-flow-light-desc">Sequence of one chat request with numbered steps. The client posts HTTP to FastAPI, which tokenizes and calls AsyncLLM generate. AsyncLLM sends an ADD over ZMQ to EngineCore. Every step until the request finishes, the scheduler sends work to the worker, the worker runs forward and sampling and returns token IDs, EngineCore sends outputs over ZMQ, AsyncLLM detokenizes, and FastAPI sends SSE or JSON to the client. When the request ends, EngineCore frees its KV blocks.</desc>
@@ -25,51 +25,51 @@
     <line x1="612" y1="32" x2="612" y2="38" stroke="rgba(45,49,66,0.2)" stroke-width="0.8"/>
     <rect x="448.0" y="26" width="104" height="12" rx="2" fill="#f5f5f5"/>
     <text x="500.0" y="35" fill="rgba(45,49,66,0.45)" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">ENGINECORE PROCESS</text>
-    <rect x="64" y="276" width="520" height="288" rx="4" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
-    <rect x="64" y="276" width="40" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
-    <text x="84" y="288" fill="#4f5d75" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.12em">LOOP</text>
-    <text x="112" y="288" fill="#4f5d75" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.04em">[every step until finished]</text>
-    <line x1="80" y1="104" x2="80" y2="632" stroke="rgba(45,49,66,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
-    <line x1="200" y1="104" x2="200" y2="632" stroke="rgba(45,49,66,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
-    <line x1="320" y1="104" x2="320" y2="632" stroke="rgba(45,49,66,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
-    <line x1="440" y1="104" x2="440" y2="632" stroke="rgba(45,49,66,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
-    <line x1="560" y1="104" x2="560" y2="632" stroke="rgba(45,49,66,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
-    <path d="M84 136 H196" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
-    <rect x="100.0" y="116" width="80" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="140.0" y="125" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">1 · HTTP POST</text>
-    <path d="M200 160 H216 V174 H206" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <rect x="224" y="161" width="72" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="226" y="170" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.08em">2 · TOKENIZE</text>
-    <path d="M204 220 H316" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <rect x="228.0" y="200" width="64" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="260.0" y="209" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">GENERATE()</text>
-    <path d="M324 256 H436" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <rect x="346.0" y="236" width="68" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="380.0" y="245" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">3 · ZMQ ADD</text>
-    <path d="M444 320 H556" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <rect x="464.0" y="300" width="72" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="500.0" y="309" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">4 · SCHEDULE</text>
-    <path d="M560 340 H576 V354 H566" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <rect x="488" y="341" width="64" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="550" y="350" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="end" letter-spacing="0.08em">5 · FORWARD</text>
-    <path d="M556 400 H444" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-    <rect x="466.0" y="380" width="68" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="500.0" y="389" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SAMPLED IDS</text>
-    <path d="M436 436 H324" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-    <rect x="346.0" y="416" width="68" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="380.0" y="425" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">ZMQ OUTPUTS</text>
-    <path d="M320 456 H336 V470 H326" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <rect x="344" y="457" width="80" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="346" y="466" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.08em">6 · DETOKENIZE</text>
-    <path d="M316 516 H204" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-    <rect x="220.0" y="496" width="80" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="260.0" y="505" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">REQUESTOUTPUT</text>
-    <path d="M196 548 H84" fill="none" stroke="#eb6c36" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-accent)"/>
-    <rect x="108.0" y="528" width="64" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="140.0" y="537" fill="#eb6c36" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SSE / JSON</text>
-    <path d="M440 588 H456 V602 H446" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <rect x="464" y="589" width="88" height="12" rx="2" fill="#f5f5f5"/>
-    <text x="466" y="598" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.08em">7 · FREE BLOCKS</text>
+    <rect x="64" y="244" width="520" height="248" rx="4" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+    <rect x="64" y="244" width="40" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+    <text x="84" y="256" fill="#4f5d75" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.12em">LOOP</text>
+    <text x="112" y="256" fill="#4f5d75" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.04em">[every step until finished]</text>
+    <line x1="80" y1="104" x2="80" y2="548" stroke="rgba(45,49,66,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
+    <line x1="200" y1="104" x2="200" y2="548" stroke="rgba(45,49,66,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
+    <line x1="320" y1="104" x2="320" y2="548" stroke="rgba(45,49,66,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
+    <line x1="440" y1="104" x2="440" y2="548" stroke="rgba(45,49,66,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
+    <line x1="560" y1="104" x2="560" y2="548" stroke="rgba(45,49,66,0.2)" stroke-width="1" stroke-dasharray="3,3"/>
+    <path d="M84 128 H196" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+    <rect x="100.0" y="108" width="80" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="140.0" y="117" fill="#2e5aa8" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">1 · HTTP POST</text>
+    <path d="M200 148 H216 V162 H206" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="224" y="149" width="72" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="226" y="158" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.08em">2 · TOKENIZE</text>
+    <path d="M204 196 H316" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="228.0" y="176" width="64" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="260.0" y="185" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">GENERATE()</text>
+    <path d="M324 228 H436" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="346.0" y="208" width="68" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="380.0" y="217" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">3 · ZMQ ADD</text>
+    <path d="M444 284 H556" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="464.0" y="264" width="72" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="500.0" y="273" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">4 · SCHEDULE</text>
+    <path d="M560 300 H576 V314 H566" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="488" y="301" width="64" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="550" y="310" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="end" letter-spacing="0.08em">5 · FORWARD</text>
+    <path d="M556 348 H444" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+    <rect x="466.0" y="328" width="68" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="500.0" y="337" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SAMPLED IDS</text>
+    <path d="M436 380 H324" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+    <rect x="346.0" y="360" width="68" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="380.0" y="369" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">ZMQ OUTPUTS</text>
+    <path d="M320 396 H336 V410 H326" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="344" y="397" width="80" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="346" y="406" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.08em">6 · DETOKENIZE</text>
+    <path d="M316 444 H204" fill="none" stroke="#4f5d75" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+    <rect x="220.0" y="424" width="80" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="260.0" y="433" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">REQUESTOUTPUT</text>
+    <path d="M196 476 H84" fill="none" stroke="#eb6c36" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-accent)"/>
+    <rect x="108.0" y="456" width="64" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="140.0" y="465" fill="#eb6c36" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SSE / JSON</text>
+    <path d="M440 516 H456 V530 H446" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="464" y="517" width="88" height="12" rx="2" fill="#f5f5f5"/>
+    <text x="466" y="526" fill="#7a8399" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="start" letter-spacing="0.08em">7 · FREE BLOCKS</text>
     <rect x="28" y="48" width="104" height="56" rx="6" fill="#f5f5f5"/>
     <rect x="28" y="48" width="104" height="56" rx="6" fill="rgba(79,93,117,0.1)" stroke="#7a8399" stroke-width="1"/>
     <text x="80.0" y="74.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', system-ui, sans-serif" text-anchor="middle">Client</text>
@@ -92,13 +92,13 @@
     <text x="560.0" y="88.0" fill="#4f5d75" font-size="9" font-family="'Geist Mono', ui-monospace, monospace" text-anchor="middle">ModelRunner · GPU</text>
   </g>
   <g>
-    <line x1="40" y1="656" x2="600" y2="656" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
-    <text x="40" y="672" fill="#4f5d75" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
-    <line x1="40" y1="691" x2="68" y2="691" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <text x="74" y="694" fill="#4f5d75" font-size="8" font-family="'Geist', system-ui, sans-serif">Call</text>
-    <line x1="124" y1="691" x2="152" y2="691" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-    <text x="158" y="694" fill="#4f5d75" font-size="8" font-family="'Geist', system-ui, sans-serif">Result</text>
-    <line x1="216" y1="691" x2="244" y2="691" stroke="#eb6c36" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-accent)"/>
-    <text x="250" y="694" fill="#4f5d75" font-size="8" font-family="'Geist', system-ui, sans-serif">Response to client</text>
+    <line x1="40" y1="572" x2="600" y2="572" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
+    <text x="40" y="588" fill="#4f5d75" font-size="8" font-family="'Geist Mono', ui-monospace, monospace" letter-spacing="0.18em">LEGEND</text>
+    <line x1="40" y1="607" x2="68" y2="607" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <text x="74" y="610" fill="#4f5d75" font-size="8" font-family="'Geist', system-ui, sans-serif">Call</text>
+    <line x1="124" y1="607" x2="152" y2="607" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+    <text x="158" y="610" fill="#4f5d75" font-size="8" font-family="'Geist', system-ui, sans-serif">Result</text>
+    <line x1="216" y1="607" x2="244" y2="607" stroke="#eb6c36" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-accent)"/>
+    <text x="250" y="610" fill="#4f5d75" font-size="8" font-family="'Geist', system-ui, sans-serif">Response to client</text>
   </g>
 </svg>
