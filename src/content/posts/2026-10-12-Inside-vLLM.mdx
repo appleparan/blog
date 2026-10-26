@@ -24,7 +24,11 @@ import Figure from '../../components/Figure.astro';
 
 ## 큰 그림
 
-코드를 따라가기 전에 전체 구조부터 보고 가자. 그 전에 vLLM이 요청을 어떻게 처리하는지부터 알아야 한다. vLLM은 요청 단위가 아니라 step이라는 시간 단위로 일한다. 요청을 하나씩 끝까지 처리하지 않고, step을 돌리면서 step 한 번에 살아 있는 요청 전부를 한꺼번에 조금씩 진행시킨다. prefill 중인 요청은 prompt token을 한 조각 더 계산하고, decode 중인 요청은 다음 token을 하나 더 만든다.
+코드를 따라가기 전에 전체 구조부터 보고 가자.
+
+### step: vLLM이 요청을 처리하는 단위
+
+그 전에 vLLM이 요청을 어떻게 처리하는지부터 알아야 한다. vLLM은 요청 단위가 아니라 step이라는 시간 단위로 일한다. 요청을 하나씩 끝까지 처리하지 않고, step을 돌리면서 step 한 번에 살아 있는 요청 전부를 한꺼번에 조금씩 진행시킨다. prefill 중인 요청은 prompt token을 한 조각 더 계산하고, decode 중인 요청은 다음 token을 하나 더 만든다.
 
 <Figure
   src="/assets/images/post/2026-10-12-Inside-vLLM/00-step-timeline-light.svg"
@@ -39,7 +43,7 @@ import Figure from '../../components/Figure.astro';
 3. **하나의 요청은 여러 step에 걸쳐 처리된다.** 먼저 입력 token들을 처리하는 prefill을 수행하고, 이후 매 step에서 decode를 반복하며 출력 token을 생성한다.
 4. **한 step에는 여러 요청이 함께 처리될 수 있다.** 수백 개의 요청이 하나의 batch에 포함될 수 있으며, 긴 요청 하나가 GPU를 독점하지 않고 다른 요청들과 연산 자원을 공유한다.
 
-### vLLM 컴포넌트 
+### vLLM 컴포넌트
 
 이 step을 돌리는 vLLM 서버는 크게 세 컴포넌트로 나뉜다.
 
@@ -68,9 +72,11 @@ prefill은 보통 한 step에 끝나지만, prompt가 길면 token budget에 맞
 
 step마다 나온 token ID는 frontend로 돌아간다. streaming 요청이면 그때그때 SSE event가 되고, non-streaming 요청이면 완료된 뒤에 최종 JSON으로 만들어진다.
 
-시작(프로세스를 띄우는 일)과 요청 처리(요청이 흘러가는 일)는 서로 다른 시간축이다. 그래서 글도 그 순서로 간다. 먼저 `vllm serve`가 어떤 프로세스를 어떻게 띄우는지 보고, 그다음 요청 하나가 위 그림을 어떻게 통과하는지 따라간다.
+이후 글은 두 부분으로 나뉜다. 서버 초기화에서는 이 그림의 상자들이 만들어지는 순서를 따라가고, 요청 처리에서는 화살표를 따라간다.
 
-## 시작
+## 서버 초기화
+
+### 1. `vllm serve`가 서버 모드를 고른다
 
 `vllm serve`를 한다고 하자. `vllm/entrypoints/cli/main.py`를 통해 `vllm/entrypoints/cli/serve.py`로 실행하게 된다.
 외부 LB라던가 Multiport같은 특수한 옵션을 주지 않는다면, Single API Server가 올라오게 된다.
@@ -82,13 +88,48 @@ uvloop.run(run_server(args))
 
 API server 수와 EngineCore 수는 따로 정한다. API server를 늘리면(예: `--api-server-count 2`) tokenize와 응답 직렬화 같은 frontend의 CPU 작업을 여러 프로세스가 나눠 지고, engine은 하나를 공유한다. data parallelism은 반대로 engine과 model replica를 늘린다. 이 글은 둘 다 하나인 구성만 다룬다.
 
+### 2. 소켓을 먼저 열고 worker를 부른다
+
 Single API 서버는 `setup_server` 후 `run_server_worker`를 실행한다. [`vllm/entrypoints/launchers/api_server/entry.py`](https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/launchers/api_server/entry.py#L164)
 
 `setup_server`는 로깅 셋업, parser plugin 로드, argument 검증 후 포트(소켓)을 열게 된다.
 실질적으로 메인역할을 하는건 `run_server_worker`이다.
 `run_server_worker`: `setup_server`로 연 소켓을 받아서 엔진 클라이언트(`AsyncLLM`)를 만들고, FastAPI 앱을 구성한 뒤 `uvicorn`으로 서빙한다. 물론 종료 처리도 이 함수가 처리한다.
 
+### 3. CLI 인자가 `VllmConfig`가 된다
 
+### 4. `AsyncLLM`이 EngineCore 프로세스를 띄운다
 
+### 5. EngineCore가 model, KV cache, scheduler를 준비한다
 
+### 6. route를 등록하고 Uvicorn이 요청을 받는다
 
+## 요청 처리
+
+### 요청은 계층마다 다른 객체가 된다
+
+### 1. FastAPI router가 요청을 받는다
+
+### 2. chat 요청이 token ID가 된다
+
+### 3. `AsyncLLM`이 요청을 EngineCore로 보낸다
+
+### 4. scheduler가 이번 step의 token을 고른다
+
+### 5. worker가 forward와 sampling을 한다
+
+### 6. token ID가 text와 응답이 된다
+
+### 7. 끝난 요청은 KV block과 함께 정리된다
+
+## 실행 batch와 KV cache
+
+### step 안에서는 필요한 token만 한 줄로 모은다
+
+### block table이 token 위치를 KV cache 주소로 바꾼다
+
+### block은 scheduler가 소유하고 재사용한다
+
+### padding이 남는 곳: CUDA graph
+
+## 마치며
