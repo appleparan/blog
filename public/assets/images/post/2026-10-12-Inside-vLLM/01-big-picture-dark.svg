@@ -13,6 +13,7 @@
     </style>
     <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bfc0c0"/></marker>
     <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f08a59"/></marker>
+    <marker id="arrow-loop" markerUnits="userSpaceOnUse" markerWidth="6" markerHeight="5" refX="5" refY="2.5" orient="auto"><polygon points="0 0, 6 2.5, 0 5" fill="#f08a59"/></marker>
     <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6a95d8"/></marker>
   </defs>
   <rect width="100%" height="100%" fill="#2d3142"/>
@@ -29,8 +30,8 @@
     <line x1="368" y1="170" x2="272" y2="170" stroke="#bfc0c0" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
     <line x1="444" y1="184" x2="444" y2="260" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
     <line x1="492" y1="260" x2="492" y2="184" stroke="#bfc0c0" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
-    <line x1="280" y1="312" x2="280" y2="356" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <line x1="440" y1="356" x2="440" y2="312" stroke="#bfc0c0" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
+    <line x1="280" y1="312" x2="280" y2="356" stroke="#f08a59" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
+    <line x1="440" y1="356" x2="440" y2="312" stroke="#f08a59" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow-accent)"/>
     <line x1="320" y1="408" x2="320" y2="456" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
     <line x1="400" y1="456" x2="400" y2="408" stroke="#bfc0c0" stroke-width="1" stroke-dasharray="4,3" marker-end="url(#arrow)"/>
     <rect x="156" y="86" width="40" height="12" rx="2" fill="#2d3142"/>
@@ -47,8 +48,9 @@
     <text x="536.0" y="223" fill="#8e98ac" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">ZMQ OUTPUTS</text>
     <rect x="200" y="328" width="72" height="12" rx="2" fill="#2d3142"/>
     <text x="236.0" y="337" fill="#8e98ac" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">SCHED OUTPUT</text>
-    <rect x="328" y="328" width="64" height="12" rx="2" fill="#2d3142"/>
-    <text x="360.0" y="337" fill="#f08a59" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP LOOP</text>
+    <rect x="298" y="324" width="104" height="20" rx="3" fill="#2d3142"/>
+    <path d="M315 328.8 A6 6 0 1 1 309 328.8" fill="none" stroke="#f08a59" stroke-width="1.4" marker-end="url(#arrow-loop)"/>
+    <text x="324" y="338" fill="#f08a59" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" letter-spacing="0.08em">STEP LOOP</text>
     <rect x="448" y="328" width="80" height="12" rx="2" fill="#2d3142"/>
     <text x="488.0" y="337" fill="#8e98ac" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">RUNNER OUTPUT</text>
     <rect x="232" y="432" width="80" height="12" rx="2" fill="#2d3142"/>
