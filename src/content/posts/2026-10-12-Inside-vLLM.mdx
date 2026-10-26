@@ -68,8 +68,6 @@ prefill은 보통 한 step에 끝나지만, prompt가 길면 token budget에 맞
 
 step마다 나온 token ID는 frontend로 돌아간다. streaming 요청이면 그때그때 SSE event가 되고, non-streaming 요청이면 완료된 뒤에 최종 JSON으로 만들어진다.
 
-참고로 API server 수와 EngineCore/model replica 수는 같은 값이 아니다. 예를 들어 `--api-server-count 2`와 DP=1이면 Python HTTP frontend 둘이 model replica 하나를 공유한다. 반대로 data parallelism은 engine과 replica를 늘리는 설정이다. 이 글은 위 그림대로 각각 하나인 경우만 다룬다.
-
 시작(프로세스를 띄우는 일)과 요청 처리(요청이 흘러가는 일)는 서로 다른 시간축이다. 그래서 글도 그 순서로 간다. 먼저 `vllm serve`가 어떤 프로세스를 어떻게 띄우는지 보고, 그다음 요청 하나가 위 그림을 어떻게 통과하는지 따라간다.
 
 ## 시작
@@ -81,6 +79,8 @@ step마다 나온 token ID는 frontend로 돌아간다. streaming 요청이면 �
 args.api_server_count = None
 uvloop.run(run_server(args))
 ```
+
+API server 수와 EngineCore 수는 따로 정한다. API server를 늘리면(예: `--api-server-count 2`) tokenize와 응답 직렬화 같은 frontend의 CPU 작업을 여러 프로세스가 나눠 지고, engine은 하나를 공유한다. data parallelism은 반대로 engine과 model replica를 늘린다. 이 글은 둘 다 하나인 구성만 다룬다.
 
 Single API 서버는 `setup_server` 후 `run_server_worker`를 실행한다. [`vllm/entrypoints/launchers/api_server/entry.py`](https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/launchers/api_server/entry.py#L164)
 
