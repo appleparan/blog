@@ -76,6 +76,12 @@ step마다 나온 token ID는 frontend로 돌아간다. streaming 요청이면 �
 
 ## 서버 초기화
 
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/02-server-init-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/02-server-init-dark.svg"
+  caption="서버 초기화 순서. 번호는 아래 소제목 번호와 같다. API server는 EngineCore가 READY를 보낸 뒤에야 route를 등록하고 Uvicorn을 띄운다."
+/>
+
 ### 1. `vllm serve`와 서버 모드 선택
 
 `vllm serve`를 한다고 하자. `vllm/entrypoints/cli/main.py`를 통해 `vllm/entrypoints/cli/serve.py`로 실행하게 된다.
@@ -106,6 +112,12 @@ Single API 서버는 `setup_server` 후 `run_server_worker`를 실행한다. [`v
 
 ## 요청 처리
 
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-request-flow-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-request-flow-dark.svg"
+  caption="요청 하나의 흐름. 번호는 아래 소제목 번호와 같다. LOOP 안의 단계는 요청이 끝날 때까지 step마다 반복된다."
+/>
+
 ### 계층별 요청 객체
 
 ### 1. FastAPI router의 요청 수신
@@ -123,6 +135,12 @@ Single API 서버는 `setup_server` 후 `run_server_worker`를 실행한다. [`v
 ### 7. 요청 종료와 KV block 정리
 
 ## 실행 batch와 KV cache
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/04-batch-kv-cache-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/04-batch-kv-cache-dark.svg"
+  caption="세 요청의 token을 padding 없이 한 줄로 이어 붙인 입력과, 각 token이 block table을 거쳐 KV cache slot으로 가는 모습. 끝의 PAD는 CUDA graph 크기를 맞추는 padding이다."
+/>
 
 ### step 안의 token packing
 
