@@ -24,7 +24,11 @@ import Figure from '../../components/Figure.astro';
 
 ## 큰 그림
 
-코드를 따라가기 전에 전체 구조부터 보고 가자. 그 전에 vLLM이 요청을 어떻게 처리하는지부터 알아야 한다. vLLM은 요청 단위가 아니라 step이라는 시간 단위로 일한다. 요청을 하나씩 끝까지 처리하지 않고, step을 돌리면서 step 한 번에 살아 있는 요청 전부를 한꺼번에 조금씩 진행시킨다. prefill 중인 요청은 prompt token을 한 조각 더 계산하고, decode 중인 요청은 다음 token을 하나 더 만든다.
+코드를 따라가기 전에 전체 구조부터 보고 가자.
+
+### step: vLLM이 요청을 처리하는 단위
+
+그 전에 vLLM이 요청을 어떻게 처리하는지부터 알아야 한다. vLLM은 요청 단위가 아니라 step이라는 시간 단위로 일한다. 요청을 하나씩 끝까지 처리하지 않고, step을 돌리면서 step 한 번에 살아 있는 요청 전부를 한꺼번에 조금씩 진행시킨다. prefill 중인 요청은 prompt token을 한 조각 더 계산하고, decode 중인 요청은 다음 token을 하나 더 만든다.
 
 <Figure
   src="/assets/images/post/2026-10-12-Inside-vLLM/00-step-timeline-light.svg"
@@ -39,24 +43,28 @@ import Figure from '../../components/Figure.astro';
 3. **하나의 요청은 여러 step에 걸쳐 처리된다.** 먼저 입력 token들을 처리하는 prefill을 수행하고, 이후 매 step에서 decode를 반복하며 출력 token을 생성한다.
 4. **한 step에는 여러 요청이 함께 처리될 수 있다.** 수백 개의 요청이 하나의 batch에 포함될 수 있으며, 긴 요청 하나가 GPU를 독점하지 않고 다른 요청들과 연산 자원을 공유한다.
 
-### vLLM 컴포넌트 
+### vLLM 컴포넌트
 
-이 step을 돌리는 vLLM 서버는 크게 세 컴포넌트로 나뉜다.
-
-- **API frontend**는 HTTP를 받고, chat template을 렌더링하고 token화하며, 결과 token ID를 text와 HTTP 응답으로 바꾼다. 
-    - 원래는 Python이었지만, Rust Frontend로 전환하기 위해 현재 구현되고 있다. 아직 몇 가지 기능들이 구현이 안된게 있으므로 이 글에서는 Python Frontend로 설명할 예정이다.
-- **EngineCore**는 request의 priority, token budget, KV cache block을 관리하고, 이번 step에 실행할 일을 scheduler가 고른다.
-- **Worker와 model runner**는 scheduler가 고른 일을 GPU forward와 sampling으로 처리한다. 실행 token은 요청별 가변 길이를 한 batch로 pack하지만, KV state는 별도 page/block으로 관리한다.
-
-아래 그림은 API server 하나와 EngineCore 하나를 쓰는 uni executor 경로다. 화살표는 요청과 결과가 이동하는 방향이고, GPU는 프로세스 밖의 장치로 표시했다.
+이 step을 돌리는 vLLM 서버는 아래 그림처럼 두 프로세스와 GPU로 나뉜다. 그림은 API server 하나와 EngineCore 하나를 쓰는 uni executor 구성이다.
 
 <Figure
   src="/assets/images/post/2026-10-12-Inside-vLLM/01-big-picture-light.svg"
   darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/01-big-picture-dark.svg"
-  caption="vLLM serving 경로의 큰 그림. 연한 상자는 OS 프로세스, 실선 화살표는 요청, 점선 화살표는 결과가 돌아오는 방향이다. Scheduler와 Worker 사이의 두 화살표는 매 step마다 반복된다."
+  caption="API server 하나와 EngineCore 하나로 이루어진 vLLM 서버. 주황색 STEP LOOP가 매 step 반복되는 부분이다."
 />
 
-그림에서 Scheduler와 Worker 사이를 도는 화살표가 앞서 말한 step이다. 한 step을 조금 더 자세히 보면 세 단계다.
+그림의 상자를 위에서부터 차례로 보면 이렇다.
+
+- **API SERVER PROCESS**는 HTTP 요청을 엔진 요청으로, 엔진 출력을 HTTP 응답으로 바꾼다.
+    - **FastAPI app**: router가 HTTP 요청을 받아 `ChatCompletionRequest`로 검증한다. handler인 `OpenAIServingChat`이 chat template을 적용하고 tokenizer로 token화한다. 돌아온 결과는 JSON이나 SSE 응답으로 만든다.
+    - **AsyncLLM**: 엔진 client다. `InputProcessor`가 엔진 요청을 만들고, ZMQ client가 EngineCore와 요청과 결과를 주고받고, `OutputProcessor`가 token ID를 text로 바꾼다.
+    - 지금은 Python 구현이다. Rust frontend로 전환하는 작업이 진행 중이지만 아직 빠진 기능이 있어서, 이 글은 Python frontend로 설명한다.
+- **ENGINECORE PROCESS**는 busy loop를 돌며 ZMQ로 받은 요청을 Scheduler에 넣고, step을 실행하고, 결과를 AsyncLLM으로 보낸다.
+    - **Scheduler**: 대기 중인 요청과 실행 중인 요청을 보고, token budget과 priority에 따라 이번 step에 요청마다 계산할 token 수를 정한다. 안에 있는 KV cache manager가 KV cache block을 요청에 할당하고, 끝난 요청의 block을 회수한다.
+    - **Executor · Worker · ModelRunner**: Scheduler가 정한 일을 GPU에서 실행한다. Executor는 EngineCore가 worker를 부르는 창구이고, GPU가 하나면 같은 프로세스 안의 `UniProcExecutor`가 쓰인다. Worker는 GPU 장치를 초기화하고 model을 load한다. ModelRunner는 이번 step의 token을 한 줄로 묶어 batch를 만들고 forward와 sampling을 실행한다.
+- **GPU**는 프로세스 밖의 장치다. ModelRunner가 보낸 forward와 sampling을 계산하고 token ID를 돌려준다.
+
+그림의 주황색 STEP LOOP가 앞서 말한 step이다. 한 step을 조금 더 자세히 보면 세 단계다.
 
 1. scheduler가 지금 살아 있는 요청들을 보고, 이번 step에 계산할 token을 고른다. 한 번에 쓸 수 있는 token 수(token budget)와 KV cache 자리가 한도다.
 2. worker가 고른 token들을 GPU에서 forward 한 번으로 계산하고, 요청마다 다음 token을 하나씩 뽑는다(sampling).
@@ -68,11 +76,17 @@ prefill은 보통 한 step에 끝나지만, prompt가 길면 token budget에 맞
 
 step마다 나온 token ID는 frontend로 돌아간다. streaming 요청이면 그때그때 SSE event가 되고, non-streaming 요청이면 완료된 뒤에 최종 JSON으로 만들어진다.
 
-참고로 API server 수와 EngineCore/model replica 수는 같은 값이 아니다. 예를 들어 `--api-server-count 2`와 DP=1이면 Python HTTP frontend 둘이 model replica 하나를 공유한다. 반대로 data parallelism은 engine과 replica를 늘리는 설정이다. 이 글은 위 그림대로 각각 하나인 경우만 다룬다.
+이후 글은 두 부분으로 나뉜다. 서버 초기화에서는 이 그림의 상자들이 만들어지는 순서를 따라가고, 요청 처리에서는 화살표를 따라간다.
 
-시작(프로세스를 띄우는 일)과 요청 처리(요청이 흘러가는 일)는 서로 다른 시간축이다. 그래서 글도 그 순서로 간다. 먼저 `vllm serve`가 어떤 프로세스를 어떻게 띄우는지 보고, 그다음 요청 하나가 위 그림을 어떻게 통과하는지 따라간다.
+## 서버 초기화
 
-## 시작
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/02-server-init-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/02-server-init-dark.svg"
+  caption="서버 초기화 순서. 번호는 아래 소제목 번호와 같다. API server는 EngineCore가 READY를 보낸 뒤에야 route를 등록하고 Uvicorn을 띄운다."
+/>
+
+### 1. `vllm serve`와 서버 모드 선택
 
 `vllm serve`를 한다고 하자. `vllm/entrypoints/cli/main.py`를 통해 `vllm/entrypoints/cli/serve.py`로 실행하게 된다.
 외부 LB라던가 Multiport같은 특수한 옵션을 주지 않는다면, Single API Server가 올라오게 된다.
@@ -82,13 +96,62 @@ args.api_server_count = None
 uvloop.run(run_server(args))
 ```
 
+API server 수와 EngineCore 수는 따로 정한다. API server를 늘리면(예: `--api-server-count 2`) tokenize와 응답 직렬화 같은 frontend의 CPU 작업을 여러 프로세스가 나눠 지고, engine은 하나를 공유한다. data parallelism은 반대로 engine과 model replica를 늘린다. 이 글은 둘 다 하나인 구성만 다룬다.
+
+### 2. 소켓 bind와 `run_server_worker`
+
 Single API 서버는 `setup_server` 후 `run_server_worker`를 실행한다. [`vllm/entrypoints/launchers/api_server/entry.py`](https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/launchers/api_server/entry.py#L164)
 
 `setup_server`는 로깅 셋업, parser plugin 로드, argument 검증 후 포트(소켓)을 열게 된다.
 실질적으로 메인역할을 하는건 `run_server_worker`이다.
 `run_server_worker`: `setup_server`로 연 소켓을 받아서 엔진 클라이언트(`AsyncLLM`)를 만들고, FastAPI 앱을 구성한 뒤 `uvicorn`으로 서빙한다. 물론 종료 처리도 이 함수가 처리한다.
 
+### 3. CLI 인자에서 `VllmConfig`까지
 
+### 4. `AsyncLLM`과 EngineCore 프로세스 생성
 
+### 5. EngineCore 준비: model, KV cache, scheduler
 
+### 6. route 등록과 Uvicorn 실행
 
+## 요청 처리
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-request-flow-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-request-flow-dark.svg"
+  caption="요청 하나의 흐름. 번호는 아래 소제목 번호와 같다. LOOP 안의 단계는 요청이 끝날 때까지 step마다 반복된다."
+/>
+
+### 계층별 요청 객체
+
+### 1. FastAPI router의 요청 수신
+
+### 2. chat 요청의 token화
+
+### 3. `AsyncLLM`에서 EngineCore로의 전달
+
+### 4. scheduler의 step 구성
+
+### 5. worker의 forward와 sampling
+
+### 6. detokenize와 응답 생성
+
+### 7. 요청 종료와 KV block 정리
+
+## 실행 batch와 KV cache
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/04-batch-kv-cache-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/04-batch-kv-cache-dark.svg"
+  caption="세 요청의 token을 padding 없이 한 줄로 이어 붙인 입력과, 각 token이 block table을 거쳐 KV cache slot으로 가는 모습. 끝의 PAD는 CUDA graph 크기를 맞추는 padding이다."
+/>
+
+### step 안의 token packing
+
+### block table: token 위치에서 KV cache 주소로
+
+### scheduler의 block 소유와 재사용
+
+### padding이 남는 곳: CUDA graph
+
+## 마치며
