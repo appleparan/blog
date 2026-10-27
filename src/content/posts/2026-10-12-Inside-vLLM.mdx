@@ -122,7 +122,15 @@ API server 하나로 띄우는 `run_server()`는 두 함수를 차례로 부른�
 
 `build_and_serve()`는 엔진에게 지원하는 task 목록([`SupportedTask`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/tasks.py#L43))과 `model_config`를 받아 온다. task 목록에는 `generate` 같은 생성 task와 `embed` 같은 pooling task가 들어 있다. `build_app()`은 이 목록에 맞는 route만 FastAPI app에 등록하고, `init_app_state()`는 handler를 준비한다. 마지막으로 [`serve_http()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L175)를 부른다.
 
-`serve_http()`는 Uvicorn 설정을 만들고, `server.serve()` coroutine을 event loop에 task로 올린다. event loop가 이 task를 실행하면 Uvicorn이 시작하면서 소켓에 `listen()`을 부른다. `accept()`는 그 뒤 요청이 들어올 때마다 일어난다. 이때 Uvicorn 서버로 [`NoSignalServer`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L45)를 쓴다. 이 서버는 SIGINT와 SIGTERM handler를 설치하지 않는다. vLLM이 직접 등록한 종료 handler와 Uvicorn의 handler가 충돌하기 때문이다. vLLM은 종료할 때 HTTP 서버뿐 아니라 엔진도 정리해야 한다.
+[`serve_http()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L175)는 Uvicorn 설정을 만들고, `server.serve()` coroutine을 event loop에 task로 올린다. event loop가 이 task를 실행하면 Uvicorn이 시작하면서 소켓에 `listen()`을 부른다. `accept()`는 그 뒤 요청이 들어올 때마다 일어난다. 이때 Uvicorn 서버로 [`NoSignalServer`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L45)를 쓴다. 이 서버는 SIGINT와 SIGTERM handler를 설치하지 않는다. vLLM이 직접 등록한 종료 handler와 Uvicorn의 handler가 충돌하기 때문이다. vLLM은 종료할 때 HTTP 서버뿐 아니라 엔진도 정리해야 한다.
+
+`server.serve()` 다음부터는 Uvicorn 코드다. 아래 그림은 vLLM 개발 환경에 설치된 Uvicorn 0.52.4 기준이다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/02b-serve-tree-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/02b-serve-tree-dark.svg"
+  caption="serve_http()가 올린 Uvicorn task의 흐름. startup()에서 bind된 소켓에 listen을 시작하고, main_loop()에서 종료 신호를 기다린다."
+/>
 
 ### 3. CLI 인자에서 `VllmConfig`까지
 
