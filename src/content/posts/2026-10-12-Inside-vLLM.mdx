@@ -24,7 +24,7 @@ import Figure from '../../components/Figure.astro';
 
 ## 큰 그림
 
-코드를 따라가기 전에 전체 구조부터 보고 가자.
+LLM이 하는 일은 결국 token 계산이다. prompt token을 계산하고, 그 결과로 다음 token을 하나씩 만든다. vLLM은 이 token 계산을 요청 하나씩 끝까지 하지 않고, 잘게 쪼개서 여러 요청의 것을 함께 계산한다. 코드를 따라가기 전에, 이 쪼개는 방식과 그것을 돌리는 전체 구조부터 보고 가자.
 
 ### step: LLM 요청을 쪼개는 단위
 
