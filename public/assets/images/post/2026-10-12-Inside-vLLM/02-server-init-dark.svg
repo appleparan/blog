@@ -42,50 +42,50 @@
     <rect x="56" y="56" width="224" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
     <rect x="64" y="64" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
     <text x="72.0" y="73" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">1</text>
-    <text x="168.0" y="76" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">vllm serve</text>
-    <text x="168.0" y="91" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">serve.py picks run_server</text>
+    <text x="168.0" y="76" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Server mode selection</text>
+    <text x="168.0" y="91" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">vllm serve · run_server()</text>
     <rect x="56" y="128" width="224" height="44" rx="6" fill="#2d3142"/>
     <rect x="56" y="128" width="224" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
     <rect x="64" y="136" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
     <text x="72.0" y="145" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">2</text>
-    <text x="168.0" y="148" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">setup_server</text>
-    <text x="168.0" y="163" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">bind socket, no accept yet</text>
+    <text x="168.0" y="148" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Socket bind</text>
+    <text x="168.0" y="163" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">setup_server()</text>
     <rect x="56" y="200" width="224" height="44" rx="6" fill="#2d3142"/>
     <rect x="56" y="200" width="224" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
     <rect x="64" y="208" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
     <text x="72.0" y="217" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">3</text>
-    <text x="168.0" y="220" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">VllmConfig</text>
-    <text x="168.0" y="235" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">EngineArgs · create_engine_config</text>
+    <text x="168.0" y="220" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Engine config</text>
+    <text x="168.0" y="235" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">create_engine_config() · VllmConfig</text>
     <rect x="56" y="272" width="224" height="44" rx="6" fill="#2d3142"/>
     <rect x="56" y="272" width="224" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
     <rect x="64" y="280" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
     <text x="72.0" y="289" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">4</text>
-    <text x="168.0" y="292" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">AsyncLLM</text>
-    <text x="168.0" y="307" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">renderer · processors · MP client</text>
+    <text x="168.0" y="292" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Engine client</text>
+    <text x="168.0" y="307" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">AsyncLLM · AsyncMPClient</text>
     <rect x="56" y="488" width="224" height="44" rx="6" fill="#2d3142"/>
     <rect x="56" y="488" width="224" height="44" rx="6" fill="rgba(240,138,89,0.10)" stroke="#f08a59" stroke-width="1"/>
     <rect x="64" y="496" width="16" height="12" rx="2" fill="transparent" stroke="#f08a59" stroke-opacity="0.5" stroke-width="0.8"/>
     <text x="72.0" y="505" fill="#f08a59" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">6</text>
-    <text x="168.0" y="508" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">build_app · serve_http</text>
-    <text x="168.0" y="523" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">routes · app state · Uvicorn</text>
+    <text x="168.0" y="508" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">HTTP serving</text>
+    <text x="168.0" y="523" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">build_app() · serve_http()</text>
     <rect x="360" y="272" width="224" height="44" rx="6" fill="#2d3142"/>
     <rect x="360" y="272" width="224" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
     <rect x="368" y="280" width="20" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
     <text x="378.0" y="289" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">5A</text>
-    <text x="472.0" y="292" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Executor · Worker</text>
-    <text x="472.0" y="307" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">init_device · load_model</text>
+    <text x="472.0" y="292" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Model load</text>
+    <text x="472.0" y="307" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">init_device() · load_model()</text>
     <rect x="360" y="344" width="224" height="44" rx="6" fill="#2d3142"/>
     <rect x="360" y="344" width="224" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
     <rect x="368" y="352" width="20" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
     <text x="378.0" y="361" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">5B</text>
-    <text x="472.0" y="364" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">KV cache</text>
-    <text x="472.0" y="379" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">profile memory · GPU blocks</text>
+    <text x="472.0" y="364" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">KV cache allocation</text>
+    <text x="472.0" y="379" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">_initialize_kv_caches()</text>
     <rect x="360" y="416" width="224" height="44" rx="6" fill="#2d3142"/>
     <rect x="360" y="416" width="224" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
     <rect x="368" y="424" width="20" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
     <text x="378.0" y="433" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">5C</text>
-    <text x="472.0" y="436" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Scheduler</text>
-    <text x="472.0" y="451" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">token budget · KV cache manager</text>
+    <text x="472.0" y="436" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Scheduler setup</text>
+    <text x="472.0" y="451" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">Scheduler · KVCacheManager</text>
   </g>
   <g>
     <line x1="40" y1="572" x2="600" y2="572" stroke="rgba(245,245,245,0.1)" stroke-width="0.8"/>
@@ -94,6 +94,10 @@
     <text x="60" y="610" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Starts serving</text>
     <line x1="148" y1="607" x2="176" y2="607" stroke="#f08a59" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-accent)"/>
     <text x="182" y="610" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Engine ready</text>
+    <text x="268" y="610" fill="#f5f5f5" font-size="9" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Name</text>
+    <text x="296" y="610" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Role of the step</text>
+    <text x="388" y="610" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace">code()</text>
+    <text x="426" y="610" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Code identifier, () marks a function</text>
   </g>
   </g>
 </svg>
