@@ -90,13 +90,21 @@ step마다 나온 token ID는 frontend로 돌아간다. streaming 요청이면 �
 
 ### 1. `vllm serve`와 서버 모드 선택
 
-`vllm serve`를 한다고 하자. `vllm/entrypoints/cli/main.py`를 통해 `vllm/entrypoints/cli/serve.py`로 실행하게 된다.
-외부 LB라던가 Multiport같은 특수한 옵션을 주지 않는다면, Single API Server가 올라오게 된다.
+`vllm serve`를 실행하면 [`vllm/entrypoints/cli/main.py`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/cli/main.py)가 subcommand를 찾아 [`vllm/entrypoints/cli/serve.py`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/cli/serve.py)의 `ServeSubcommand.cmd()`를 부른다. 이 함수가 옵션을 보고 서버를 어떤 모드로 띄울지 정한다. 외부 load balancer나 multi-port 같은 특수한 옵션을 주지 않으면, 지금 프로세스에서 API server 하나가 [`run_server()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L165-L177)로 올라온다.
 
 ```python
+# Single API server (this process).
 args.api_server_count = None
 uvloop.run(run_server(args))
 ```
+
+다른 모드는 아래 세 가지다.
+
+- [`run_dp_supervisor()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/dp_supervisor.py#L562): `--data-parallel-multi-port-external-lb`를 주면 쓰인다. `DPSupervisor`가 이 노드의 DP rank마다 vLLM 서버 프로세스를 하나씩 띄우고, 각 서버는 자기 port로 요청을 받는다.
+- [`run_headless()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/cli/serve.py#L181): `--headless`를 주면 쓰인다. API server 없이 EngineCore만 띄우고, 요청은 다른 노드의 frontend에서 받는다. 주로 vLLM을 여러 노드에 띄울 때 worker 노드에서 쓴다.
+- [`run_multi_api_server()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/cli/serve.py#L269): API server가 둘 이상이거나 Rust frontend를 쓰면 쓰인다. DP(data parallelism)를 켜고 API server 수를 따로 정하지 않으면 그 기본값이 DP 크기가 되므로, 이 경로로 온다.
+
+Rust frontend가 Python API server를 완전히 대체하면, `run_server()`도 결국 Rust frontend만 띄우게 될 것으로 본다. 이 글은 우선 `run_server()` 경로만 따라간다.
 
 API server 수와 EngineCore 수는 따로 정한다. API server를 늘리면(예: `--api-server-count 2`) tokenize와 응답 직렬화 같은 frontend의 CPU 작업을 여러 프로세스가 나눠 지고, engine은 하나를 공유한다. data parallelism은 반대로 engine과 model replica를 늘린다. 이 글은 둘 다 하나인 구성만 다룬다.
 
