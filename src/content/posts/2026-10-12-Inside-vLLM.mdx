@@ -58,8 +58,8 @@ LLM은 token을 하나씩 만든다. 요청은 이 token 생성을 묶은 단위
 그림의 상자를 위에서부터 차례로 보면 이렇다.
 
 - **API SERVER PROCESS**는 HTTP 요청을 엔진 요청으로, 엔진 출력을 HTTP 응답으로 바꾼다.
-    - **FastAPI app**: router가 HTTP 요청을 받아 `ChatCompletionRequest`로 검증한다. handler인 `OpenAIServingChat`이 chat template을 적용하고 tokenizer로 token화한다. 돌아온 결과는 JSON이나 SSE 응답으로 만든다.
-    - **AsyncLLM**: 엔진 client다. `InputProcessor`가 엔진 요청을 만들고, ZMQ client가 EngineCore와 요청과 결과를 주고받고, `OutputProcessor`가 token ID를 text로 바꾼다.
+    - **FastAPI app**: OpenAI 호환 HTTP 서버다. FastAPI router가 `/v1/chat/completions` 같은 endpoint로 들어온 요청을 받아 `ChatCompletionRequest`로 검증한다. 그 다음 endpoint의 handler인 `OpenAIServingChat`이 chat template으로 메시지 목록을 prompt 하나로 만들고, tokenizer로 token ID로 바꾼다. 엔진이 돌려준 결과는 다시 JSON이나 SSE 응답으로 만든다.
+    - **AsyncLLM**: API server 안에서 엔진 역할을 대신하는 객체다. 실제 엔진은 EngineCore 프로세스에 있으므로, EngineCore 쪽에서 보면 AsyncLLM은 client다. handler는 AsyncLLM의 `generate()`를 부르고 결과를 기다린다. 안에서는 `InputProcessor`가 token ID와 sampling parameter로 엔진 요청인 `EngineCoreRequest`를 만든다. ZMQ client는 이 요청을 EngineCore로 보내고 결과를 받아 온다. `OutputProcessor`는 돌아온 token ID를 text로 바꿔(detokenize) handler에 넘긴다.
     - 지금은 Python 구현이다. Rust frontend로 전환하는 작업이 진행 중이지만 아직 빠진 기능이 있어서, 이 글은 Python frontend로 설명한다.
 - **ENGINECORE PROCESS**는 busy loop를 돌며 ZMQ로 받은 요청을 Scheduler에 넣고, step을 실행하고, 결과를 AsyncLLM으로 보낸다.
     - **Scheduler**: 대기 중인 요청과 실행 중인 요청을 보고, token budget과 priority에 따라 이번 step에 요청마다 계산할 token 수를 정한다. 안에 있는 KV cache manager가 KV cache block을 요청에 할당하고, 끝난 요청의 block을 회수한다.
