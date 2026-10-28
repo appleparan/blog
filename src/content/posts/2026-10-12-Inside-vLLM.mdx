@@ -14,7 +14,7 @@ import Figure from '../../components/Figure.astro';
 
 ## Introduction
 
-예전에 Inside vLLM: Anatomy of a High-Throughput LLM Inference System을 읽고는 '아, 그렇구나' 하고 넘어간 적이 있다. 그런데 막상 누군가에게 설명하려니 말이 제대로 나오지 않았다. 분명 읽을 때는 이해했다고 생각했는데, 정작 내 언어로 설명할 수 없다는 사실이 꽤 부끄러웠다.
+예전에 [Inside vLLM: Anatomy of a High-Throughput LLM Inference System](https://www.aleksagordic.com/blog/vllm)을 읽고는 '아, 그렇구나' 하고 넘어간 적이 있다. 그런데 막상 누군가에게 설명하려니 말이 제대로 나오지 않았다. 예전에 비슷한 내용을 [코드](https://github.com/appleparan/nano-vllm-rs)를 통해서도 공부하고 작동원리를 이해했다고 생각했지만, 정작 내가 설명할 때는 기억도 잘 나지 않고 제대로 설명할 수 없다는 사실이 꽤 부끄러웠다.
 
 이럴 때 가장 좋은 방법은 역시 직접 글로 정리해 보는 것이다. 코드를 따라가며 이해한 내용을 내 방식대로 풀어 쓰다 보면, 적어도 쉽게 잊어버리지는 않는다.
 
@@ -24,11 +24,13 @@ import Figure from '../../components/Figure.astro';
 
 ## 큰 그림
 
-코드를 따라가기 전에 전체 구조부터 보고 가자.
+LLM은 token을 하나씩 만든다. 요청은 이 token 생성을 묶은 단위다. prompt를 받아 output token을 끝까지 만들어 내는 일 전체가 요청 하나다. vLLM은 이 요청을 한꺼번에 처리하지 않고 step으로 다시 쪼갠다. step은 GPU forward 한 번이고, step 한 번에 각 요청은 자기 token을 몇 개씩만 계산한다. 그래서 요청 하나는 여러 step에 걸쳐 끝나고, step 하나에는 여러 요청의 token이 함께 들어간다.
 
-### step: vLLM이 요청을 처리하는 단위
+코드를 따라가기 전에 이 관계와, 이것을 돌리는 전체 구조부터 보고 가자.
 
-그 전에 vLLM이 요청을 어떻게 처리하는지부터 알아야 한다. vLLM은 요청 단위가 아니라 step이라는 시간 단위로 일한다. 요청을 하나씩 끝까지 처리하지 않고, step을 돌리면서 step 한 번에 살아 있는 요청 전부를 한꺼번에 조금씩 진행시킨다. prefill 중인 요청은 prompt token을 한 조각 더 계산하고, decode 중인 요청은 다음 token을 하나 더 만든다.
+### step: LLM 요청을 쪼개는 단위
+
+그 전에 vLLM이 요청을 어떻게 처리하는지부터 알아야 한다. vLLM 구조를 이해하는 출발점은 LLM 요청 하나를 여러 step으로 쪼갠다는 점이다. vLLM은 요청 단위가 아니라 step이라는 시간 단위로 일한다. 요청을 하나씩 끝까지 처리하지 않고, step을 돌리면서 step 한 번에 살아 있는 요청 전부를 한꺼번에 조금씩 진행시킨다. prefill 중인 요청은 prompt token을 한 조각 더 계산하고, decode 중인 요청은 다음 token을 하나 더 만든다.
 
 <Figure
   src="/assets/images/post/2026-10-12-Inside-vLLM/00-step-timeline-light.svg"
@@ -56,8 +58,8 @@ import Figure from '../../components/Figure.astro';
 그림의 상자를 위에서부터 차례로 보면 이렇다.
 
 - **API SERVER PROCESS**는 HTTP 요청을 엔진 요청으로, 엔진 출력을 HTTP 응답으로 바꾼다.
-    - **FastAPI app**: router가 HTTP 요청을 받아 `ChatCompletionRequest`로 검증한다. handler인 `OpenAIServingChat`이 chat template을 적용하고 tokenizer로 token화한다. 돌아온 결과는 JSON이나 SSE 응답으로 만든다.
-    - **AsyncLLM**: 엔진 client다. `InputProcessor`가 엔진 요청을 만들고, ZMQ client가 EngineCore와 요청과 결과를 주고받고, `OutputProcessor`가 token ID를 text로 바꾼다.
+    - **FastAPI app**: FastAPI router가 HTTP 요청을 받는다. chat template과 tokenizer로 prompt를 token ID로 바꿔 AsyncLLM에 넘기고, 돌아온 결과를 JSON이나 SSE로 응답한다.
+    - **AsyncLLM**: EngineCore를 부르는 engine client다. 요청을 ZMQ로 EngineCore에 보내고, 돌아온 출력을 FastAPI app에 넘긴다.
     - 지금은 Python 구현이다. Rust frontend로 전환하는 작업이 진행 중이지만 아직 빠진 기능이 있어서, 이 글은 Python frontend로 설명한다.
 - **ENGINECORE PROCESS**는 busy loop를 돌며 ZMQ로 받은 요청을 Scheduler에 넣고, step을 실행하고, 결과를 AsyncLLM으로 보낸다.
     - **Scheduler**: 대기 중인 요청과 실행 중인 요청을 보고, token budget과 priority에 따라 이번 step에 요청마다 계산할 token 수를 정한다. 안에 있는 KV cache manager가 KV cache block을 요청에 할당하고, 끝난 요청의 block을 회수한다.
@@ -88,31 +90,91 @@ step마다 나온 token ID는 frontend로 돌아간다. streaming 요청이면 �
 
 ### 1. `vllm serve`와 서버 모드 선택
 
-`vllm serve`를 한다고 하자. `vllm/entrypoints/cli/main.py`를 통해 `vllm/entrypoints/cli/serve.py`로 실행하게 된다.
-외부 LB라던가 Multiport같은 특수한 옵션을 주지 않는다면, Single API Server가 올라오게 된다.
+`vllm serve`를 실행하면 [`vllm/entrypoints/cli/main.py`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/cli/main.py)가 subcommand를 찾아 [`vllm/entrypoints/cli/serve.py`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/cli/serve.py)의 `ServeSubcommand.cmd()`를 부른다. 이 함수가 옵션을 보고 서버를 어떤 모드로 띄울지 정한다. 외부 load balancer나 multi-port 같은 특수한 옵션을 주지 않으면, 지금 프로세스에서 API server 하나가 [`run_server()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L165-L177)로 올라온다.
 
 ```python
+# Single API server (this process).
 args.api_server_count = None
 uvloop.run(run_server(args))
 ```
+
+다른 모드는 아래 세 가지다.
+
+- [`run_dp_supervisor()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/dp_supervisor.py#L562): `--data-parallel-multi-port-external-lb`를 주면 쓰인다. `DPSupervisor`가 이 노드의 DP rank마다 vLLM 서버 프로세스를 하나씩 띄우고, 각 서버는 자기 port로 요청을 받는다.
+- [`run_headless()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/cli/serve.py#L181): `--headless`를 주면 쓰인다. API server 없이 EngineCore만 띄우고, 요청은 다른 노드의 frontend에서 받는다. 주로 vLLM을 여러 노드에 띄울 때 worker 노드에서 쓴다.
+- [`run_multi_api_server()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/cli/serve.py#L269): API server가 둘 이상이거나 Rust frontend를 쓰면 쓰인다. DP(data parallelism)를 켜고 API server 수를 따로 정하지 않으면 그 기본값이 DP 크기가 되므로, 이 경로로 온다.
+
+Rust frontend가 Python API server를 완전히 대체하면, `run_server()`도 결국 Rust frontend만 띄우게 될 것으로 본다. 이 글은 우선 `run_server()` 경로만 따라간다.
 
 API server 수와 EngineCore 수는 따로 정한다. API server를 늘리면(예: `--api-server-count 2`) tokenize와 응답 직렬화 같은 frontend의 CPU 작업을 여러 프로세스가 나눠 지고, engine은 하나를 공유한다. data parallelism은 반대로 engine과 model replica를 늘린다. 이 글은 둘 다 하나인 구성만 다룬다.
 
 ### 2. 소켓 bind와 `run_server_worker`
 
-Single API 서버는 `setup_server` 후 `run_server_worker`를 실행한다. [`vllm/entrypoints/launchers/api_server/entry.py`](https://github.com/vllm-project/vllm/blob/main/vllm/entrypoints/launchers/api_server/entry.py#L164)
+API server 하나로 띄우는 `run_server()`는 두 함수를 차례로 부른다. [`setup_server()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L378)가 소켓을 만들어 주소에 bind하고, [`run_server_worker()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L180)가 엔진 client를 만든 뒤 HTTP 서버를 띄운다.
 
-`setup_server`는 로깅 셋업, parser plugin 로드, argument 검증 후 포트(소켓)을 열게 된다.
-실질적으로 메인역할을 하는건 `run_server_worker`이다.
-`run_server_worker`: `setup_server`로 연 소켓을 받아서 엔진 클라이언트(`AsyncLLM`)를 만들고, FastAPI 앱을 구성한 뒤 `uvicorn`으로 서빙한다. 물론 종료 처리도 이 함수가 처리한다.
+`setup_server()`는 vLLM 버전과 기본값이 아닌 인자를 log로 남기고, tool parser와 reasoning parser plugin을 load하고, 인자를 검증한다. 그 다음 소켓을 만들어 bind한다. 기본은 [`create_server_socket()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L335)이 만드는 TCP 소켓이다. `--uds`로 경로를 주면 [`create_server_unix_socket()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L353)이 Unix domain socket을 만든다. 같은 호스트의 reverse proxy가 vLLM과 통신할 때 이 방식을 쓴다.
+
+소켓을 엔진보다 먼저 bind하는 데는 이유가 있다. 코드 주석에 따르면, 엔진을 준비하기 전에 port를 잡아 두어 Ray와의 race condition을 피하려는 것이다([#8204](https://github.com/vllm-project/vllm/issues/8204)). port가 이미 쓰이고 있으면 무거운 엔진 초기화를 시작하기 전에 바로 실패하는 효과도 있다.
+
+서버 소켓은 `socket() → bind() → listen() → accept()` 순서로 열린다. `setup_server()`는 `bind()`까지만 한다. 그래서 엔진을 준비하는 동안 port는 잡혀 있지만, 요청은 아직 받지 않는다. `listen()`과 `accept()`는 뒤에 나오는 `serve_http()`에서 일어난다.
+
+[`run_server_worker()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L180)도 tool parser와 reasoning parser plugin을 import한다. API server를 여러 개 띄우면 이 함수가 새 프로세스마다 따로 시작되기 때문이다. 그 다음 [`build_async_engine_client()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L36)로 엔진 client인 `AsyncLLM`을 만들고 [`build_and_serve()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L116)를 부른다. 서버가 끝나면 엔진을 정리하고 소켓을 닫는 일도 이 함수가 한다.
+
+엔진 초기화는 모두 `build_async_engine_client()` 안에서 일어난다. 이 함수가 반환되기 전에 설정 생성, EngineCore 프로세스 시작, model load와 KV cache 할당이 모두 끝난다. 3~5번이 이 과정을, 6번이 그 뒤의 `build_and_serve()`를 다룬다.
 
 ### 3. CLI 인자에서 `VllmConfig`까지
 
+3번은 [`build_async_engine_client()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L36)에서 시작한다. 이 함수는 CLI 인자를 두 단계에 걸쳐 엔진 설정으로 바꾼다.
+
+먼저 [`AsyncEngineArgs.from_cli_args()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/engine/arg_utils.py#L1933)가 argparse `Namespace`에서 `EngineArgs` dataclass의 field와 이름이 같은 값만 골라 `AsyncEngineArgs`를 만든다([entry.py#L53](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L53)). 이 단계는 값을 옮겨 담기만 한다.
+
+그 다음 [`build_async_engine_client_from_engine_args()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L70)가 [`create_engine_config()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/engine/arg_utils.py#L2205)를 부른다. 실제 설정은 이 함수가 만든다. 먼저 [`create_model_config()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/engine/arg_utils.py#L1943)로 `ModelConfig`를 만든다. 이때 model의 Hugging Face config를 읽고 `max_model_len`을 정한다. 그 뒤 `CacheConfig`, `ParallelConfig`, `SchedulerConfig` 같은 하위 설정을 차례로 만들고, 마지막에 이것들을 모아 [`VllmConfig`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/engine/arg_utils.py#L2838)를 조립한다.
+
+`VllmConfig`의 [`__post_init__()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L1414)는 하위 설정끼리 서로 맞는지 검사하고, 정하지 않은 값을 채운다. compilation mode 같은 값이 여기서 정해진다. 이후 API server와 EngineCore의 컴포넌트는 모두 이 `VllmConfig` 하나를 받아 필요한 하위 설정을 꺼내 쓴다.
+
 ### 4. `AsyncLLM`과 EngineCore 프로세스 생성
+
+`VllmConfig`가 준비되면 [`AsyncLLM.from_vllm_config()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L95)가 엔진 client를 만든다. [`AsyncLLM.__init__()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L87)은 API server 프로세스에 남는 부품을 먼저 만든다.
+
+- [`renderer`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L158): tokenizer와 chat template으로 prompt를 만든다.
+- [`InputProcessor`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L161): 요청을 EngineCore가 받는 `EngineCoreRequest`로 바꾼다.
+- [`OutputProcessor`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L171): EngineCore가 돌려준 token ID를 detokenize해서 `RequestOutput`으로 바꾼다.
+
+그 다음 [`EngineCoreClient.make_async_mp_client()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core_client.py#L137)를 부른다([async_llm.py#L184](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L184)). DP를 쓰지 않으면 이 함수는 [`AsyncMPClient`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core_client.py#L1106)를 돌려준다. EngineCore 프로세스는 이 client의 부모 클래스 [`MPClient.__init__()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core_client.py#L595)에서 생긴다.
+
+`MPClient.__init__()`은 먼저 ZMQ 소켓 두 개를 bind한다. 요청을 보내는 ROUTER 소켓과 출력을 받는 PULL 소켓이다. 그 다음 [`launch_core_engines()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/utils.py#L1198)가 handshake용 소켓을 열고, `CoreEngineProcManager`가 [`EngineCoreProc.run_engine_core()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/utils.py#L282-L283)를 target으로 새 프로세스를 시작한다.
+
+두 프로세스는 handshake로 연결된다. EngineCore가 HELLO를 보내면 API server가 ZMQ 소켓 주소를 돌려준다. EngineCore는 준비를 마친 뒤 READY를 보낸다. `launch_core_engines()`의 `with` 블록이 끝날 때 [`wait_for_engine_startup()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/utils.py#L1361)이 이 READY를 기다린다. 그래서 `AsyncLLM` 생성은 EngineCore가 5번의 준비를 끝낼 때까지 반환되지 않는다.
 
 ### 5. EngineCore 준비: model, KV cache, scheduler
 
+새 프로세스는 [`EngineCoreProc.run_engine_core()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1391)에서 시작한다. 이 함수가 `EngineCoreProc`를 만든다. [`EngineCoreProc.__init__()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1135)은 [`_perform_handshakes()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1250) context를 열어 HELLO를 보내고 ZMQ 주소를 받는다. 그리고 그 context 안에서 [`EngineCore.__init__()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L118)을 부른다([core.py#L1194](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1194)).
+
+`EngineCore.__init__()`은 model, KV cache, scheduler를 이 순서로 준비한다. 뒤 단계가 앞 단계의 결과를 쓰기 때문이다.
+
+model은 [`executor_class(vllm_config)`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L144)에서 올라온다. GPU 하나로 띄우면 executor는 `UniProcExecutor`이고, 이 프로세스 안에 Worker를 하나 만든다. Worker의 [`init_device()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu_worker.py#L436)가 CUDA device와 분산 환경을 초기화하고, [`load_model()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu_worker.py#L587)이 model runner를 통해 weight를 GPU에 올린다. tensor parallelism을 쓰면 `MultiprocExecutor`가 GPU마다 worker 프로세스를 따로 띄운다.
+
+KV cache는 [`_initialize_kv_caches()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L261)가 준비한다([core.py#L157](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L157)). 먼저 layer별 KV cache 형태를 모은다. 그 다음 Worker의 [`determine_available_memory()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu_worker.py#L634)가 dummy 입력으로 forward를 한 번 돌려 메모리 사용량을 잰다. `gpu_memory_utilization`으로 잡은 메모리에서 weight와 activation이 쓰는 몫을 뺀 나머지가 KV cache 몫이다. 이 크기로 block 수를 정하고, [`initialize_from_config()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L377)가 KV cache tensor를 할당한다. 이어서 [`compile_or_warm_up_model()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L379)이 model을 warm up하고 CUDA graph를 capture한다.
+
+scheduler는 [`Scheduler(...)`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L174)로 만든다. 앞에서 정한 KV cache 설정을 받아 [`KVCacheManager`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L328)를 만든다. 요청에 KV block을 나눠 주려면 전체 block 수를 알아야 하므로, scheduler는 KV cache 다음에 생긴다.
+
+`EngineCore.__init__()`이 끝나면 `EngineCoreProc`은 ZMQ 입출력 thread를 띄운다. 그 다음 `_perform_handshakes()` context를 빠져나가면서 READY를 보낸다([core.py#L1338-L1350](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1338-L1350)). 마지막으로 [`run_busy_loop()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1547)에 들어가 요청을 기다린다. 이 loop가 뒤에서 볼 step loop다.
+
 ### 6. route 등록과 Uvicorn 실행
+
+다시 2번의 [`run_server_worker()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L180)로 돌아온다. `AsyncLLM`이 반환되면 `run_server_worker()`는 [`build_and_serve()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L116)를 부른다. 이 함수는 먼저 엔진에게 지원하는 task 목록([`SupportedTask`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/tasks.py#L43))과 `model_config`를 받아 온다. task 목록에는 `generate` 같은 생성 task와 `embed` 같은 pooling task가 들어 있다.
+
+[`build_app()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/app.py#L19)은 FastAPI app을 만들고, [`register_api_routers()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/routers.py#L12)로 이 목록에 맞는 route만 등록한다. 예를 들어 `generate`가 있으면 `/v1/chat/completions` 같은 생성 route를 붙인다. [`init_app_state()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/app_state.py#L24)는 route가 쓸 handler를 `app.state`에 만들어 둔다. chat 요청을 처리하는 `OpenAIServingChat`도 여기서 생긴다. 마지막으로 [`serve_http()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L175)를 부른다.
+
+[`serve_http()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L175)는 Uvicorn 설정을 만들고, `server.serve()` coroutine을 event loop에 task로 올린다. event loop가 이 task를 실행하면 Uvicorn이 시작하면서 소켓에 `listen()`을 부른다. `accept()`는 그 뒤 요청이 들어올 때마다 일어난다. 이때 Uvicorn 서버로 [`NoSignalServer`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L45)를 쓴다. 이 서버는 SIGINT와 SIGTERM handler를 설치하지 않는다. vLLM이 직접 등록한 종료 handler와 Uvicorn의 handler가 충돌하기 때문이다. vLLM은 종료할 때 HTTP 서버뿐 아니라 엔진도 정리해야 한다.
+
+`server.serve()` 다음부터는 Uvicorn 코드다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/02b-serve-tree-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/02b-serve-tree-dark.svg"
+  caption="serve_http()가 올린 Uvicorn task의 흐름. startup()에서 bind된 소켓에 listen을 시작하고, main_loop()에서 종료 신호를 기다린다. (Uvicorn 0.52.4 기준)"
+/>
 
 ## 요청 처리
 
