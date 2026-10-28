@@ -118,6 +118,12 @@ API server 하나로 띄우는 `run_server()`는 두 함수를 차례로 부른�
 
 서버 소켓은 `socket() → bind() → listen() → accept()` 순서로 열린다. `setup_server()`는 `bind()`까지만 한다. 그래서 엔진을 준비하는 동안 port는 잡혀 있지만, 요청은 아직 받지 않는다. `listen()`과 `accept()`는 뒤에 나오는 `serve_http()`에서 일어난다.
 
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/02-2-socket-lifecycle-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/02-2-socket-lifecycle-dark.svg"
+  caption="서버 소켓의 상태 변화. bind와 listen 사이에 엔진 초기화가 들어가고, 이 동안 port는 잡혀 있지만 연결은 거절된다."
+/>
+
 [`run_server_worker()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L180)도 tool parser와 reasoning parser plugin을 import한다. API server를 여러 개 띄우면 이 함수가 새 프로세스마다 따로 시작되기 때문이다. 그 다음 [`build_async_engine_client()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L36)로 엔진 client인 `AsyncLLM`을 만들고 [`build_and_serve()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L116)를 부른다. 서버가 끝나면 엔진을 정리하고 소켓을 닫는 일도 이 함수가 한다.
 
 엔진 초기화는 모두 `build_async_engine_client()` 안에서 일어난다. 이 함수가 반환되기 전에 설정 생성, EngineCore 프로세스 시작, model load와 KV cache 할당이 모두 끝난다. 3~5번이 이 과정을, 6번이 그 뒤의 `build_and_serve()`를 다룬다.
@@ -131,6 +137,12 @@ API server 하나로 띄우는 `run_server()`는 두 함수를 차례로 부른�
 그 다음 [`build_async_engine_client_from_engine_args()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L70)가 [`create_engine_config()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/engine/arg_utils.py#L2205)를 부른다. 실제 설정은 이 함수가 만든다. 먼저 [`create_model_config()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/engine/arg_utils.py#L1943)로 `ModelConfig`를 만든다. 이때 model의 Hugging Face config를 읽고 `max_model_len`을 정한다. 그 뒤 `CacheConfig`, `ParallelConfig`, `SchedulerConfig` 같은 하위 설정을 차례로 만들고, 마지막에 이것들을 모아 [`VllmConfig`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/engine/arg_utils.py#L2838)를 조립한다.
 
 `VllmConfig`의 [`__post_init__()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L1414)는 하위 설정끼리 서로 맞는지 검사하고, 정하지 않은 값을 채운다. compilation mode 같은 값이 여기서 정해진다. 이후 API server와 EngineCore의 컴포넌트는 모두 이 `VllmConfig` 하나를 받아 필요한 하위 설정을 꺼내 쓴다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/02-3-config-flow-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/02-3-config-flow-dark.svg"
+  caption="CLI 인자가 VllmConfig가 되는 과정. 하위 설정은 대표 네 개만 그렸다."
+/>
 
 ### 4. `AsyncLLM`과 EngineCore 프로세스 생성
 
@@ -146,15 +158,27 @@ API server 하나로 띄우는 `run_server()`는 두 함수를 차례로 부른�
 
 두 프로세스는 handshake로 연결된다. EngineCore가 HELLO를 보내면 API server가 ZMQ 소켓 주소를 돌려준다. EngineCore는 준비를 마친 뒤 READY를 보낸다. `launch_core_engines()`의 `with` 블록이 끝날 때 [`wait_for_engine_startup()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/utils.py#L1361)이 이 READY를 기다린다. 그래서 `AsyncLLM` 생성은 EngineCore가 5번의 준비를 끝낼 때까지 반환되지 않는다.
 
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/02-4-engine-handshake-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/02-4-engine-handshake-dark.svg"
+  caption="API server와 EngineCore의 handshake. API server는 READY를 받을 때까지 기다린다."
+/>
+
 ### 5. EngineCore 준비: model, KV cache, scheduler
 
 새 프로세스는 [`EngineCoreProc.run_engine_core()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1391)에서 시작한다. 이 함수가 `EngineCoreProc`를 만든다. [`EngineCoreProc.__init__()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1135)은 [`_perform_handshakes()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1250) context를 열어 HELLO를 보내고 ZMQ 주소를 받는다. 그리고 그 context 안에서 [`EngineCore.__init__()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L118)을 부른다([core.py#L1194](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1194)).
 
 `EngineCore.__init__()`은 model, KV cache, scheduler를 이 순서로 준비한다. 뒤 단계가 앞 단계의 결과를 쓰기 때문이다.
 
-model은 [`executor_class(vllm_config)`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L144)에서 올라온다. GPU 하나로 띄우면 executor는 `UniProcExecutor`이고, 이 프로세스 안에 Worker를 하나 만든다. Worker의 [`init_device()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu_worker.py#L436)가 CUDA device와 분산 환경을 초기화하고, [`load_model()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu_worker.py#L587)이 model runner를 통해 weight를 GPU에 올린다. tensor parallelism을 쓰면 `MultiprocExecutor`가 GPU마다 worker 프로세스를 따로 띄운다.
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/02-5-enginecore-memory-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/02-5-enginecore-memory-dark.svg"
+  caption="EngineCore 준비 단계별 GPU 메모리. 막대 길이는 비율이 아니라 모양만 보여 준다. WEIGHTS 칸에는 CUDA context 같은 상주 메모리도 들어간다."
+/>
 
-KV cache는 [`_initialize_kv_caches()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L261)가 준비한다([core.py#L157](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L157)). 먼저 layer별 KV cache 형태를 모은다. 그 다음 Worker의 [`determine_available_memory()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu_worker.py#L634)가 dummy 입력으로 forward를 한 번 돌려 메모리 사용량을 잰다. `gpu_memory_utilization`으로 잡은 메모리에서 weight와 activation이 쓰는 몫을 뺀 나머지가 KV cache 몫이다. 이 크기로 block 수를 정하고, [`initialize_from_config()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L377)가 KV cache tensor를 할당한다. 이어서 [`compile_or_warm_up_model()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L379)이 model을 warm up하고 CUDA graph를 capture한다.
+model은 [`executor_class(vllm_config)`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L144)에서 올라온다. GPU 하나로 띄우면 executor는 `UniProcExecutor`이고, 이 프로세스 안에 Worker를 하나 만든다. Worker의 [`init_device()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu_worker.py#L436)가 CUDA device와 분산 환경을 초기화하고, [`load_model()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu_worker.py#L587)이 model runner를 통해 weight를 GPU에 올린다. GPU를 여러 개 쓰면 `MultiprocExecutor`가 GPU마다 worker 프로세스를 따로 띄운다. worker 수는 tensor, pipeline, prefill context parallelism 크기를 곱한 [`world_size`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/parallel.py#L945-L949)다. data parallelism은 EngineCore 자체를 늘리므로, EngineCore 하나에 속한 worker 수에는 들어가지 않는다.
+
+KV cache는 [`_initialize_kv_caches()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L261)가 준비한다([core.py#L157](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L157)). 먼저 layer별 KV cache 형태를 모은다. 그 다음 Worker의 [`determine_available_memory()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu_worker.py#L634)가 dummy 입력으로 forward를 한 번 돌려 메모리 사용량을 잰다. `gpu_memory_utilization`으로 잡은 메모리에서 weight와 activation이 쓰는 몫을 뺀 나머지가 KV cache 몫이다. 이 크기로 block 수를 정하고, [`initialize_from_config()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L377)가 KV cache tensor를 할당한다. 이어서 [`compile_or_warm_up_model()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L379)이 model을 warm up하고 CUDA graph를 capture한다. CUDA graph capture는 batch 크기별로 forward의 GPU kernel 호출 순서를 미리 기록해 두고, 실행할 때 kernel을 하나씩 launch하는 대신 기록을 한 번에 replay하게 만드는 일이다.
 
 scheduler는 [`Scheduler(...)`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L174)로 만든다. 앞에서 정한 KV cache 설정을 받아 [`KVCacheManager`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L328)를 만든다. 요청에 KV block을 나눠 주려면 전체 block 수를 알아야 하므로, scheduler는 KV cache 다음에 생긴다.
 
@@ -171,9 +195,9 @@ scheduler는 [`Scheduler(...)`](https://github.com/vllm-project/vllm/blob/v0.32.
 `server.serve()` 다음부터는 Uvicorn 코드다.
 
 <Figure
-  src="/assets/images/post/2026-10-12-Inside-vLLM/02b-serve-tree-light.svg"
-  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/02b-serve-tree-dark.svg"
-  caption="serve_http()가 올린 Uvicorn task의 흐름. startup()에서 bind된 소켓에 listen을 시작하고, main_loop()에서 종료 신호를 기다린다. (Uvicorn 0.52.4 기준)"
+  src="/assets/images/post/2026-10-12-Inside-vLLM/02-6-serve-tree-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/02-6-serve-tree-dark.svg"
+  caption="build_and_serve()부터 Uvicorn task까지의 흐름. startup()에서 bind된 소켓에 listen을 시작하고, main_loop()에서 종료 신호를 기다린다. (Uvicorn 0.52.4 기준)"
 />
 
 ## 요청 처리

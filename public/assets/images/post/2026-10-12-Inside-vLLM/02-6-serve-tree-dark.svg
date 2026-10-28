@@ -1,7 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 516" width="640" height="516"
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 596" width="640" height="596"
      role="img" aria-labelledby="vllm-serve-tree-dark-title vllm-serve-tree-dark-desc">
-  <title id="vllm-serve-tree-dark-title">What runs after serve_http: the uvicorn server task</title>
-  <desc id="vllm-serve-tree-dark-desc">serve_http in vLLM creates a task for uvicorn Server.serve, which calls _serve. _serve runs three steps in order: startup, main_loop, and shutdown. startup runs the app lifespan startup and then loop.create_server on the bound socket, where asyncio starts listening and gives each connection its own task. main_loop ticks every 0.1 seconds until should_exit is set.</desc>
+  <title id="vllm-serve-tree-dark-title">build_and_serve and the uvicorn server task</title>
+  <desc id="vllm-serve-tree-dark-desc">build_and_serve runs three steps in order: build_app registers the routes, init_app_state creates the handlers, and serve_http creates a task for uvicorn Server.serve. Server.serve calls _serve, which runs startup, main_loop and shutdown in order. startup runs the app lifespan startup and then loop.create_server on the bound socket, where asyncio starts listening and gives each connection its own task. main_loop ticks every 0.1 seconds until should_exit is set. Numbers show the call order inside each parent.</desc>
   <defs>
     <style>
       @font-face { font-family: 'Pretendard'; font-weight: 400; font-style: normal;
@@ -18,70 +18,91 @@
   <rect width="100%" height="100%" fill="#2d3142"/>
   <g transform="translate(0,-8)">
   <g>
-    <rect x="40" y="24" width="560" height="76" rx="8" fill="rgba(245,245,245,0.02)" stroke="rgba(245,245,245,0.1)" stroke-width="0.8"/>
+    <rect x="40" y="24" width="560" height="156" rx="8" fill="rgba(245,245,245,0.02)" stroke="rgba(245,245,245,0.1)" stroke-width="0.8"/>
     <rect x="56" y="28" width="40" height="12" rx="2" fill="#2d3142"/>
     <text x="76.0" y="37" fill="rgba(245,245,245,0.45)" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">VLLM</text>
-    <rect x="40" y="124" width="560" height="312" rx="8" fill="rgba(245,245,245,0.02)" stroke="rgba(245,245,245,0.1)" stroke-width="0.8"/>
-    <rect x="56" y="128" width="64" height="12" rx="2" fill="#2d3142"/>
-    <text x="88.0" y="137" fill="rgba(245,245,245,0.45)" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">UVICORN</text>
-    <path d="M320 88 V148" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <path d="M288 192 V204 A8 8 0 0 1 280 212 H144 A8 8 0 0 0 136 220 V240" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <path d="M320 192 V240" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <path d="M352 192 V204 A8 8 0 0 0 360 212 H496 A8 8 0 0 1 504 220 V240" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <path d="M136 284 V312" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <path d="M136 356 V380" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <rect x="328" y="110" width="72" height="12" rx="2" fill="#2d3142"/>
-    <text x="364.0" y="119" fill="#8e98ac" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">CREATE_TASK</text>
-    <text x="320" y="304" fill="#8e98ac" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">EVERY 0.1 S</text>
-    <text x="320" y="318" fill="#8e98ac" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">UNTIL SHOULD_EXIT</text>
-    <text x="232" y="398" fill="#f08a59" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em">LISTEN() ON THE BOUND SOCKET</text>
-    <text x="232" y="412" fill="#8e98ac" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em">EACH CONNECTION GETS ITS OWN TASK</text>
+    <rect x="40" y="204" width="560" height="312" rx="8" fill="rgba(245,245,245,0.02)" stroke="rgba(245,245,245,0.1)" stroke-width="0.8"/>
+    <rect x="56" y="208" width="64" height="12" rx="2" fill="#2d3142"/>
+    <text x="88.0" y="217" fill="rgba(245,245,245,0.45)" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">UVICORN</text>
+    <path d="M288 88 V100 A8 8 0 0 1 280 108 H144 A8 8 0 0 0 136 116 V120" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <path d="M320 88 V120" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <path d="M352 88 V100 A8 8 0 0 0 360 108 H496 A8 8 0 0 1 504 116 V120" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <path d="M504 164 V184 A8 8 0 0 1 496 192 H328 A8 8 0 0 0 320 200 V228" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <path d="M288 272 V284 A8 8 0 0 1 280 292 H144 A8 8 0 0 0 136 300 V320" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <path d="M320 272 V320" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <path d="M352 272 V284 A8 8 0 0 0 360 292 H496 A8 8 0 0 1 504 300 V320" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <path d="M136 364 V392" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <path d="M136 436 V460" fill="none" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <rect x="512" y="168" width="72" height="12" rx="2" fill="#2d3142"/>
+    <text x="548.0" y="177" fill="#8e98ac" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">CREATE_TASK</text>
+    <text x="320" y="384" fill="#8e98ac" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">EVERY 0.1 S</text>
+    <text x="320" y="398" fill="#8e98ac" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">UNTIL SHOULD_EXIT</text>
+    <text x="232" y="478" fill="#f08a59" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em">LISTEN() ON THE BOUND SOCKET</text>
+    <text x="232" y="492" fill="#8e98ac" font-size="8" font-family="'Fira Code', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em">EACH CONNECTION GETS ITS OWN TASK</text>
     <rect x="192" y="44" width="256" height="44" rx="6" fill="#2d3142"/>
     <rect x="192" y="44" width="256" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
-    <text x="320.0" y="64.0" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Start HTTP serving</text>
-    <text x="320.0" y="78.0" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">serve_http()</text>
-    <rect x="192" y="148" width="256" height="44" rx="6" fill="#2d3142"/>
-    <rect x="192" y="148" width="256" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
-    <text x="320.0" y="168.0" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Uvicorn server</text>
-    <text x="320.0" y="182.0" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">Server.serve() · _serve()</text>
-    <rect x="56" y="240" width="160" height="44" rx="6" fill="#2d3142"/>
-    <rect x="56" y="240" width="160" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
-    <rect x="64" y="248" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
-    <text x="72.0" y="257" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">1</text>
-    <text x="136.0" y="260" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Startup</text>
-    <text x="136.0" y="275" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">startup(sockets)</text>
-    <rect x="240" y="240" width="160" height="44" rx="6" fill="#2d3142"/>
-    <rect x="240" y="240" width="160" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
-    <rect x="248" y="248" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
-    <text x="256.0" y="257" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">2</text>
-    <text x="320.0" y="260" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Wait loop</text>
-    <text x="320.0" y="275" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">main_loop()</text>
-    <rect x="424" y="240" width="160" height="44" rx="6" fill="#2d3142"/>
-    <rect x="424" y="240" width="160" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
-    <rect x="432" y="248" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
-    <text x="440.0" y="257" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">3</text>
-    <text x="504.0" y="260" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Shutdown</text>
-    <text x="504.0" y="275" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">shutdown()</text>
-    <rect x="56" y="312" width="160" height="44" rx="6" fill="#2d3142"/>
-    <rect x="56" y="312" width="160" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
-    <text x="136.0" y="332.0" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">App startup</text>
-    <text x="136.0" y="346.0" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">lifespan.startup()</text>
-    <rect x="56" y="380" width="160" height="44" rx="6" fill="#2d3142"/>
-    <rect x="56" y="380" width="160" height="44" rx="6" fill="rgba(240,138,89,0.10)" stroke="#f08a59" stroke-width="1"/>
-    <text x="136.0" y="400.0" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Listen</text>
-    <text x="136.0" y="414.0" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">loop.create_server()</text>
+    <text x="320.0" y="64.0" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Build and serve</text>
+    <text x="320.0" y="78.0" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">build_and_serve()</text>
+    <rect x="56" y="120" width="160" height="44" rx="6" fill="#2d3142"/>
+    <rect x="56" y="120" width="160" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <rect x="64" y="128" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
+    <text x="72.0" y="137" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">1</text>
+    <text x="136.0" y="140" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Register routes</text>
+    <text x="136.0" y="155" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">build_app()</text>
+    <rect x="240" y="120" width="160" height="44" rx="6" fill="#2d3142"/>
+    <rect x="240" y="120" width="160" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <rect x="248" y="128" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
+    <text x="256.0" y="137" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">2</text>
+    <text x="320.0" y="140" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Create handlers</text>
+    <text x="320.0" y="155" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">init_app_state()</text>
+    <rect x="424" y="120" width="160" height="44" rx="6" fill="#2d3142"/>
+    <rect x="424" y="120" width="160" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <rect x="432" y="128" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
+    <text x="440.0" y="137" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">3</text>
+    <text x="504.0" y="140" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Start HTTP serving</text>
+    <text x="504.0" y="155" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">serve_http()</text>
+    <rect x="192" y="228" width="256" height="44" rx="6" fill="#2d3142"/>
+    <rect x="192" y="228" width="256" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="320.0" y="248.0" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Uvicorn server</text>
+    <text x="320.0" y="262.0" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">Server.serve() · _serve()</text>
+    <rect x="56" y="320" width="160" height="44" rx="6" fill="#2d3142"/>
+    <rect x="56" y="320" width="160" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <rect x="64" y="328" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
+    <text x="72.0" y="337" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">1</text>
+    <text x="136.0" y="340" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Startup</text>
+    <text x="136.0" y="355" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">startup(sockets)</text>
+    <rect x="240" y="320" width="160" height="44" rx="6" fill="#2d3142"/>
+    <rect x="240" y="320" width="160" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <rect x="248" y="328" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
+    <text x="256.0" y="337" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">2</text>
+    <text x="320.0" y="340" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Wait loop</text>
+    <text x="320.0" y="355" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">main_loop()</text>
+    <rect x="424" y="320" width="160" height="44" rx="6" fill="#2d3142"/>
+    <rect x="424" y="320" width="160" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <rect x="432" y="328" width="16" height="12" rx="2" fill="transparent" stroke="#f5f5f5" stroke-opacity="0.5" stroke-width="0.8"/>
+    <text x="440.0" y="337" fill="#f5f5f5" font-size="7" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">3</text>
+    <text x="504.0" y="340" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Shutdown</text>
+    <text x="504.0" y="355" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">shutdown()</text>
+    <rect x="56" y="392" width="160" height="44" rx="6" fill="#2d3142"/>
+    <rect x="56" y="392" width="160" height="44" rx="6" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="136.0" y="412.0" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">App startup</text>
+    <text x="136.0" y="426.0" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">lifespan.startup()</text>
+    <rect x="56" y="460" width="160" height="44" rx="6" fill="#2d3142"/>
+    <rect x="56" y="460" width="160" height="44" rx="6" fill="rgba(240,138,89,0.10)" stroke="#f08a59" stroke-width="1"/>
+    <text x="136.0" y="480.0" fill="#f5f5f5" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Listen</text>
+    <text x="136.0" y="494.0" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace" text-anchor="middle">loop.create_server()</text>
   </g>
   <g>
-    <line x1="40" y1="460" x2="600" y2="460" stroke="rgba(245,245,245,0.1)" stroke-width="0.8"/>
-    <text x="40" y="476" fill="#bfc0c0" font-size="8" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" letter-spacing="0.12em">LEGEND</text>
-    <rect x="40" y="490" width="14" height="10" rx="2" fill="rgba(240,138,89,0.10)" stroke="#f08a59" stroke-width="1"/>
-    <text x="60" y="498" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Starts listening</text>
-    <line x1="156" y1="495" x2="184" y2="495" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
-    <text x="190" y="498" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Calls</text>
-    <text x="268" y="498" fill="#f5f5f5" font-size="9" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Name</text>
-    <text x="296" y="498" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Role of the step</text>
-    <text x="388" y="498" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace">code()</text>
-    <text x="426" y="498" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Code identifier, () marks a function</text>
+    <line x1="40" y1="540" x2="600" y2="540" stroke="rgba(245,245,245,0.1)" stroke-width="0.8"/>
+    <text x="40" y="556" fill="#bfc0c0" font-size="8" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" letter-spacing="0.12em">LEGEND</text>
+    <rect x="40" y="570" width="14" height="10" rx="2" fill="rgba(240,138,89,0.10)" stroke="#f08a59" stroke-width="1"/>
+    <text x="60" y="578" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Starts listening</text>
+    <line x1="156" y1="575" x2="184" y2="575" stroke="#bfc0c0" stroke-width="1.2" marker-end="url(#arrow)"/>
+    <text x="190" y="578" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Calls</text>
+    <text x="268" y="578" fill="#f5f5f5" font-size="9" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Name</text>
+    <text x="296" y="578" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Role of the step</text>
+    <text x="388" y="578" fill="#bfc0c0" font-size="9" font-family="'Fira Code', ui-monospace, monospace">code()</text>
+    <text x="426" y="578" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Code identifier, () marks a function</text>
   </g>
   </g>
 </svg>
