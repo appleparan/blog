@@ -751,6 +751,12 @@ speculative decoding은 작은 drafter가 다음 token 몇 개를 미리 추측�
 
 draft token의 KV는 일반 token과 같은 block, 같은 slot 계산으로 쓰이고, 틀린 draft의 KV는 지우지 않고 다음 step에 덮어쓴다. 예시의 A가 draft 2개(d17, d18)를 받았다고 하자.
 
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/04-spec-decode-kv-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/04-spec-decode-kv-dark.svg"
+  caption="draft 검증 step과 다음 step의 KV slot."
+/>
+
 1. 배정: A는 이번 step에 3 token(A16, d17, d18)을 배정받는다. `allocate_slots()`의 `num_new_tokens`에는 [검증 전 draft token도 포함된다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L450). position 16–18은 모두 block 12 안이므로 새 block은 필요 없다.
 2. forward: 세 token은 [1.3](#13-step-안의-token-packing)의 배열에 함께 들어간다. `positions`는 16, 17, 18이고, [1.4](#14-block-table-token-위치에서-kv-cache-주소로)와 같은 계산으로 `slot_mapping`은 192, 193, 194다. 본 model은 forward 한 번으로 세 token의 KV를 모두 쓰고, 각 위치의 다음 token을 예측한다.
 3. 검증: rejection sampler가 d17은 맞고 d18은 틀렸다고 판정하면, d17을 받고 position 18에는 본 model이 뽑은 token을 쓴다. scheduler는 `num_computed_tokens`를 19에서 틀린 draft 수만큼 [되돌려 18로 만든다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2113-L2127).
@@ -778,13 +784,19 @@ drafter마다 다른 점은 자기 KV가 있는지, 틀린 draft의 KV를 어떻
 
 정리하면, drafter KV도 본 model KV와 같은 규칙을 따른다. block은 scheduler가 `req_to_blocks`로 나눠 주고, worker는 같은 block table로 slot을 찾으며, 틀린 자리는 지우지 않고 다시 쓴다. 다른 점은 drafter가 본 model보다 앞선 position에 KV를 쓴다는 것뿐이고, 그 자리를 lookahead slot이 미리 확보한다.
 
+#### 설계 결정: drafter의 KV를 본 model과 같은 pool에 둔다
+
+v0.32.0은 drafter의 KV를 본 model과 같은 KV cache pool에 둔다. 이렇게 하면 drafter가 본 model의 block table과 `slot_mapping`을 그대로 쓸 수 있다. 코드 주석도 batch 모양과 KV cache 배치가 같아서 draft prefill에 본 model의 attention metadata와 slot mapping을 [바로 쓸 수 있다고 적는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/target_dependent_ar/speculator.py#L282-L284).
+
+이 결정은 hybrid model에서 비용이 드러난다. hybrid model은 linear attention과 full attention처럼 서로 다른 layer를 섞은 model이다. [RFC #59117](https://github.com/vllm-project/vllm/issues/59117)은 GDN과 full attention을 섞은 27B model에 DFlash drafter를 붙인 사례를 vLLM 0.30 기준으로 보고한다. drafter의 sliding window layer가 새 KV cache spec을 더하면서 KV cache group이 4개에서 16개로 늘었다. 그 결과 쓸 수 있는 KV cache가 369,121 token에서 33,530 token으로 줄었다. 이 RFC는 drafter에 전용 pool을 주자고 제안한다. [RFC #58638](https://github.com/vllm-project/vllm/issues/58638)은 같은 문제를 group을 나누는 방식을 고쳐서 풀자고 제안한다. 두 RFC 모두 아직 open 상태이고, v0.32.0은 공유 pool을 유지한다.
+
 #### 설계 결정: drafter가 쓸 자리를 미리 잡는다
 
-scheduler는 본 model이 계산할 token 외에 lookahead slot까지 [block을 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L542-L544). drafter는 본 model의 query 범위 뒤쪽 position에 KV를 쓰는데, block table이 그 position을 덮지 않으면 엉뚱한 block에 쓰게 된다. [PR #42971](https://github.com/vllm-project/vllm/pull/42971)은 이 문제를 실제로 겪은 사례다. 새 request의 첫 step에 lookahead block을 잡지 않아서, DFlash drafter가 마지막 prefill block에 KV를 덮어썼다. prefix caching을 켜고 동시 request가 많으면 그 block은 여러 request가 공유하는 block이라, 정상이던 request의 KV까지 망가졌다. scheduler 쪽 수정은 [PR #43733](https://github.com/vllm-project/vllm/pull/43733)에서 들어갔다. 지금은 lookahead 값을 [`num_lookahead_tokens` 한 곳에서만 계산하고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L616-L623), scheduler와 worker warmup이 같은 값을 읽는다.
+scheduler는 본 model이 계산할 token 외에 lookahead slot까지 [block을 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L542-L544). drafter는 본 model의 query 범위 뒤쪽 position에 KV를 쓰는데, block table이 그 position을 덮지 않으면 엉뚱한 block에 쓰게 된다. 이 결정에는 별도 RFC가 없고, 버그 수정 PR에서 이유가 드러난다. [PR #42971](https://github.com/vllm-project/vllm/pull/42971)은 이 문제를 실제로 겪은 사례다. 새 request의 첫 step에 lookahead block을 잡지 않아서, DFlash drafter가 마지막 prefill block에 KV를 덮어썼다. prefix caching을 켜고 동시 request가 많으면 그 block은 여러 request가 공유하는 block이라, 정상이던 request의 KV까지 망가졌다. scheduler 쪽 수정은 [PR #43733](https://github.com/vllm-project/vllm/pull/43733)에서 들어갔다. 지금은 lookahead 값을 [`num_lookahead_tokens` 한 곳에서만 계산하고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L616-L623), scheduler와 worker warmup이 같은 값을 읽는다.
 
 #### 설계 결정: 틀린 draft의 KV는 지우지 않고 덮어쓴다
 
-틀린 draft의 KV는 지우지 않는다. scheduler는 `num_computed_tokens`만 되돌리고, 다음 step이 같은 slot에 올바른 KV를 쓴다. EAGLE 계열 drafter는 한발 더 나아가 틀린 위치까지 포함해 본 model과 같은 query 길이로 계산한다. 코드 주석에 따르면 이유는 두 가지다. 틀린 token 수를 CPU가 알려면 CPU와 GPU를 동기화해야 하는데, 이를 피할 수 있다. 그리고 본 model의 `query_start_loc`, `seq_lens` 같은 attention metadata를 [그대로 다시 쓸 수 있다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/target_dependent_ar/speculator.py#L204-L209).
+틀린 draft의 KV는 지우지 않는다. scheduler는 `num_computed_tokens`만 되돌리고, 다음 step이 같은 slot에 올바른 KV를 쓴다. EAGLE 계열 drafter는 한발 더 나아가 틀린 위치까지 포함해 본 model과 같은 query 길이로 계산한다. 코드 주석에 따르면 이유는 두 가지다. 틀린 token 수를 CPU가 알려면 CPU와 GPU를 동기화해야 하는데, 이를 피할 수 있다. 그리고 본 model의 `query_start_loc`, `seq_lens` 같은 attention metadata를 [그대로 다시 쓸 수 있다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/target_dependent_ar/speculator.py#L204-L209). 이는 Model Runner V2의 설계 원칙과도 맞는다. MRV2 설계 문서는 speculative decoding처럼 CPU가 아직 모르는 값을 [GPU가 직접 계산하게 한다](https://github.com/vllm-project/vllm/blob/v0.32.0/docs/design/model_runner_v2.md#L136-L138)고 적는다. MRV2를 도입한 [PR #25266](https://github.com/vllm-project/vllm/pull/25266)도 같은 방향이다.
 
 #### 설계 결정: draft를 위한 자리도 token budget에서 뺀다
 
