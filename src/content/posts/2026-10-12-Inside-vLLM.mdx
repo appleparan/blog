@@ -522,9 +522,36 @@ if model_output is None:
 engine_core_outputs = self.scheduler.update_from_output(scheduler_output, model_output)
 ```
 
-executor는 [서버 초기화 5번](#5-enginecore-startup-model-load-kv-cache-allocation-scheduler-setup)에서 본 [`collective_rpc()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/executor/abstract.py#L199)로 worker의 model runner를 호출한다. model runner의 [`execute_model()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1719-L2087)은 request 상태와 KV block table을 갱신하고, attention metadata를 준비한 뒤 forward를 실행한다. CUDA graph 모드와 batch 크기에 따라, capture해 둔 graph를 재생하거나 model을 직접 호출한다. 이어서 [`sample_tokens()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2088-L2175)가 마지막 hidden state로 logits를 만들고, sampling parameter를 적용해 request마다 token ID를 뽑는다. 결과가 [`ModelRunnerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/outputs.py#L267)이다.
+executor는 [서버 초기화 5번](#5-enginecore-startup-model-load-kv-cache-allocation-scheduler-setup)에서 본 [`collective_rpc()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/executor/abstract.py#L199)로 worker의 model runner를 호출한다. model runner의 [`execute_model()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1719-L2087)은 forward를 네 단계로 처리한다.
 
-한 step 안에서 여러 request의 token을 어떻게 한 줄로 묶고, 각 token의 KV를 어디에 저장하는지는 뒤의 "실행 batch와 KV cache" 파트에서 다룬다.
+1. request 상태를 갱신한다. [`finish_requests()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1733), `add_requests()`, `update_requests()`가 끝난 request를 빼고, 새 request를 넣고, 새로 받은 KV block을 block table에 더한다. worker는 request 상태를 step 사이에 계속 들고 있으므로, scheduler는 매 step 바뀐 부분만 보낸다.
+2. 입력을 준비한다. [`prepare_inputs()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1812)가 `input_ids`, `positions`, `query_start_loc`, `seq_lens`를 만들고, [`prepare_attn()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1815)이 block table과 `slot_mapping`을 만든다. 이 값으로 attention metadata를 조립한다.
+3. forward를 실행한다. CUDA graph 모드와 batch 크기에 따라 [full graph를 재생하거나](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2006), piecewise graph를 쓰거나, [model을 직접 호출한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2044).
+4. 결과를 저장하고 `None`을 반환한다. hidden state는 `ExecuteModelState`에 넣어 두고, sampling은 다음 호출에서 한다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-5-forward-sampling-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-5-forward-sampling-dark.svg"
+  caption="worker가 한 step의 forward와 sampling을 처리하는 순서. 번호는 본문의 execute_model() 단계와 같다."
+/>
+
+forward에 들어가는 입력은 세 가지다. 이번 step의 token을 한 줄로 이어 붙인 `input_ids`, 각 token의 위치인 `positions`, 그리고 attention metadata다. attention metadata는 attention layer가 이 한 줄을 request별로 나눠 계산하는 데 필요한 batch 구조 정보다. 어디서 어디까지가 같은 request인지(`query_start_loc`), request마다 KV cache까지 합친 길이가 얼마인지(`seq_lens`), 이전 KV가 어느 block에 있는지(block table), 새 KV를 어디에 쓸지(`slot_mapping`)를 담는다. v0.32.0에서는 [`CommonAttentionMetadata`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/attention/backend.py#L387)가 이 값을 담고, attention backend마다 [builder](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/attention/backend.py#L683)가 자기 kernel에 맞는 형태로 바꾼다.
+
+attention metadata는 model의 `forward()` 인자로 넘기지 않는다. model runner가 [`set_forward_context()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2015)로 전역 context에 올려 두면, 각 attention layer가 [`get_forward_context()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/model_executor/layers/attention/attention.py#L704)로 꺼내 쓴다. 그래서 model 코드는 `forward(input_ids, positions)` 형태를 그대로 유지할 수 있다. 각 배열의 실제 값은 뒤의 [step 안의 token packing](#step-안의-token-packing)과 [block table](#block-table-token-위치에서-kv-cache-주소로)에서 예시로 본다.
+
+sampling은 [`sample_tokens()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2088-L2175)가 따로 한다. 먼저 hidden state 중 [`logits_indices`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L968)가 가리키는 위치만 고른다. request마다 이번 step의 마지막 token 위치다. 고른 hidden state로 `compute_logits()`가 vocabulary 크기의 logits를 만들고, [`sample()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1592-L1660)이 penalty, `logit_bias`, temperature, top-k, top-p, min-p를 적용한 뒤 request마다 token을 뽑는다. MRV2는 이 sampler를 [Triton kernel](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/sample)로 다시 구현했다. 결과가 [`ModelRunnerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/outputs.py#L267)이다.
+
+forward와 sampling을 두 번의 호출로 나눈 이유는 structured output 때문이다. JSON schema나 정규식처럼 출력 형식을 강제하는 request는, sampling 전에 허용되지 않는 token의 logits를 지우는 grammar bitmask가 필요하다. 이 bitmask는 CPU에서 계산한다. 위의 `step()`을 보면 `execute_model(non_block=True)`로 forward를 시작한 뒤, GPU가 도는 동안 CPU가 `get_grammar_bitmask()`를 계산하고, 그 결과를 `sample_tokens()`에 넘긴다. 호출을 나눠야 bitmask 계산이 forward와 겹친다.
+
+#### 설계 결정: Model Runner V2를 처음부터 다시 만들었다
+
+위에서 본 `execute_model()`과 `sample_tokens()`는 Model Runner V2(MRV2)의 코드다. MRV2는 v0.12.0에서 실험 기능으로 들어와 v0.29.0부터 모든 model의 기본 실행 경로가 되었다([PR #25266](https://github.com/vllm-project/vllm/pull/25266)). [설계 문서](https://github.com/vllm-project/vllm/blob/v0.32.0/docs/design/model_runner_v2.md)는 V1 model runner를 다시 만든 이유로 "fundamental design mistakes"와 쌓인 기술 부채를 든다. 이 글의 흐름과 닿는 변경은 세 가지다.
+
+- persistent batch와 입력의 분리: 연속된 step의 batch는 거의 같으므로, V1부터 request 상태를 step 사이에 계속 들고 있었다(persistent batch). V1은 이 상태 tensor를 그대로 model 입력으로 써서, request가 들고 날 때마다 tensor 전체를 다시 정렬해야 했다. MRV2는 request마다 고정된 행을 주고, step마다 필요한 행을 GPU에서 모아 입력을 만든다. 위 1단계의 `add_requests()`와 `finish_requests()`가 이 행을 관리한다.
+- async-first: V1은 async scheduling을 나중에 덧붙였다. MRV2는 실행 loop를 CPU 동기화가 없는 CUDA stream으로 가정하고 처음부터 설계했다.
+- GPU에서 입력 준비: `input_ids`, `positions`, `query_start_loc`, `seq_lens`를 Python이 아니라 Triton kernel로 만든다. CPU 부담이 줄고, async scheduling에서 CPU가 아직 모르는 값(예: 직전 step의 token)을 GPU가 바로 쓸 수 있다.
+
+설계 문서는 MRV2가 아직 기능이 완전하지 않고 열린 설계 결정도 남아 있다고 적는다. 그래서 Triton이 없거나 MRV2가 아직 지원하지 않는 기능을 쓰면 [V1 runner로 돌아간다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L703-L738).
 
 #### 설계 결정: async scheduling으로 scheduling과 실행을 겹친다
 
