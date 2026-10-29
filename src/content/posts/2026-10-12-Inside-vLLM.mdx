@@ -230,7 +230,9 @@ scheduler는 step마다 어떤 request의 token을 몇 개 계산할지 정하�
 
 vLLM은 KV cache를 시작할 때 한 번에 할당하고, 이후에는 고정 크기 block 단위로 request에 나눠 준다. 이 block 방식은 PagedAttention 논문에서 왔다. 논문은 request마다 KV cache를 연속 공간으로 미리 잡으면 단편화와 과잉 예약으로 메모리가 낭비된다고 보고, OS의 paging처럼 KV cache를 block으로 나눠 이 낭비를 줄였다([Kwon et al., SOSP 2023](https://arxiv.org/abs/2309.06180)).
 
-block pool을 시작할 때 한 번에 잡으므로, 그 크기를 정하려면 KV cache 말고 다른 것이 쓸 메모리를 먼저 알아야 한다. activation 최고치와 CUDA graph 메모리는 model, attention kernel, batch 크기에 따라 달라서 식으로 미리 계산하기 어렵다. 그래서 vLLM은 dummy 입력으로 실제로 한 번 돌려서 재는 방식을 택한 것으로 보인다.
+block pool을 시작할 때 한 번에 잡으므로, 그 크기를 정하려면 KV cache 말고 다른 것이 쓸 메모리를 먼저 알아야 한다. activation 최고치와 CUDA graph 메모리는 model, attention kernel, batch 크기에 따라 달라서 식으로 미리 계산하기 어렵다. 그래서 vLLM은 dummy 입력으로 실제로 한 번 돌려서 잰다. KV cache 크기를 자동으로 정하는 기능은 초기 [PR #6](https://github.com/vllm-project/vllm/pull/6)에서 들어왔다.
+
+CUDA graph 메모리는 이 방식에서 따로 다뤄야 했다. CUDA graph는 KV cache에 의존하므로 KV cache를 할당한 뒤에 capture한다. 그래서 profiling 때는 그 크기가 빠졌고, KV cache를 너무 크게 잡아 OOM이 나기도 했다. [PR #30515](https://github.com/vllm-project/vllm/pull/30515)는 profiling 중에 작은 dummy KV cache로 CUDA graph를 한 번 capture해 그 크기를 추정하게 했다. 이 PR에서는 기본으로 꺼져 있었지만, v0.32.0에서는 [기본으로 켜져 있다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/envs.py#L2221-L2223)(`VLLM_MEMORY_PROFILER_ESTIMATE_CUDAGRAPHS`).
 
 #### `collective_rpc()`: EngineCore가 worker에 일을 시키는 방식
 
@@ -792,7 +794,7 @@ v0.32.0은 drafter의 KV를 본 model과 같은 KV cache pool에 둔다. 이렇�
 
 #### 설계 결정: drafter가 쓸 자리를 미리 잡는다
 
-scheduler는 본 model이 계산할 token 외에 lookahead slot까지 [block을 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L542-L544). drafter는 본 model의 query 범위 뒤쪽 position에 KV를 쓰는데, block table이 그 position을 덮지 않으면 엉뚱한 block에 쓰게 된다. 이 결정에는 별도 RFC가 없고, 버그 수정 PR에서 이유가 드러난다. [PR #42971](https://github.com/vllm-project/vllm/pull/42971)은 이 문제를 실제로 겪은 사례다. 새 request의 첫 step에 lookahead block을 잡지 않아서, DFlash drafter가 마지막 prefill block에 KV를 덮어썼다. prefix caching을 켜고 동시 request가 많으면 그 block은 여러 request가 공유하는 block이라, 정상이던 request의 KV까지 망가졌다. scheduler 쪽 수정은 [PR #43733](https://github.com/vllm-project/vllm/pull/43733)에서 들어갔다. 지금은 lookahead 값을 [`num_lookahead_tokens` 한 곳에서만 계산하고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L616-L623), scheduler와 worker warmup이 같은 값을 읽는다.
+scheduler는 본 model이 계산할 token 외에 lookahead slot까지 [block을 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L542-L544). drafter는 본 model의 query 범위 뒤쪽 position에 KV를 쓰는데, block table이 그 position을 덮지 않으면 엉뚱한 block에 쓰게 된다. [PR #42971](https://github.com/vllm-project/vllm/pull/42971)은 이 문제를 실제로 겪은 사례다. 새 request의 첫 step에 lookahead block을 잡지 않아서, DFlash drafter가 마지막 prefill block에 KV를 덮어썼다. prefix caching을 켜고 동시 request가 많으면 그 block은 여러 request가 공유하는 block이라, 정상이던 request의 KV까지 망가졌다. scheduler 쪽 수정은 [PR #43733](https://github.com/vllm-project/vllm/pull/43733)에서 들어갔다. 지금은 lookahead 값을 [`num_lookahead_tokens` 한 곳에서만 계산하고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L616-L623), scheduler와 worker warmup이 같은 값을 읽는다.
 
 #### 설계 결정: 틀린 draft의 KV는 지우지 않고 덮어쓴다
 
