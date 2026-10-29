@@ -10,7 +10,6 @@ tags:
   - Noise Conditional Score Network
 math: true
 mermaid: false
-draft: true
 bibliography: 2025-12-13-EBM-to-NCSN.bib
 ---
 
@@ -458,7 +457,7 @@ $$
 \end{equation*}
 $$
 
-이 Loss function은 기존 $$\mathcal{L}_{\text{SM}}(\phi)$$보다는 tractable하나 앞서 언급한 것처럼 trace of Jacobian인 $$Tr(\nabla_\mathbf{x} \mathbf{s}_\phi (\mathbf{x}))$$이 quadratic하다는 것이 문제였다. 이를 해결하기 위해 *모든 차원의 Jacobian이 아닌 단면만 보고 1차원적인 기울기*를 통해 trace 항을 대체한다.
+이 Loss function은 기존 $$\mathcal{L}_{\text{SM}}(\phi)$$보다는 tractable하나 앞서 언급한 것처럼 trace of Jacobian인 $$Tr(\nabla_\mathbf{x} \mathbf{s}_\phi (\mathbf{x}))$$은 전체 Jacobian 행렬을 만들지 않더라도 모든 입력 좌표의 미분 정보를 모아야 하므로, 차원 $D$가 커질수록 계산 비용이 커진다는 것이 문제였다. 이를 해결하기 위해 *모든 차원의 Jacobian이 아닌 단면만 보고 1차원적인 기울기*를 통해 trace 항을 대체한다.
 
 만약 $$D$$차원에서 isotropic random vector $$\mathbf{u} \in \mathbb{R}^D$$가 존재한다고 가정하자. (Rademacher나 standard Gaussian이면 된다.)
 이 때 $$\mathbb{E} [\mathbf{u}] = 0$$고 $$\mathbb{E} [\mathbf{u} \mathbf{u}^{\mathsf{T}}]= \mathbf{I}$$를 만족한다.
@@ -761,21 +760,19 @@ $$
 \end{equation*}
 $$
 
-[@song2019generative]는 $\lambda(\sigma) = \sigma^2$를 썼다.
-최적 score의 크기가 대략 $\| \mathbf{s} \|_2 \propto 1/\sigma$이므로, $\sigma^2$를 곱하면 레벨마다 Loss의 크기가 비슷해지기 때문이다.
-
 #### Relationship with DDPM Loss
 
-$\lambda(\sigma) = \sigma^2$를 넣고 DSM Loss를 다시 쓰면 DDPM과의 관계가 드러난다.
+$\mathbf{x}_\sigma = \mathbf{x} + \sigma \mathbf{\epsilon}$이고 $p_\sigma$가 그 marginal이면, 앞의 Tweedie's formula에 의해 다음이 성립한다.
 
 $$
 \begin{equation*}
-\sigma^2 \left\| \mathbf{s}_\phi (\mathbf{x}_\sigma, \sigma) + \dfrac{\mathbf{\epsilon}}{\sigma} \right\|^2_2 = \left\| \sigma \mathbf{s}_\phi (\mathbf{x}_\sigma, \sigma) + \mathbf{\epsilon} \right\|^2_2
+\nabla_{\mathbf{x}_\sigma} \log p_\sigma (\mathbf{x}_\sigma) = -\dfrac{1}{\sigma} \mathbb{E} [\mathbf{\epsilon} \mid \mathbf{x}_\sigma]
 \end{equation*}
 $$
 
-여기서 $\mathbf{\epsilon}_\phi := -\sigma \mathbf{s}_\phi$로 두면 이는 DDPM의 simplified loss $\| \mathbf{\epsilon}_\phi - \mathbf{\epsilon} \|^2_2$와 같은 식이다.
-최적해 관점에서도 앞의 Tweedie's formula에 의해 둘은 정확히 대응한다.
+NCSN의 최적해는 실제 score $\mathbf{s}^* (\mathbf{x}_\sigma, \sigma) = \nabla_{\mathbf{x}_\sigma} \log p_\sigma (\mathbf{x}_\sigma)$이다.
+한편 DDPM Loss의 Bayes optimal noise predictor는 [이전 포스트](https://blog.liam.kim/posts/2025/11/VAE-to-DDPMs/)에서 본 것처럼 $\mathbf{\epsilon}^* (\mathbf{x}_\sigma, \sigma) = \mathbb{E}[\mathbf{\epsilon} \mid \mathbf{x}_\sigma]$이다.
+따라서 둘은 정확히 대응한다.
 
 $$
 \begin{equation}
@@ -785,7 +782,7 @@ $$
 
 DDPM에서도 $\sigma_i := \sqrt{1 - \bar{\alpha}_i^2}$로 두면 $\mathbf{x}_i = \bar{\alpha}_i \mathbf{x}_0 + \sigma_i \mathbf{\epsilon}$이고, $\mathbf{s}^* (\mathbf{x}_i, i) = -\mathbb{E}[\mathbf{\epsilon} \mid \mathbf{x}_i] / \sigma_i$가 성립한다.
 즉 **DDPM의 노이즈 예측은 알려진 scale $1/\sigma_i$를 빼면 NCSN의 score 예측과 같다.**
-변분 관점(VAE → DDPM)과 score 관점(EBM → NCSN)이라는 서로 다른 출발점이 같은 학습 목표에 도착한 것이다.
+변분 관점(VAE → DDPM)과 score 관점(EBM → NCSN)이라는 서로 다른 출발점에서 학습한 모델이 같은 정보를 담고 있는 것이다.
 
 ### Sampling: Annealed Langevin Dynamics
 
@@ -827,7 +824,7 @@ $L \times K$를 줄이기 어려운 이유는 두 가지이다.
 
 ## Summary: NCSN vs DDPM
 
-두 모델은 출발점이 다르지만 구조는 거울처럼 대칭이다.
+두 모델의 차이와 공통점을 표로 정리하면 다음과 같다.
 NCSN은 $\mathbf{x}_i \mid \mathbf{x}$를 정의하고 transition을 유도하는 반면, DDPM은 transition을 정의하고 $\mathbf{x}_i \mid \mathbf{x}$를 유도한다.
 
 |                                    | NCSN                                                                                                                     | DDPM                                                                                                        |
@@ -849,9 +846,9 @@ NCSN은 $\mathbf{x}_i \mid \mathbf{x}$를 정의하고 transition을 유도하�
 3. Score matching은 부분적분으로 data score를 없앴지만 Jacobian trace 계산이 비싸다. Sliced score matching은 이를 줄였지만 분산과 안정성 문제가 남는다.
 4. DSM은 데이터에 노이즈를 더하고 $\mathbf{x}$로 conditioning해서 target을 closed form인 $-\mathbf{\epsilon}/\sigma$로 바꾼다. DDPM에서 썼던 conditioning trick과 같다.
 5. Tweedie's formula에 의해 score 예측은 곧 denoising이다.
-6. NCSN은 여러 노이즈 레벨의 score를 하나의 네트워크로 학습하고, Annealed Langevin dynamics로 큰 노이즈에서 작은 노이즈로 내려가며 샘플을 만든다. 그 학습 목표는 DDPM의 $\epsilon$-prediction과 scale만 다르다.
+6. NCSN은 여러 노이즈 레벨의 score를 하나의 네트워크로 학습하고, Annealed Langevin dynamics로 큰 노이즈에서 작은 노이즈로 내려가며 샘플을 만든다. 그 최적해는 DDPM의 최적 noise predictor와 scale $1/\sigma$만 다르다.
 
 NCSN과 DDPM이 같은 곳에 도착한 것은 우연이 아니다.
 다음 단계는 노이즈 레벨을 이산적인 사다리가 아니라 연속적인 시간으로 보는 것이다.
 그러면 NCSN과 DDPM 모두 하나의 SDE를 서로 다르게 이산화한 것으로 통합되는데, 이것이 Score SDE [@song2020score]이다.
-NCSN과 DDPM이 공유하는 느린 샘플링 문제도 이 연속 시간 관점에서 ODE solver 같은 수치해석 도구로 다룰 수 있게 된다.
+두 모델이 공유하는 느린 샘플링 문제는 논문의 뒷부분(9~11장)에서 더 효율적인 sampler, 적은 step으로의 distillation, 처음부터 few-step generator를 학습하는 방법으로 다룬다.
