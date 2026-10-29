@@ -452,6 +452,7 @@ EngineCore는 이 일을 queue 몇 개로 처리한다. [`run_busy_loop()`](http
   base="/assets/images/post/2026-10-12-Inside-vLLM/03-4-step-queues"
   caption="EngineCore step 하나에서 request가 queue를 지나는 순서."
   labels={[
+    '시작: input thread가 새 request E를 input_queue에 넣어 두었다. running에는 A와 B, waiting에는 C와 D가 있다.',
     '① input_queue에 쌓인 새 request E를 waiting 끝으로 옮긴다.',
     '② running부터 본다. A와 B가 decode token 1개씩 budget을 쓴다.',
     '③ waiting 앞의 C가 남은 budget만큼 prefill 조각으로 들어오고, D와 E는 기다린다. KV block이 모자라면 running의 request를 waiting 앞으로 preempt한다.',
