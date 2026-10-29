@@ -18,9 +18,9 @@ import Figure from '../../components/Figure.astro';
 
 이럴 때 가장 좋은 방법은 역시 직접 글로 정리해 보는 것이다. 코드를 따라가며 이해한 내용을 내 방식대로 풀어 쓰다 보면, 적어도 쉽게 잊어버리지는 않는다.
 
-게다가 위 글은 2025년 가을의 글이고 그 뒤로 vLLM이 Model Runner v2도 나오고, 그사이 vLLM에는 Model Runner V2를 비롯해 많은 변화가 있었다. 따라서 이번에는 2026년 10월, vLLM v0.32.0을 기준으로 내부 아키텍처를 다시 살펴보려 한다.
+게다가 위 글은 2025년 가을의 글이고, 그사이 vLLM에는 큰 변화가 많았다. V0 engine이 완전히 제거되어 V1만 남았고, async scheduling이 기본으로 켜졌으며, Model Runner V2가 모든 model의 기본 실행 경로가 되었다. Python API server를 대신할 Rust frontend도 실험 기능으로 들어왔다. 따라서 이번에는 2026년 10월, vLLM v0.32.0을 기준으로 내부 아키텍처를 다시 살펴보려 한다.
 
-특히 대 LLM 시대를 맞아, 실제 소스 코드를 하나씩 뜯어보면서 이해해보려고 한다. (v0.32.0 기준)
+이번 글은 설명을 요약하는 대신, vLLM 소스 코드를 직접 열어 보며 따라간다.
 
 ## 큰 그림
 
@@ -528,9 +528,11 @@ executor는 [서버 초기화 5번](#5-enginecore-startup-model-load-kv-cache-al
 
 #### 설계 결정: async scheduling으로 scheduling과 실행을 겹친다
 
+async scheduling이 꺼져 있으면 EngineCore는 `step()`으로 schedule, forward, 결과 처리를 차례로 한다. GPU가 step N을 마치면 CPU가 결과를 받아 상태를 갱신하고 step N+1을 짜는데, 그동안 GPU는 다음 일을 받지 못하고 기다린다. 순서대로 할 수밖에 없었던 이유는 step N+1을 짜려면 step N에서 뽑힌 token을 알아야 하기 때문이다.
+
 v0.32.0은 조건이 맞으면 [async scheduling을 자동으로 켠다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L1585). 이때 EngineCore는 [`step()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L657-L687) 대신 [`step_with_batch_queue()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L698)를 쓴다. 새 batch의 실행을 먼저 시작하고, 그 실행이 GPU에서 도는 동안 다음 step을 schedule한다. 앞선 batch의 결과는 queue가 차거나 더 넣을 수 없을 때 받는다. 동시에 진행하는 batch 수는 [`max_concurrent_batches`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L577)가 정한다.
 
-이 구조는 [#19970](https://github.com/vllm-project/vllm/pull/19970)에서 들어왔다. 목표는 scheduler를 실행보다 한 step 앞서 돌게 해서, scheduling에 드는 CPU 시간을 GPU 실행 뒤에 숨기는 것이다. PR은 이 방식이 [NanoFlow](https://arxiv.org/abs/2408.12757) 논문의 접근과 비슷하다고 밝힌다. 처음에는 `--async-scheduling`으로 켜는 실험 기능이었다.
+이 구조는 [#19970](https://github.com/vllm-project/vllm/pull/19970)에서 들어왔다. 목표는 scheduler를 실행보다 한 step 앞서 돌게 해서, scheduling에 드는 CPU 시간을 GPU 실행 뒤에 숨기는 것이다. PR은 이 방식이 [NanoFlow](https://arxiv.org/abs/2408.12757) 논문의 접근과 비슷하다고 밝힌다. 처음에는 `--async-scheduling`으로 켜는 실험 기능이었다. [`AsyncScheduler`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/async_scheduler.py)는 이 의존성을 placeholder로 푼다. step N의 결과를 기다리지 않고 request마다 다음 token이 하나 나온다고 가정해 `num_output_placeholders`를 올려 두고 step N+1을 짠다. 실제 token ID는 GPU에 남아 있는 step N의 sampling 결과를 worker가 바로 이어 붙이고, 결과가 CPU에 도착하면 placeholder를 실제 token으로 바꾼다. EOS로 끝난 request처럼 가정이 틀린 경우에는 미리 계산한 결과를 버린다. 이 기능은 v0.14.0부터 기본으로 켜졌다.
 
 ### 6. Detokenize: token ID에서 응답까지
 
