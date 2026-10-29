@@ -18,7 +18,7 @@ interface Props {
   currentPath?: string;
   /** Marks the page `noindex` and leaves out the canonical link (the 404 page). */
   noindex?: boolean;
-  /** Open Graph image path or URL; defaults to the avatar. */
+  /** Open Graph image path or URL. Pages that are not articles fall back to the avatar. */
   image?: string;
   /** Marks the page as an article and adds BlogPosting JSON-LD. */
   article?: { published: Date; modified: Date };
@@ -37,7 +37,9 @@ const pageTitle = title ? `${title} | ${siteConfig.title}` : siteConfig.title;
 const absolute = (path: string) => new URL(path, siteConfig.url).href;
 // The page's own URL, not `currentPath`: taxonomy pages highlight `/tags/` in the navbar.
 const canonical = absolute(Astro.url.pathname);
-const ogImage = absolute(image ?? siteConfig.avatar);
+// Articles without an image get no preview image, so link previews never show the author's photo.
+const ogImageSource = image ?? (article ? undefined : siteConfig.avatar);
+const ogImage = ogImageSource && absolute(ogImageSource);
 const jsonLd = article && {
   '@context': 'https://schema.org',
   '@type': 'BlogPosting',
@@ -67,14 +69,14 @@ const jsonLd = article && {
     <meta property="og:title" content={pageTitle} />
     <meta property="og:description" content={description} />
     {!noindex && <meta property="og:url" content={canonical} />}
-    <meta property="og:image" content={ogImage} />
+    {ogImage && <meta property="og:image" content={ogImage} />}
     <meta property="og:locale" content="ko_KR" />
     {article && <meta property="article:published_time" content={article.published.toISOString()} />}
     {article && <meta property="article:modified_time" content={article.modified.toISOString()} />}
     <meta name="twitter:card" content={image ? 'summary_large_image' : 'summary'} />
     <meta name="twitter:title" content={pageTitle} />
     <meta name="twitter:description" content={description} />
-    <meta name="twitter:image" content={ogImage} />
+    {ogImage && <meta name="twitter:image" content={ogImage} />}
     {jsonLd && <script type="application/ld+json" set:html={JSON.stringify(jsonLd).replace(/</g, '\\u003c')} />}
     <Analytics />
     <link rel="icon" href="/favicon.ico" sizes="any" />

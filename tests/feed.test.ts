@@ -117,8 +117,20 @@ describe('built site', () => {
     expect(ld.datePublished).toMatch(/^2017-07/);
     expect(ld.dateModified).toBeTruthy();
     expect(ld.author.name).toBe('Jongsu Liam Kim');
-    expect(root.querySelector("meta[property='og:image']")?.getAttribute('content')).toMatch(
-      /^https:\/\/blog\.liam\.kim\//,
+  });
+
+  it('leaves out the avatar as the link preview image on posts without an image', () => {
+    const root = parse(readFileSync('dist/posts/2017/07/Tox-Workflow/index.html', 'utf8'));
+    expect(root.querySelector("meta[property='og:image']")).toBeNull();
+    expect(root.querySelector("meta[name='twitter:image']")).toBeNull();
+    const ld = JSON.parse(root.querySelector("script[type='application/ld+json']")!.text);
+    expect(ld.image).toBeUndefined();
+  });
+
+  it('keeps the avatar as the link preview image on non-post pages', () => {
+    const root = parse(readFileSync('dist/about/index.html', 'utf8'));
+    expect(root.querySelector("meta[property='og:image']")?.getAttribute('content')).toBe(
+      'https://blog.liam.kim/assets/commons/avatar.jpg',
     );
   });
 });
