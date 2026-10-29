@@ -11,6 +11,7 @@ mermaid: false
 ---
 
 import Figure from '../../components/Figure.astro';
+import FigureSteps from '../../components/FigureSteps.astro';
 
 ## Introduction
 
@@ -447,10 +448,17 @@ ADD를 보내기 전에 `add_request()`는 [`check_admission()`](https://github.
 
 EngineCore는 이 일을 queue 몇 개로 처리한다. [`run_busy_loop()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1547-L1556)는 step마다 두 가지를 반복한다. 먼저 [`_process_input_queue()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1573-L1602)가 input thread가 채운 [`input_queue`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1147)를 비워, 새 request를 scheduler의 `waiting` queue에 넣는다. 그 다음 `step_fn`이 schedule, forward, 결과 처리를 한 번 실행한다. 결과는 [`output_queue`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1148)로 가고, output thread가 이를 API server로 보낸다.
 
-<Figure
-  src="/assets/images/post/2026-10-12-Inside-vLLM/03-4-step-queues-light.svg"
-  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-4-step-queues-dark.svg"
+<FigureSteps
+  base="/assets/images/post/2026-10-12-Inside-vLLM/03-4-step-queues"
   caption="EngineCore step 하나에서 request가 queue를 지나는 순서."
+  labels={[
+    '① input_queue에 쌓인 새 request E를 waiting 끝으로 옮긴다.',
+    '② running부터 본다. A와 B가 decode token 1개씩 budget을 쓴다.',
+    '③ waiting 앞의 C가 남은 budget만큼 prefill 조각으로 들어오고, D와 E는 기다린다. KV block이 모자라면 running의 request를 waiting 앞으로 preempt한다.',
+    '④ 배정 결과인 SchedulerOutput을 worker에 보내 forward와 sampling을 한다.',
+    '⑤ update_from_output()이 sampling 결과를 기록하고, 끝난 B를 running에서 뺀다.',
+    '⑥ 출력이 output_queue를 거쳐 output thread로 가고, API server로 나간다.',
+  ]}
 />
 
 [`Scheduler.schedule()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L591)은 두 queue를 정해진 순서로 본다.
@@ -471,10 +479,16 @@ running을 먼저 보는 이유는 이미 시작한 request를 끝까지 진행�
 빈 block은 [`BlockPool`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/block_pool.py#L136)의 [`free_block_queue`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/block_pool.py#L178)에 있다. 이 queue는 Python `deque`가 아니라 vLLM이 직접 만든 [이중 연결 리스트](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_utils.py#L246-L262)다. 중간의 block을 O(1)에 빼낼 수 있어야 하기 때문이다. 이 필요는 아래 prefix caching에서 나온다.
 
 
-<Figure
-  src="/assets/images/post/2026-10-12-Inside-vLLM/03-4-kv-block-manager-light.svg"
-  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-4-kv-block-manager-dark.svg"
+<FigureSteps
+  base="/assets/images/post/2026-10-12-Inside-vLLM/03-4-kv-block-manager"
   caption="KVCacheManager가 KV block을 나눠 주고 돌려받는 경로. 번호는 아래 설명의 순서와 같다."
+  labels={[
+    '① 할당: queue 앞에서 block 5를 꺼내 C의 block 목록에 붙인다.',
+    '② hash가 없는 block의 반납: queue 앞에 넣어 가장 먼저 다시 쓴다.',
+    '③ hash가 있는 block의 반납: queue 뒤에 넣어 prefix cache로 오래 남긴다.',
+    '④ prefix cache hit: hash 표에서 block 8을 찾아 queue 중간에서 꺼낸다.',
+    '네 경로 전체.',
+  ]}
 />
 
 [`allocate_slots()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L371)는 세 단계로 block을 나눠 준다.
@@ -664,10 +678,19 @@ worker도 같은 정보를 따로 들고 있다. scheduler는 step마다 새로 
 
 vLLM의 batching은 batch를 step마다 다시 짜는 continuous batching이고, 여기에 prefill token과 decode token을 한 step에 섞는다. 그림은 같은 request 네 개를 세 방식으로 처리한다.
 
-<Figure
-  src="/assets/images/post/2026-10-12-Inside-vLLM/03-4-batching-compare-light.svg"
-  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-4-batching-compare-dark.svg"
+<FigureSteps
+  base="/assets/images/post/2026-10-12-Inside-vLLM/03-4-batching-compare"
   caption="static batching, continuous batching, vLLM의 continuous batching 비교."
+  labels={[
+    'step 1: A, B, C가 prefill한다. 세 방식이 같다.',
+    'step 2: D가 도착한다. static batching은 batch가 이미 차 있어서 D가 기다린다.',
+    'step 3: continuous batching은 D의 prefill만 하고 A, B, C를 멈춘다. vLLM은 네 request를 한 step에 섞는다.',
+    'step 4: static batching에서 B가 끝났지만, 그 자리는 padding으로 남는다.',
+    'step 5: C도 끝난다. static batching은 빈 자리 두 개를 padding으로 채운다.',
+    'step 6: 가장 긴 A가 끝나야 static batching의 batch가 끝난다.',
+    'step 7: static batching에서 D가 이제야 prefill한다. vLLM에서 D는 이미 decode 중이다.',
+    'step 8: 전체 비교. vLLM은 빈 칸과 기다리는 칸이 가장 적다.',
+  ]}
 />
 
 - static batching: A, B, C를 한 batch로 묶으면 가장 긴 A가 끝날 때까지 batch가 유지된다. 먼저 끝난 B와 C의 자리는 padding으로 채우고, step 2에 도착한 D는 batch가 끝난 step 7에야 시작한다.
@@ -741,10 +764,15 @@ attention layer는 forward 중에 KV cache를 두 번 쓴다.
 
 **position에서 slot까지**
 
-<Figure
-  src="/assets/images/post/2026-10-12-Inside-vLLM/04-block-table-lookup-light.svg"
-  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/04-block-table-lookup-dark.svg"
+<FigureSteps
+  base="/assets/images/post/2026-10-12-Inside-vLLM/04-block-table-lookup"
   caption="request C의 position이 block table을 거쳐 KV cache slot이 되는 과정."
+  labels={[
+    'C14: 14 // 16 = 0이므로 block 9, 나머지 14이므로 slot 158이다.',
+    'C15: 같은 block 9의 다음 칸, slot 159다.',
+    'C16: 16 // 16 = 1이므로 block 4로 넘어가고, 나머지 0이므로 slot 64다.',
+    '세 token 전체. 실제 forward에서는 세 token의 KV를 한 번에 쓴다.',
+  ]}
 />
 
 request C의 token C14가 KV를 쓸 위치를 찾는 과정은 세 단계다. C의 block ID 목록은 `[9, 4]`다.
@@ -805,10 +833,15 @@ speculative decoding은 작은 drafter가 다음 token 몇 개를 미리 추측�
 
 draft token의 KV는 일반 token과 같은 block, 같은 slot 계산으로 쓰이고, 틀린 draft의 KV는 지우지 않고 다음 step에 덮어쓴다. 예시의 A가 draft 2개(d17, d18)를 받았다고 하자.
 
-<Figure
-  src="/assets/images/post/2026-10-12-Inside-vLLM/04-spec-decode-kv-light.svg"
-  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/04-spec-decode-kv-dark.svg"
+<FigureSteps
+  base="/assets/images/post/2026-10-12-Inside-vLLM/04-spec-decode-kv"
   caption="draft 검증 step과 다음 step의 KV slot."
+  labels={[
+    '1. 배정: A는 A16, d17, d18 세 token을 배정받는다. position 16–18은 block 12 안이라 새 block이 필요 없다.',
+    '2. forward: forward 한 번으로 slot 192–194에 세 token의 KV를 쓴다.',
+    '3. 검증: d17은 맞고 d18은 틀렸다. num_computed_tokens는 18로 돌아가고, slot 194에는 틀린 KV가 남는다.',
+    '4. 덮어쓰기: 다음 step은 position 18부터 다시 계산하고, 새 KV가 slot 194를 덮어쓴다.',
+  ]}
 />
 
 1. 배정: A는 이번 step에 3 token(A16, d17, d18)을 배정받는다. `allocate_slots()`의 `num_new_tokens`에는 [검증 전 draft token도 포함된다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L450). position 16–18은 모두 block 12 안이므로 새 block은 필요 없다.

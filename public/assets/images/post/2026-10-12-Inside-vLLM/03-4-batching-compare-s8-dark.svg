@@ -1,0 +1,221 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 706" width="640" height="706"
+     role="img" aria-labelledby="vllm-batching-compare-dark-title vllm-batching-compare-dark-desc">
+  <title id="vllm-batching-compare-dark-title">Static batching, continuous batching, and continuous batching in vLLM</title>
+  <desc id="vllm-batching-compare-dark-desc">Four requests over eight steps. With static batching, requests A, B and C form one batch that runs until A, the longest, ends at step 6. B and C finish early and their slots are padded, and request D waits until step 7. With continuous batching the batch is rebuilt every step, but a step runs either prefill or decode. D starts its prefill at step 3 in a step of its own, and A, B and C wait for one step. In vLLM, prefill and decode tokens share a step: step 3 runs the tokens of A, B, C and D as one flat input.</desc>
+  <defs>
+    <style>
+      @font-face { font-family: 'Pretendard'; font-weight: 400; font-style: normal;
+        src: url(data:font/woff2;base64,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) format('woff2'); }
+      @font-face { font-family: 'Pretendard'; font-weight: 600; font-style: normal;
+        src: url(data:font/woff2;base64,d09GMgABAAAAAAXIAA0AAAAACoAAAAV4AAFPGgAAAAAAAAAAAAAAAAAAAAAAAAAAGhYbgngcKgZgAHQKiTiHZgE2AiQDQAsiAAQgBYJaByAbpQhRVHFKyL5IsG07nI0sjiIwUmSR3WwW285D8cEjzORuPPx37/v7nDuTVhpQqAiFKoUgwG15VBOKtv/1zQGeduV3SaoXO1HlpMzqJHR7Qd1eAFGx2+EeqemmS7oiJJUUhawkpYmd/P8CCImJY6broJ0nDnRgBTaR6sKIAplpguzffvZlhY/v36T6g+6yJyWePYrACCCFNC4EhuzQQ1ycPPjAOMMzk4GhwF9Rc+DpyUCjpCgGNWG7EuBJH5N3fccEugHaAQ98zOap4mzv479tj3e7nq2dNsCMt9c+sh3t22LPPGJ6uRGMGTcsdEaF1Cmqfn0GDBnGiEGlZiwIhP7e1y8n6/q+nHOPCnx5S3W6dO/pBxTqVC4Bb4ApXxuy4Z36W6SCYO+83AQ8OAIcWf1gD2T2eG++RpmrBNiAIdFhBkkAMtmNhnXRP9jgyJkHL1y4NFk/bLClAGR8Tu3TUUccsN8eU/r1RVChJpzYAGZB7AA5qnCFJi/jSz9HCk4JuSiNvAhB5FAZTIGKMWkrZRax1JctR8X0PCyA4ZcTggSJmfVzc1Ai5cMcOCRFGB9uEErn5xGMSH9wIxZ7qj9csk4qhZIRRrReYRTRifKhy/D4NqH0zpPiR3MCDBXTQfAWlNxUWYT1c6oQqpgNDCKz3TDxZ7YHIzCntZcuMZ2WJcVIPkIlBTQPXUA/W1UcFo+RsYTGVY3ER6mRUBqpUY0Hxua2M+qjblSKhM5fMsgXI1IgH1MpQAloHnL/Li1XkJwneWSNVCAI3QKpdKpJSFdJzr4iFG5fLEDECLnkqu92hhMrHhNREAJKQomoGKUhBGSR0PdR6OSHvXKCyrpnEhsORbI0F5fNwbnGJ5yx485AwyVqvddC42aSC+v701YyvEhNItFQXEby1ntRo26ztyriAmxtYnPMvRVm12rgSXpWwdaivNh0rIUKV5lLQsVtNn65O7PxZ6Nj+LNdWTnCFqvwHBaXuqh+5MmC8unDGttmfJ4+m/UGt3xohJI7/XTJIBWegCL5esN4w5Tjg0fTTuYbb9MfPXn66/fPRz/uP34KNFyy6fZsQ+7t3IZNd7eBndR7S1lZ9vqA4Zt7vjs7P3GU699DwH0ueWzaPcBa0r79tPaOKe8nT2Z9NLYfGqLkTd9e0oCscQXyhZK7FcA9Ai/VntzH7pOhSt6qjd9n3Cfm/yJzxp+mZ12u76i4XqxvYim3is1aSP7xZvX77PrClq+PYe+S9zVFf2ami/+/bOyte5hV8X23z3e4dqwQO/J80yxLfy8NLm444VHwrh9cLTNSbF3dMx3sM8mOYAgbkNDDN0vPVWT827wl68/50pKbwYcZ235Dnf8/K8gQWQzHx5kPZAi4vAyR2WB0rPlwhj8XNCOdIp19jISc3ySicEBht2KfXGczZAKeNnBF2HDx46ZFA2TUIdbBPyjF0ULbw8KHvVGxa01fb3ZkQtdJ34qSQ15JrbSIz3BYnj9v4HLSWOfLlRUhkT02wkqICBk4MUD+T54HfbLVf6vvRzClYElKdgL8+IG7K35quNKLDjKyMos3sUvxBoBArCtV768Zm2nxn9YNgM+kkKaAL5nRHpUvtkZTDgD9EgT9dw8McECpov+PcyYG8BzPQb2oFOap7hJRLaqKhAAuIMJH1G2m8r99GnU8co5X9Lg0j6lEIh8BE9SRQEhrqHgAgH7XSCKDOAc2NZyxoKYxj9TOhdzRYqZWS/ad0+eEFOylSJUnXZwYsTJxzLREPToPpY/DXZxEHC7yZEkWQ1O8OMl8pMNlwiWLEi5dFA6eTODCJU1htZMiURRuJkaWxPBj69KiT4cpc/b4BHjMN5MG7DWBwrekyxAnRTKOPbgNLCSVoLbaBg==) format('woff2'); }
+      @font-face { font-family: 'Fira Code'; font-weight: 400; font-style: normal;
+        src: url(data:font/woff2;base64,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) format('woff2'); }
+    </style>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#bfc0c0"/></marker>
+    <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#f08a59"/></marker>
+    <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#6a95d8"/></marker>
+  </defs>
+  <rect width="100%" height="100%" fill="#2d3142"/>
+  <g transform="translate(0,-8)">
+  <g>
+    <text x="40" y="40" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em">STATIC BATCHING</text>
+    <text x="40" y="54" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em">A BATCH RUNS UNTIL ITS LONGEST REQUEST ENDS · EMPTY SLOTS ARE PADDED</text>
+    <text x="195.0" y="74" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 1</text>
+    <text x="249.0" y="74" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 2</text>
+    <text x="303.0" y="74" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 3</text>
+    <text x="357.0" y="74" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 4</text>
+    <text x="411.0" y="74" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 5</text>
+    <text x="465.0" y="74" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 6</text>
+    <text x="519.0" y="74" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 7</text>
+    <text x="573.0" y="74" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 8</text>
+    <text x="40" y="95" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request A</text>
+    <text x="40" y="105" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">6 steps</text>
+    <rect x="170" y="84" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="195.0" y="99" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="224" y="84" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="249.0" y="99" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="278" y="84" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="303.0" y="99" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="332" y="84" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="357.0" y="99" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="386" y="84" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="411.0" y="99" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="440" y="84" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="465.0" y="99" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="40" y="123" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request B</text>
+    <text x="40" y="133" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">3 steps</text>
+    <rect x="170" y="112" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="195.0" y="127" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="224" y="112" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="249.0" y="127" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="278" y="112" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="303.0" y="127" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="332" y="112" width="50" height="22" rx="3" fill="none" stroke="rgba(245,245,245,0.35)" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="357.0" y="127" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">PAD</text>
+    <rect x="386" y="112" width="50" height="22" rx="3" fill="none" stroke="rgba(245,245,245,0.35)" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="411.0" y="127" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">PAD</text>
+    <rect x="440" y="112" width="50" height="22" rx="3" fill="none" stroke="rgba(245,245,245,0.35)" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="465.0" y="127" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">PAD</text>
+    <text x="40" y="151" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request C</text>
+    <text x="40" y="161" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">4 steps</text>
+    <rect x="170" y="140" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="195.0" y="155" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="224" y="140" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="249.0" y="155" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="278" y="140" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="303.0" y="155" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="332" y="140" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="357.0" y="155" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="386" y="140" width="50" height="22" rx="3" fill="none" stroke="rgba(245,245,245,0.35)" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="411.0" y="155" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">PAD</text>
+    <rect x="440" y="140" width="50" height="22" rx="3" fill="none" stroke="rgba(245,245,245,0.35)" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="465.0" y="155" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">PAD</text>
+    <text x="40" y="179" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request D</text>
+    <text x="40" y="189" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">arrives at step 2</text>
+    <text x="249.0" y="183" fill="#f08a59" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">WAIT</text>
+    <text x="303.0" y="183" fill="#f08a59" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">WAIT</text>
+    <text x="357.0" y="183" fill="#f08a59" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">WAIT</text>
+    <text x="411.0" y="183" fill="#f08a59" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">WAIT</text>
+    <text x="465.0" y="183" fill="#f08a59" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">WAIT</text>
+    <rect x="494" y="168" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="519.0" y="183" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="548" y="168" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="573.0" y="183" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <line x1="40" y1="226" x2="600" y2="226" stroke="rgba(245,245,245,0.12)" stroke-width="0.8"/>
+    <text x="40" y="250" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em">CONTINUOUS BATCHING</text>
+    <text x="40" y="264" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em">THE BATCH IS REBUILT EVERY STEP · A STEP RUNS PREFILL OR DECODE, NOT BOTH</text>
+    <text x="195.0" y="284" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 1</text>
+    <text x="249.0" y="284" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 2</text>
+    <text x="303.0" y="284" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 3</text>
+    <text x="357.0" y="284" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 4</text>
+    <text x="411.0" y="284" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 5</text>
+    <text x="465.0" y="284" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 6</text>
+    <text x="519.0" y="284" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 7</text>
+    <text x="573.0" y="284" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 8</text>
+    <text x="40" y="305" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request A</text>
+    <text x="40" y="315" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">6 steps</text>
+    <rect x="170" y="294" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="195.0" y="309" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="224" y="294" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="249.0" y="309" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="303.0" y="309" fill="#f08a59" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">WAIT</text>
+    <rect x="332" y="294" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="357.0" y="309" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="386" y="294" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="411.0" y="309" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="440" y="294" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="465.0" y="309" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="494" y="294" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="519.0" y="309" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="40" y="333" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request B</text>
+    <text x="40" y="343" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">3 steps</text>
+    <rect x="170" y="322" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="195.0" y="337" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="224" y="322" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="249.0" y="337" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="303.0" y="337" fill="#f08a59" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">WAIT</text>
+    <rect x="332" y="322" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="357.0" y="337" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="40" y="361" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request C</text>
+    <text x="40" y="371" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">4 steps</text>
+    <rect x="170" y="350" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="195.0" y="365" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="224" y="350" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="249.0" y="365" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="303.0" y="365" fill="#f08a59" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">WAIT</text>
+    <rect x="332" y="350" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="357.0" y="365" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="386" y="350" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="411.0" y="365" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="40" y="389" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request D</text>
+    <text x="40" y="399" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">arrives at step 2</text>
+    <text x="249.0" y="393" fill="#f08a59" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">WAIT</text>
+    <rect x="278" y="378" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="303.0" y="393" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="332" y="378" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="357.0" y="393" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="386" y="378" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="411.0" y="393" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="440" y="378" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="465.0" y="393" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="494" y="378" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="519.0" y="393" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="548" y="378" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="573.0" y="393" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="301.0" y="418" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 3 = D ONLY · A, B, C WAIT</text>
+    <line x1="40" y1="436" x2="600" y2="436" stroke="rgba(245,245,245,0.12)" stroke-width="0.8"/>
+    <rect x="274" y="499" width="54" height="116" rx="6" fill="rgba(240,138,89,0.10)" stroke="#f08a59" stroke-opacity="0.5" stroke-width="0.8" stroke-dasharray="4,4"/>
+    <text x="40" y="460" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em">CONTINUOUS BATCHING IN VLLM</text>
+    <text x="40" y="474" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em">PREFILL AND DECODE TOKENS SHARE ONE STEP · NO SLOTS, NO PADDING</text>
+    <text x="195.0" y="494" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 1</text>
+    <text x="249.0" y="494" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 2</text>
+    <text x="303.0" y="494" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 3</text>
+    <text x="357.0" y="494" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 4</text>
+    <text x="411.0" y="494" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 5</text>
+    <text x="465.0" y="494" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 6</text>
+    <text x="519.0" y="494" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 7</text>
+    <text x="573.0" y="494" fill="#8e98ac" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 8</text>
+    <text x="40" y="515" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request A</text>
+    <text x="40" y="525" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">6 steps</text>
+    <rect x="170" y="504" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="195.0" y="519" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="224" y="504" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="249.0" y="519" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="278" y="504" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="303.0" y="519" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="332" y="504" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="357.0" y="519" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="386" y="504" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="411.0" y="519" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="440" y="504" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="465.0" y="519" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="40" y="543" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request B</text>
+    <text x="40" y="553" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">3 steps</text>
+    <rect x="170" y="532" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="195.0" y="547" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="224" y="532" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="249.0" y="547" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="278" y="532" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="303.0" y="547" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="40" y="571" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request C</text>
+    <text x="40" y="581" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">4 steps</text>
+    <rect x="170" y="560" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="195.0" y="575" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="224" y="560" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="249.0" y="575" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="278" y="560" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="303.0" y="575" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="332" y="560" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="357.0" y="575" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="40" y="599" fill="#f5f5f5" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif">Request D</text>
+    <text x="40" y="609" fill="#8e98ac" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace">arrives at step 2</text>
+    <text x="249.0" y="603" fill="#f08a59" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.1em">WAIT</text>
+    <rect x="278" y="588" width="50" height="22" rx="3" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="303.0" y="603" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">prefill</text>
+    <rect x="332" y="588" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="357.0" y="603" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="386" y="588" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="411.0" y="603" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="440" y="588" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="465.0" y="603" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="494" y="588" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="519.0" y="603" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <rect x="548" y="588" width="50" height="22" rx="3" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="573.0" y="603" fill="#f5f5f5" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle">decode</text>
+    <text x="301.0" y="630" fill="#f08a59" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">STEP 3 = A, B, C, D</text>
+    <text x="301.0" y="642" fill="#f08a59" font-size="8" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">ONE FLAT INPUT</text>
+  </g>
+  <g>
+    <line x1="40" y1="662" x2="600" y2="662" stroke="rgba(245,245,245,0.1)" stroke-width="0.8"/>
+    <text x="40" y="678" fill="#bfc0c0" font-size="8" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" letter-spacing="0.12em">LEGEND</text>
+    <rect x="40" y="692" width="14" height="10" rx="2" fill="#393e53" stroke="#f5f5f5" stroke-width="1"/>
+    <text x="60" y="700" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Prefill</text>
+    <rect x="120" y="692" width="14" height="10" rx="2" fill="rgba(191,192,192,0.15)" stroke="#bfc0c0" stroke-width="1"/>
+    <text x="140" y="700" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Decode</text>
+    <rect x="200" y="692" width="14" height="10" rx="2" fill="transparent" stroke="rgba(245,245,245,0.35)" stroke-width="1" stroke-dasharray="3,2"/>
+    <text x="220" y="700" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Padding</text>
+    <text x="280" y="700" fill="#f08a59" font-size="7" font-family="'Fira Code', 'Pretendard', ui-monospace, monospace" letter-spacing="0.1em">WAIT</text>
+    <text x="306" y="700" fill="#bfc0c0" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Waiting in the queue or paused</text>
+  </g>
+  </g>
+</svg>
