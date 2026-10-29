@@ -543,6 +543,8 @@ sampling은 [`sample_tokens()`](https://github.com/vllm-project/vllm/blob/v0.32.
 
 forward와 sampling을 두 번의 호출로 나눈 이유는 structured output 때문이다. JSON schema나 정규식처럼 출력 형식을 강제하는 request는, sampling 전에 허용되지 않는 token의 logits를 지우는 grammar bitmask가 필요하다. 이 bitmask는 CPU에서 계산한다. 위의 `step()`을 보면 `execute_model(non_block=True)`로 forward를 시작한 뒤, GPU가 도는 동안 CPU가 `get_grammar_bitmask()`를 계산하고, 그 결과를 `sample_tokens()`에 넘긴다. 호출을 나눠야 bitmask 계산이 forward와 겹친다.
 
+structured output은 이 bitmask로 동작한다. request가 JSON schema나 정규식 같은 형식을 주면, EngineCore의 [`StructuredOutputManager`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/structured_output/__init__.py#L47)가 backend로 grammar를 [compile한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/structured_output/__init__.py#L126). backend는 기본값 `auto`에서 xgrammar, guidance, outlines, lm-format-enforcer 중 하나를 [고른다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/structured_outputs.py#L12-L20). compile은 thread pool에서 돌고, 그동안 request는 [`WAITING_FOR_STRUCTURED_OUTPUT_GRAMMAR`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L374) 상태로 기다린다. step마다 [`get_grammar_bitmask()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L1995)가 grammar의 현재 상태에서 허용되는 token을 bitmask로 만들고, sampler가 허용되지 않는 token의 logits를 지운다. token이 뽑히면 `update_from_output()`이 [`accept_tokens()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2186)로 grammar 상태를 그만큼 진행시킨다.
+
 #### 설계 결정: Model Runner V2를 처음부터 다시 만들었다
 
 위에서 본 `execute_model()`과 `sample_tokens()`는 Model Runner V2(MRV2)의 코드다. MRV2는 v0.12.0에서 실험 기능으로 들어와 v0.29.0부터 모든 model의 기본 실행 경로가 되었다([PR #25266](https://github.com/vllm-project/vllm/pull/25266)). [설계 문서](https://github.com/vllm-project/vllm/blob/v0.32.0/docs/design/model_runner_v2.md)는 V1 model runner를 다시 만든 이유로 "fundamental design mistakes"와 쌓인 기술 부채를 든다. 이 글의 흐름과 닿는 변경은 세 가지다.
@@ -665,6 +667,22 @@ slot_mapping = [192, 48, 49, 158, 159, 64, -1, -1]
 
 다음 step에 decode할 때도 같은 계산을 한다. A가 position 17의 token을 계산하면 그 KV는 block 12의 1번째 칸(`12 × 16 + 1 = 193`)에 쓰인다. block이 꽉 차면 scheduler가 `allocate_slots()`로 새 block을 받아 block table에 한 칸을 더한다.
 
+### chunked prefill: 긴 prompt를 여러 step에 나누기
+
+prompt가 한 step의 token budget보다 길면 scheduler는 prompt를 여러 step에 나눠 계산한다. 위 예시의 C가 바로 이런 조각이다. C는 이번 step에 position 14부터 16까지 3 token만 계산하고, 나머지는 다음 step으로 넘긴다.
+
+나누는 방법은 단순하다. scheduler는 request마다 남은 token 수를 계산한 뒤, 이를 [남은 token budget으로 자른다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L704-L712). 남은 부분은 request의 `num_computed_tokens`에 기록되어, 다음 step에 이어서 배정된다. `enable_chunked_prefill`은 [기본으로 켜져 있다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/scheduler.py#L134). 끄면 budget보다 긴 새 request는 [그 step에 넣지 않는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L1158-L1167).
+
+긴 prompt 하나가 budget을 다 차지하면 다른 request의 decode가 밀린다. `--long-prefill-token-threshold`는 이를 막는 상한이다. request 하나가 한 step에 계산할 prefill token 수를 이 값으로 자른다. 기본값은 0(끔)이고, request가 하나뿐이면 밀릴 request가 없으므로 [적용하지 않는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L640-L649). encoder-decoder model은 chunked prefill을 지원하지 않아서 [자동으로 끈다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/scheduler.py#L294-L302).
+
+### speculative decoding: draft token이 batch와 KV에 들어가는 방식
+
+speculative decoding은 작은 drafter가 다음 token 몇 개를 미리 추측하고, 본 model이 한 forward에서 이를 한꺼번에 검증하는 방식이다. 추측이 맞으면 한 step에 token 여러 개를 얻는다. drafter의 종류는 다양하다. v0.32.0의 MRV2에는 n-gram, EAGLE, MTP, DFlash 등이 [들어 있다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode). 여기서는 알고리즘이 아니라, draft token이 지금까지 본 batch와 KV 구조에 어떻게 들어가는지만 본다.
+
+- request: draft token은 [`Request.spec_token_ids`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L183)에 붙는다. scheduler가 보는 길이 [`num_tokens_with_spec`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L299-L300)에는 draft token이 포함된다. 그래서 decode request도 이번 step에 1 token이 아니라 `1 + draft 수`만큼 배정된다.
+- batch: 배정된 draft token은 [`SchedulerOutput.scheduled_spec_decode_tokens`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L251)로 worker에 간다. worker는 이를 다른 token과 함께 한 줄에 넣어 forward 한 번으로 계산하고, rejection sampler가 어디까지 맞았는지 판정한다.
+- KV: draft token도 KV를 쓰므로, `allocate_slots()`는 draft 수만큼 [slot을 더 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L781)(`num_lookahead_tokens`). 틀린 draft는 `update_from_output()`이 [`num_computed_tokens`를 되돌린다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2113-L2127). 그 자리에 쓰였던 KV는 다음 step에 올바른 token의 KV로 덮어써진다.
+
 ### scheduler의 block 소유와 재사용
 
 block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 뿐, block을 할당하거나 반납하지 않는다. 할당, 반납, prefix cache 재사용 규칙은 request 처리 4번의 [KVCacheManager 소제목](#kvcachemanager-block을-나눠-주고-돌려받는-방식)에서 다뤘다. 여기서는 그 규칙이 위 자료구조에서 어떻게 보이는지만 정리한다.
@@ -672,6 +690,39 @@ block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 �
 - 할당: `free_block_queue`에서 `KVCacheBlock`을 꺼내 `ref_cnt`를 1로 만들고, `req_to_blocks[request_id]`에 붙인다. worker에는 다음 `SchedulerOutput`으로 block ID가 전달된다.
 - 공유: prefix cache가 맞으면 같은 `KVCacheBlock`이 두 request의 `req_to_blocks`에 함께 들어가고, `ref_cnt`가 2가 된다. 두 request의 block table 행에 같은 block ID가 들어가므로, GPU의 같은 KV를 함께 읽는다.
 - 반납: request가 끝나면 그 request의 block마다 `ref_cnt`를 1씩 내린다. 0이 된 block만 `free_block_queue`로 돌아간다. GPU 메모리는 그대로이고, 다음에 이 block을 받는 request가 그 자리를 덮어쓴다.
+
+### 멀티턴 대화에서 KV cache를 다시 쓰는 방식
+
+멀티턴 대화는 이전 턴의 KV를 대부분 다시 쓴다. vLLM에는 대화 세션이라는 개념이 없지만, prefix caching이 같은 효과를 낸다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/04-multi-turn-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/04-multi-turn-dark.svg"
+  caption="두 번째 턴이 첫 번째 턴의 KV block을 다시 쓰는 과정."
+/>
+
+서버 입장에서 멀티턴 대화는 턴마다 새 request다. client가 이전 대화 전체를 `messages`에 다시 담아 보내고, 서버는 이를 처음 보는 request처럼 처리한다. 첫 번째 턴이 끝나면, 정상 종료든 stop string이나 연결 끊김에 따른 abort든 그 request의 block은 반납된다. 하지만 꽉 찬 block은 hash를 가진 채 `free_block_queue` 뒤에 들어가고, GPU의 KV 값도 그대로 남는다. 다른 request가 그 block을 받아 덮어쓰기 전까지는 다시 쓸 수 있다.
+
+두 번째 턴이 오면 renderer가 대화 전체를 다시 token화하고, scheduler가 block hash를 계산한다. 앞부분은 첫 번째 턴과 token이 같으므로 hash도 같고, `get_computed_blocks()`가 그 block을 찾아 다시 쓴다. 첫 번째 턴의 답변도 대부분 포함된다. 생성된 token도 block이 꽉 찰 때마다 [hash가 붙고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L272-L288), `allocate_slots()`가 계산을 마친 token까지 [cache에 등록하기](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L607-L615) 때문이다. 결국 새로 prefill하는 것은 처음으로 hash가 어긋나는 block부터다.
+
+다만 다시 계산되는 부분이 생기는 경우가 세 가지 있다.
+
+- 마지막 block: 꽉 차지 않은 block은 hash가 없어서 공유되지 않는다. 그래서 첫 번째 턴 끝의 최대 15 token은 다시 계산한다.
+- token이 달라지는 경우: 첫 번째 턴의 답변은 다음 턴에서 text로 돌아와 다시 token화된다. 이때 생성할 때와 다른 token이 될 수 있고, chat template이 턴 끝에 특수 token을 넣기도 한다. token이 처음 달라지는 block부터는 다시 계산한다.
+- eviction: 턴 사이에 다른 request가 많이 들어와 block이 모자라면, 오래 쓰지 않은 cache block부터 덮어써진다. 그 부분은 다시 prefill한다. KV offloading을 켜면 밀려난 block을 CPU 메모리나 디스크에서 다시 불러올 수 있다.
+
+여러 사용자가 한 서버를 쓸 때는 prefix cache가 사용자 사이에서도 공유된다는 점에 주의해야 한다. chat completions request의 [`cache_salt`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/protocol.py#L485-L492)를 사용자마다 다르게 주면, 첫 block의 hash에 salt가 섞여 다른 사용자의 cache와 맞지 않게 된다. 같은 이유로, system prompt를 턴마다 바꾸지 않아야 앞부분 block이 계속 재사용된다.
+
+### disaggregated prefill/decode: KV block이 instance 밖으로 나갈 때
+
+prefill은 계산이 많고, decode는 메모리 대역폭을 많이 쓴다. 두 일을 서로 다른 instance에 나누면 각각에 맞게 GPU를 쓸 수 있다. 이를 disaggregated prefill/decode(P/D)라고 한다. 이때 prefill instance가 만든 KV block을 decode instance로 옮겨야 하고, vLLM은 이 일을 KV connector에 맡긴다.
+
+KV connector는 [`--kv-transfer-config`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/kv_transfer.py#L60-L73)의 `kv_connector`로 고르고, `kv_role`로 이 instance가 KV를 보내는 쪽(`kv_producer`)인지 받는 쪽(`kv_consumer`)인지 정한다. NIXL 기반 [`NixlConnector`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/distributed/kv_transfer/kv_connector/factory.py#L178) 등이 있다. [connector](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/distributed/kv_transfer/kv_connector/v1/base.py#L180)는 scheduler 쪽과 worker 쪽으로 나뉜다. scheduler 쪽은 block 할당과 반납 시점을 정하고, worker 쪽은 실제로 KV를 layer마다 보내고 받는다.
+
+- prefill instance: request는 prefill을 마치면 끝난다. 이때 scheduler가 connector의 [`request_finished()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/distributed/kv_transfer/kv_connector/v1/base.py#L616-L636)를 호출하고, connector가 "아직 보내는 중"이라고 답하면 block 반납을 미룬다. 7번에서 본 "KV connector가 block을 보내는 중이면 반납을 미룬다"가 이 경우다.
+- decode instance: 새 request가 오면 scheduler가 [`get_num_new_matched_tokens()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/distributed/kv_transfer/kv_connector/v1/base.py#L501-L534)로 원격에서 받아올 수 있는 token 수를 묻는다. 그만큼 block을 할당하고, request를 [`WAITING_FOR_REMOTE_KVS`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L1320-L1323) 상태로 둔다. KV가 다 도착하면 받아 온 부분은 다시 계산하지 않고, 남은 token만 계산한 뒤 decode로 넘어간다.
+
+같은 connector 구조가 KV offloading에도 쓰인다. offloading connector는 GPU에서 밀려난 block을 CPU 메모리나 디스크에 보내 두고, 같은 prefix의 request가 오면 `get_num_new_matched_tokens()`로 다시 불러온다. 멀티턴 대화에서 eviction으로 사라진 block을 되살리는 것도 이 경로다.
 
 ### padding이 남는 곳: CUDA graph
 
