@@ -773,3 +773,11 @@ KV connector는 [`--kv-transfer-config`](https://github.com/vllm-project/vllm/bl
 padding은 한 군데에 남아 있다. CUDA graph는 capture한 batch 크기로만 재생할 수 있어서, 이번 step의 token 수를 가장 가까운 capture 크기로 올린다. 그림의 step은 실제 token이 6개(`num_tokens`)지만, 크기 8의 graph를 쓰려고 2개를 padding해 8개(`num_tokens_after_padding`)로 만든다. padding token의 slot은 `-1`이라 KV cache에 쓰이지 않고, 그 출력은 버린다. 이 padding은 request마다 생기는 것이 아니라 batch 끝에 한 번만 생기므로, 낭비는 batch 크기를 맞추는 몇 token에 그친다.
 
 ## 마치며
+
+이 글은 `vllm serve` 한 줄이 서버를 띄우고, chat request 하나가 token이 되어 돌아오기까지의 경로를 v0.32.0 소스 코드로 따라갔다. 서버 초기화에서는 프로세스와 config, KV cache가 준비되는 순서를 봤다. request 처리에서는 HTTP request가 tokenize, schedule, forward, detokenize를 거쳐 정리되는 과정을 봤다. 실행 batch와 KV cache에서는 그 과정을 받치는 batch와 KV block 구조를 봤다.
+
+글이 너무 길어져서 아래 주제는 이번 글에서 뺐다. 각 주제는 별도 포스트에서 다룰 예정이다.
+
+- SGLang의 구조: 같은 문제를 푸는 다른 serving engine인 SGLang이 server, scheduler, KV cache를 어떻게 나누는지 vLLM과 비교한다.
+- NCCL 초기화: 이 글은 GPU 하나를 가정했다. GPU 여러 개로 model을 나눠 띄울 때 worker process가 NCCL 통신을 언제, 어떻게 초기화하는지 본다.
+- FlashInfer 같은 attention backend의 결합: [1.4](#14-block-table-token-위치에서-kv-cache-주소로)에서 본 `slot_mapping`과 attention metadata가 FlashAttention, FlashInfer 같은 backend로 어떻게 넘어가고, backend를 어떻게 고르는지 본다.
