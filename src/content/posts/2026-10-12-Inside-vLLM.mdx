@@ -740,6 +740,36 @@ prefix cache에는 검증된 token만 올라간다. block hash를 등록할 toke
 
 `num_lookahead_tokens`는 이와 별개다. EAGLE처럼 자기 KV cache를 쓰는 drafter를 위한 값이다([docstring](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L395-L397)). drafter는 다음 step에 쓸 draft를 만들면서 그 위치의 KV를 쓴다. 그래서 `allocate_slots()`는 본 model이 쓸 slot에 이 수를 더한 만큼 [block을 미리 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L542-L544).
 
+#### drafter별 KV cache
+
+drafter가 model이면 그 attention layer도 KV를 쓰고, 이 KV는 본 model과 같은 자료구조에 들어간다. draft layer는 본 model과 같은 `vllm_config`에 등록되고, [`get_kv_cache_spec()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/attn_utils.py#L142-L151)이 모든 attention layer의 spec을 한 dictionary에 모은다. 그래서 [1.1](#11-request와-kv-block의-자료구조)의 `KVCacheManager`와 block pool이 draft KV까지 관리한다. layer의 spec이 모두 같은 일반적인 경우 [한 KV cache group으로 묶이므로](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_utils.py#L2189-L2193), block ID 하나가 본 model layer와 draft layer의 KV tensor에서 같은 자리를 가리킨다. worker의 drafter도 본 model의 [`BlockTables`를 그대로 쓰고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/speculator.py#L298), [1.4](#14-block-table-token-위치에서-kv-cache-주소로)와 같은 방식으로 `slot_mapping`을 계산한다.
+
+drafter마다 다른 점은 자기 KV가 있는지, 틀린 draft의 KV를 어떻게 처리하는지, lookahead slot이 몇 개 필요한지다. 아래 표에서 K는 `num_speculative_tokens`이고, lookahead 값은 [`VllmConfig.num_lookahead_tokens`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L615-L641)에서 정한다.
+
+| drafter | 자기 KV | 틀린 draft 자리의 drafter KV | lookahead |
+| --- | --- | --- | --- |
+| n-gram, suffix | 없음. 이미 나온 token에서 같은 패턴을 찾는다 | 해당 없음 | 0 |
+| EAGLE, EAGLE3, MTP | 있음. 본 model의 hidden state를 받는 draft layer | 본 model과 같은 query 길이로 [틀린 위치까지 계산하고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/target_dependent_ar/speculator.py#L204-L209), 다음 step에 덮어쓴다 | K |
+| multi-module MTP | 있음. MTP module 여러 개 | 다음 step에 입력을 다시 넣어 [뒤쪽 module의 오래된 slot을 갱신한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/multi_module_mtp/speculator.py#L52-L54) | K |
+| DFlash (dflash2, LiLiCorr 포함) | 있음. bonus 1개와 mask K개 query를 [한 번에 계산한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/dflash/speculator.py#L60-L62) | 틀린 행은 [PAD slot을 받아 KV를 쓰지 않는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/dflash/speculator.py#L628-L632) | K + 1 |
+| DSpark | 있음. DFlash를 확장한 block drafter | DFlash와 같다 | 기본(anchor sampling) K, 그 외 K + 1 |
+| draft model | 있음. 별도의 작은 LM | [임시 KV를 쓰고 나중에 덮어쓴다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/standalone_ar/speculator.py#L477-L479) | K |
+| Gemma4 MTP | 없음. 본 model layer의 [KV를 공유한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/gemma4/speculator.py#L5-L7) | 해당 없음 | K |
+
+정리하면, drafter KV도 본 model KV와 같은 규칙을 따른다. block은 scheduler가 `req_to_blocks`로 나눠 주고, worker는 같은 block table로 slot을 찾으며, 틀린 자리는 지우지 않고 다시 쓴다. 다른 점은 drafter가 본 model보다 앞선 position에 KV를 쓴다는 것뿐이고, 그 자리를 lookahead slot이 미리 확보한다.
+
+#### 설계 결정: drafter가 쓸 자리를 미리 잡는다
+
+scheduler는 본 model이 계산할 token 외에 lookahead slot까지 [block을 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L542-L544). drafter는 본 model의 query 범위 뒤쪽 position에 KV를 쓰는데, block table이 그 position을 덮지 않으면 엉뚱한 block에 쓰게 된다. [PR #42971](https://github.com/vllm-project/vllm/pull/42971)은 이 문제를 실제로 겪은 사례다. 새 request의 첫 step에 lookahead block을 잡지 않아서, DFlash drafter가 마지막 prefill block에 KV를 덮어썼다. prefix caching을 켜고 동시 request가 많으면 그 block은 여러 request가 공유하는 block이라, 정상이던 request의 KV까지 망가졌다. scheduler 쪽 수정은 [PR #43733](https://github.com/vllm-project/vllm/pull/43733)에서 들어갔다. 지금은 lookahead 값을 [`num_lookahead_tokens` 한 곳에서만 계산하고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L616-L623), scheduler와 worker warmup이 같은 값을 읽는다.
+
+#### 설계 결정: 틀린 draft의 KV는 지우지 않고 덮어쓴다
+
+틀린 draft의 KV는 지우지 않는다. scheduler는 `num_computed_tokens`만 되돌리고, 다음 step이 같은 slot에 올바른 KV를 쓴다. EAGLE 계열 drafter는 한발 더 나아가 틀린 위치까지 포함해 본 model과 같은 query 길이로 계산한다. 코드 주석에 따르면 이유는 두 가지다. 틀린 token 수를 CPU가 알려면 CPU와 GPU를 동기화해야 하는데, 이를 피할 수 있다. 그리고 본 model의 `query_start_loc`, `seq_lens` 같은 attention metadata를 [그대로 다시 쓸 수 있다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/target_dependent_ar/speculator.py#L204-L209).
+
+#### 설계 결정: draft를 위한 자리도 token budget에서 뺀다
+
+drafter가 본 model의 batch 안에서 draft query를 계산하면, 그 query도 한 step의 token budget을 쓴다. 그래서 scheduler는 drafter 방식에 따라 request마다 [추가 slot 수를 budget에서 미리 뺀다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/speculative.py#L1887-L1925). EAGLE3와 MTP는 0, draft model은 1, DFlash는 K다. 이 표는 v0.32.0 기준이다. 그 직후 [PR #59468](https://github.com/vllm-project/vllm/pull/59468)은 DFlash와 DSpark가 draft를 본 model batch 밖에서 계산한다는 점을 들어 이 값을 0으로 바꿨다. 이 PR은 v0.32.0 tag에는 들어 있지 않다.
+
 ### 4. scheduler의 block 소유와 재사용
 
 block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 뿐, block을 할당하거나 반납하지 않는다. 할당, 반납, prefix cache 재사용 규칙은 request 처리 4번의 [KVCacheManager 소제목](#kvcachemanager-block을-나눠-주고-돌려받는-방식)에서 다뤘다. 여기서는 그 규칙이 위 자료구조에서 어떻게 보이는지만 정리한다.
