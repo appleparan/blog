@@ -333,17 +333,98 @@ vLLM에서는 route가 handler의 async generator를 Starlette의 [`StreamingRes
 
 ### 2. Tokenize: chat request를 model 입력으로
 
-2번은 chat 형식의 request를 model이 받는 token ID로 바꾸는 단계다. 이 일은 API server 프로세스에서 일어나고, EngineCore는 이미 token화된 입력만 받는다.
+2번은 chat 형식의 request를 엔진에 넘길 형태로 바꾸는 단계다. 하는 일은 세 가지다. messages를 token ID로 바꾸고, 생성할 token 수의 한도를 정하고, sampling parameter를 만든다. 이 일은 모두 API server 프로세스에서 일어나고, EngineCore는 이미 token화된 입력만 받는다.
 
 [`OpenAIServingChat`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L118)의 [`_create_chat_completion()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L296-L415)이 실제 일을 한다. 먼저 [`render_chat_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L258-L279)가 model 이름을 확인하고, renderer의 [`render_chat()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/renderers/online_renderer.py#L224-L317)을 호출한다. 여기서 messages, system prompt, tools를 model의 chat template에 넣어 prompt 문자열을 만들고, tokenizer로 token ID로 바꾼다. 결과가 [`EngineInput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/inputs/engine.py#L266)이다. [서버 초기화 4번](#4-engine-client-asyncllm-생성과-enginecore-연결)에서 본 renderer가 바로 이 일을 한다.
 
-그 다음 생성 한도와 sampling parameter를 정한다. `max_tokens`가 없으면 `max_model_len`에서 prompt 길이를 뺀 값이 한도가 된다. `to_sampling_params()`는 temperature, top-p, stop 같은 request 필드를 `SamplingParams`로 옮긴다. 마지막으로 `engine_client.generate()`를 호출한다. 이 서버에서 `engine_client`는 [서버 초기화 4번](#4-engine-client-asyncllm-생성과-enginecore-연결)에서 만든 [`AsyncLLM`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L84)이다.
+생성 한도는 [`get_max_tokens()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/serve/utils/api_utils.py#L169-L205)가 정한다. 규칙의 핵심은 하나다. prompt와 생성 token을 합친 길이는 `max_model_len`을 넘을 수 없다. 그래서 prompt를 넣고 남은 공간이 상한이 되고, request나 서버 설정이 그보다 작은 값을 주면 그 값이 한도가 된다. 각 값의 정의와 관계는 2번 끝의 [생성 한도를 정하는 값들](#생성-한도를-정하는-값들)에서 자세히 다룬다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-2-max-tokens-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-2-max-tokens-dark.svg"
+  caption="max_model_len 안에서 max_tokens가 정해지는 방식. prompt(input_length)를 넣고 남은 공간이 생성 한도의 상한이다."
+/>
+
+코드의 변수 이름으로 쓰면 아래와 같다.
+
+$$
+\begin{aligned}
+\text{model\_max\_tokens} &= \text{max\_model\_len} - \text{input\_length} \\
+\text{max\_tokens} &= \min\big(\text{model\_max\_tokens},\ \text{fallback\_max\_tokens},\ \text{override\_max\_tokens},\ \text{platform\_max\_tokens}\big)
+\end{aligned}
+$$
+
+sampling parameter는 [`to_sampling_params()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/protocol.py#L715)가 만든다. 이 함수는 temperature, top-p, stop 같은 request 필드로 [`SamplingParams`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/sampling_params.py#L268)를 만든다. 마지막으로 `engine_client.generate()`를 호출한다. 이 서버에서 `engine_client`는 [서버 초기화 4번](#4-engine-client-asyncllm-생성과-enginecore-연결)에서 만든 [`AsyncLLM`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L84)이다.
+
+#### 생성 한도를 정하는 값들
+
+아래 값은 모두 token 단위다.
+
+- context length: model이 한 번에 다룰 수 있는 최대 token 수다. model의 HF `config.json`에 적혀 있다.
+- `max_model_len`: 이 서버가 허용하는 sequence 길이의 상한이다. sequence는 prompt와 생성 token을 합친 것이다.
+- `input_length`: prompt 길이(prompt_len). chat template을 적용해 token화한 prompt의 token 수다.
+- `model_max_tokens`: prompt를 넣고 남은 공간, 즉 `max_model_len - input_length`다.
+- `fallback_max_tokens`: request가 요청한 한도다. `max_completion_tokens`, 없으면 `max_tokens`, 그것도 없으면 model의 기본 sampling 설정 값을 쓴다.
+- `override_max_tokens`: 서버 운영자가 `--override-generation-config`의 `max_new_tokens`로 건 강제 상한이다.
+- `platform_max_tokens`: 외부 플랫폼 plugin을 위한 상한이다. CUDA를 포함한 기본 플랫폼에서는 [제한이 없다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/platforms/interface.py#L224-L225).
+
+`max_tokens`는 두 단계로 정해진다. 먼저 `max_model_len`은 context length를 넘지 못한다. 사용자가 `--max-model-len`을 주면 그 값을, 주지 않으면 context length를 쓰고, context length보다 큰 값을 주면 기본적으로 [오류가 난다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/model.py#L2639-L2664).
+
+$$
+\text{max\_model\_len} = \min\big(\texttt{--max-model-len},\ \text{context length}\big)
+$$
+
+context length는 model마다 키 이름이 달라서, vLLM은 `max_position_embeddings`, `n_positions`, `max_seq_len`, `seq_length` 같은 후보 키 중 config에 있는 값의 [최솟값을 쓴다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/transformers_utils/model_arch_config_convertor.py#L394-L427). Llama나 Qwen 같은 대부분의 model은 `max_position_embeddings`다. tokenizer config에 `model_max_length`가 있으면 그 값으로 더 줄어들 수 있다.
+
+그 다음 `max_tokens`는 `model_max_tokens`, `fallback_max_tokens`, `override_max_tokens`, `platform_max_tokens` 중 가장 작은 값이다. 값이 없는(`None`) 항은 `min`에서 빠진다. 그래서 request가 한도를 주지 않으면 `model_max_tokens`가 그대로 한도가 되고, request가 큰 값을 줘도 context 길이를 넘지는 못한다.
+
+`max_new_tokens`는 `max_tokens`와 같은 값의 다른 이름이다. Hugging Face의 `generation_config.json`과 `--override-generation-config`는 이 값을 `max_new_tokens`라고 적고, vLLM은 읽을 때 `max_tokens`로 [매핑한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/model.py#L1883-L1888). 아래에서 HF는 `generation_config.json`의 `max_new_tokens`를, override는 `--override-generation-config`의 `max_new_tokens`를 뜻한다.
+
+HF 파일을 어디서 읽는지는 `--generation-config` 값이 [정한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/model.py#L1824-L1837). `auto`(기본값)면 `--model`로 준 곳에서 읽는다. `--model`은 HF Hub repo id일 수도, local 폴더일 수도 있다. 폴더 경로를 주면 그 폴더에서 읽고, `vllm`이면 읽지 않는다.
+
+이 값들은 두 가지 역할 중 하나를 맡는다. 차이는 request가 값을 줬을 때 드러난다.
+
+- 기본값: request가 값을 주지 않았을 때만 그 자리를 채운다. request가 값을 주면 그 값이 더 커도 request 값을 쓴다.
+- 강제 상한: request가 무엇을 주든 그 값을 위에서 자른다. `min`에 항상 들어간다.
+
+`get_max_tokens()`는 세 단계로 `max_tokens`를 정한다.
+
+1. 원하는 값(requested)을 고른다. request의 `max_completion_tokens`, `max_tokens`, 서버 기본값 순서로 보고 처음 있는 값을 쓴다. 서버 기본값은 override가 있으면 override, 없으면 HF다.
+2. 강제 상한(cap)을 고른다. `--generation-config`가 폴더 경로면 서버 기본값이, 아니면 override가 [상한이 된다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L175-L181). 둘 다 없으면 상한도 없다.
+3. `model_max_tokens`, requested, cap 중 가장 작은 값을 고른다. 값이 없는 항은 빠진다.
+
+그림의 "override > HF"는 둘 다 있으면 override를 쓴다는 뜻이다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-2-max-tokens-flow-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-2-max-tokens-flow-dark.svg"
+  caption="get_max_tokens()가 max_tokens를 정하는 순서."
+/>
+
+예를 들어 `model_max_tokens`가 4000이고, model의 `generation_config.json`에 `max_new_tokens: 512`가 있다고 하자. 아래 표에서 열은 서버를 띄운 설정이고(`<dir>`은 `generation_config.json`이 있는 폴더 경로), 행은 client가 보낸 request 하나다. 칸의 값은 그 request에 실제로 적용되는 `max_tokens`다. 셋째 열은 `auto`에 `--override-generation-config '{"max_new_tokens": 1000}'`을 더한 설정이다.
+
+| client request의 `max_tokens` | `--generation-config auto` | `--generation-config <dir>` | `auto` + override 1000 |
+| --- | --- | --- | --- |
+| 없음 | 512 | 512 | 1000 |
+| 100 | 100 | 100 | 100 |
+| 2000 | 2000 | 512 | 1000 |
+
+`auto`에서 512는 기본값이라 request의 2000을 막지 않는다. 폴더 경로에서는 512가 강제 상한이라 2000이 512로 잘린다. override를 주면 1000이 강제 상한이 되고, 파일 값 위에 덮어써지므로 기본값 자리도 1000이 차지한다. `vllm`이면 파일을 읽지 않으므로 override만 적용된다.
+
+헷갈리기 쉬운 점을 정리하면 아래와 같다.
+
+- `input_length`는 prompt 길이(prompt_len)다. 이름에 input이 들어가지만 생성 token은 포함하지 않는다.
+- `max_model_len`은 context length와 같은 값이 아니다. 둘 중 작은 값이고, 대개 사용자가 `--max-model-len`으로 줄인 값이다.
+- `max_new_tokens`와 `max_tokens`는 같은 값이다. HF와 `--override-generation-config`는 앞의 이름을, vLLM 내부와 OpenAI API는 뒤의 이름을 쓴다.
+- HF 파일은 local 경로를 뜻하지 않는다. `auto`면 `--model`이 가리키는 곳(HF Hub 또는 local)의 파일이다.
+- `auto`에서 HF 값은 기본값일 뿐이다. request가 더 큰 값을 주면 막지 않는다.
+- override는 강제 상한이면서 기본값 자리도 덮어쓴다. 그래서 request가 비어 있으면 HF 값이 아니라 override 값이 쓰인다.
 
 ### 3. ZMQ ADD: `AsyncLLM`에서 EngineCore로
 
 3번은 request를 엔진에 등록하고, 결과를 받을 자리를 마련하는 단계다. 등록은 API server와 EngineCore 양쪽에서 일어난다.
 
-[`AsyncLLM.generate()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L698-L809)는 먼저 [`add_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L388)를 호출한다. 여기서 [`InputProcessor`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L161)가 [`EngineInput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/inputs/engine.py#L266)과 `SamplingParams`를 검증하고 [`EngineCoreRequest`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/__init__.py#L109)로 묶는다. 그 다음 두 줄이 순서대로 실행된다.
+[`AsyncLLM.generate()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L698-L809)는 먼저 [`add_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L388)를 호출한다. 여기서 [`InputProcessor`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L161)가 [`EngineInput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/inputs/engine.py#L266)과 [`SamplingParams`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/sampling_params.py#L268)를 검증하고 [`EngineCoreRequest`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/__init__.py#L109)로 묶는다. 그 다음 두 줄이 순서대로 실행된다.
 
 ```python
 self.output_processor.add_request(request, prompt, parent_req, index, queue)
