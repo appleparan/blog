@@ -266,7 +266,7 @@ step마다 실제로 어떻게 고르는지는 [request 처리의 4번](#4-sched
 
 ## request 처리
 
-이 파트는 request 하나가 들어와서 응답이 나갈 때까지를 따라간다. 기준은 앞과 같다. text 생성 model, API server 하나, EngineCore 하나, GPU 하나에 `/v1/chat/completions` request를 보내는 경우다. 서버 초기화가 상자를 만드는 순서였다면, 여기서는 그 상자 사이의 화살표를 따라간다.
+이 파트는 request 하나가 들어와서 응답이 나갈 때까지를 따라간다. 기준은 앞과 같다. text 생성 model, API server 하나, EngineCore 하나, GPU 하나에 `/v1/chat/completions` request를 보내는 경우다. 다른 API나 multimodal 입력, streaming 입력처럼 이 가정에서 벗어나는 경로는 필요한 곳에서 따로 설명한다. 서버 초기화가 상자를 만드는 순서였다면, 여기서는 그 상자 사이의 화살표를 따라간다.
 
 <Figure
   src="/assets/images/post/2026-10-12-Inside-vLLM/03-request-flow-light.svg"
@@ -434,6 +434,10 @@ await self.engine_core.add_request_async(request)
 [첫 줄](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L572)은 API server 쪽에 이 request의 detokenizer, logprob 처리기, 결과 queue를 등록한다. [둘째 줄](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L575)은 EngineCore에 ADD message를 보낸다. 결과 queue를 먼저 만들어 두므로, 엔진 출력이 아무리 빨리 와도 받을 자리가 이미 있다. `generate()`는 이후 이 queue([`RequestOutputCollector`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/output_processor.py#L53))를 async generator로 읽으며 결과를 기다린다.
 
 ADD message는 [서버 초기화 4번](#4-engine-client-asyncllm-생성과-enginecore-연결)에서 bind한 ROUTER 소켓으로 간다. [`AsyncMPClient.add_request_async()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core_client.py#L1296)가 request를 msgspec으로 직렬화해 ZMQ로 보낸다. EngineCore 쪽에서는 입력 thread가 이 message를 받아 [`preprocess_add_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1089)로 [`Request`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L60) 객체로 바꾼다. busy loop는 이 객체를 [`_handle_client_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1674)로 넘기고, [`add_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L508)가 scheduler의 waiting queue에 넣는다.
+
+ADD를 보내기 전에 `add_request()`는 [`check_admission()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L316-L374)으로 admission을 검사한다. 끝나지 않은 request 수가 `--max-num-queued-reqs`를, prefill 중인 prompt token 합이 `--max-num-queued-tokens`를 넘으면 request를 거절하고 HTTP 503으로 응답한다. 503은 load balancer나 client SDK가 다른 instance로 retry하게 하려는 선택이다. 다만 두 값의 [기본값은 `None`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/scheduler.py#L92-L105)이라, 설정하지 않으면 API server는 request를 거절하지 않는다. ZMQ도 막지 않는다. vLLM은 ZMQ 소켓의 [high-water mark를 0](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/utils/network_utils.py#L372-L376)(무제한)으로 두므로, ZMQ는 메시지를 버리거나 막지 않는다. 그래서 기본 설정에서 몰린 request는 EngineCore의 입력 queue를 거쳐 scheduler의 waiting queue에 쌓이고, 그만큼 TTFT가 늘어난다. 이 waiting queue를 어떻게 비우는지는 4번에서 본다.
+
+입력 자체가 stream으로 들어오는 경우는 경로가 조금 다르다. 실시간 음성 인식 API는 오디오 조각이 도착할 때마다 [`StreamingInput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/speech_to_text/realtime/serving.py#L59-L89)을 yield한다. `add_request()`는 이런 입력을 [`_add_streaming_input_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L580-L673)로 넘긴다. 이 함수는 결과 queue를 먼저 만들어 바로 반환하고, 입력을 읽는 task를 따로 띄운다. 그 task가 입력 조각마다 request를 만들어 같은 queue로 EngineCore에 이어 붙인다. admission은 첫 조각을 보낼 때 한 번만 검사한다. 거절되면 그 오류가 queue를 통해 `generate()`로 전달된다. SSE는 출력을 조금씩 보내는 방식이라 이 경로와 관계가 없다. chat completions는 `stream: true`여도 위의 일반 경로를 탄다.
 
 ### 4. Schedule: step마다 계산할 token 배정
 
