@@ -18,9 +18,9 @@ import Figure from '../../components/Figure.astro';
 
 이럴 때 가장 좋은 방법은 역시 직접 글로 정리해 보는 것이다. 코드를 따라가며 이해한 내용을 내 방식대로 풀어 쓰다 보면, 적어도 쉽게 잊어버리지는 않는다.
 
-게다가 위 글은 2025년 가을의 글이고 그 뒤로 vLLM이 Model Runner v2도 나오고, 그사이 vLLM에는 Model Runner V2를 비롯해 많은 변화가 있었다. 따라서 이번에는 2026년 10월, vLLM v0.32.0을 기준으로 내부 아키텍처를 다시 살펴보려 한다.
+게다가 위 글은 2025년 가을의 글이고, 그사이 vLLM에는 큰 변화가 많았다. V0 engine이 완전히 제거되어 V1만 남았고, async scheduling이 기본으로 켜졌으며, Model Runner V2가 모든 model의 기본 실행 경로가 되었다. Python API server를 대신할 Rust frontend도 실험 기능으로 들어왔다. 따라서 이번에는 2026년 10월, vLLM v0.32.0을 기준으로 내부 아키텍처를 다시 살펴보려 한다.
 
-특히 대 LLM 시대를 맞아, 실제 소스 코드를 하나씩 뜯어보면서 이해해보려고 한다. (v0.32.0 기준)
+이번 글은 설명을 요약하는 대신, vLLM 소스 코드를 직접 열어 보며 따라간다.
 
 ## 큰 그림
 
@@ -242,13 +242,13 @@ EngineCore는 worker가 몇 개인지, 같은 프로세스에 있는지 신경 �
 
 scheduler는 step마다 어떤 request의 token을 몇 개 계산할지 정한다. 기준은 두 가지다. 하나는 한 step에 계산할 수 있는 token 수(token budget)다. 3번에서 본 `max_num_batched_tokens`가 이 상한을 [정한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L137-L141). 다른 하나는 KV cache block이다. request가 새 token을 계산하려면 그 token의 KV를 저장할 block이 있어야 한다. [`KVCacheManager`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L328)는 GPU의 KV block 전체를 관리하는 객체로, request에 block을 [나눠 주고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L778) 끝난 request의 block을 [돌려받는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L620). block이 모자라면 scheduler는 실행 중인 request 하나를 [preempt해](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L795-L802) block을 확보한다.
 
-step마다 실제로 어떻게 고르는지는 request 처리의 4번에서 다룬다.
+step마다 실제로 어떻게 고르는지는 [request 처리의 4번](#4-schedule-step마다-계산할-token-배정)에서 다룬다.
 
 ### 6. HTTP serving: route 등록과 Uvicorn 실행
 
 다시 2번의 [`run_server_worker()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L180)로 돌아온다. [`AsyncLLM`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L84)이 반환되면 [`run_server_worker()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L180)는 [`build_and_serve()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L116)를 호출한다. 이 함수는 먼저 엔진에게 지원하는 task 목록([`SupportedTask`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/tasks.py#L43))과 `model_config`를 받아 온다. task 목록에는 `generate` 같은 생성 task와 `embed` 같은 pooling task가 들어 있다.
 
-[`build_app()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/app.py#L19)은 FastAPI app을 만들고, [`register_api_routers()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/routers.py#L12)로 이 목록에 맞는 route만 등록한다. 예를 들어 `generate`가 있으면 `/v1/chat/completions` 같은 생성 route를 붙인다. [`init_app_state()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/app_state.py#L24)는 route가 쓸 handler를 `app.state`에 만들어 둔다. chat request를 처리하는 `OpenAIServingChat`도 여기서 생긴다. 마지막으로 [`serve_http()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L175)를 호출한다.
+[`build_app()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/app.py#L19)은 FastAPI app을 만들고, [`register_api_routers()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/routers.py#L12)로 이 목록에 맞는 route만 등록한다. 예를 들어 `generate`가 있으면 `/v1/chat/completions` 같은 생성 route를 붙인다. [`init_app_state()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/app_state.py#L24)는 route가 쓸 handler를 `app.state`에 만들어 둔다. chat request를 처리하는 [`OpenAIServingChat`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L118)도 여기서 생긴다. 마지막으로 [`serve_http()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L175)를 호출한다.
 
 [`serve_http()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L175)는 Uvicorn 설정을 만들고, `server.serve()` coroutine을 event loop에 task로 올린다. event loop가 이 task를 실행하면 Uvicorn이 시작하면서 소켓에 `listen()`을 호출한다. `accept()`는 그 뒤 연결이 들어올 때마다 일어난다. Uvicorn 서버로는 signal handler를 설치하지 않는 [`NoSignalServer`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L45)를 쓴다.
 
@@ -266,6 +266,8 @@ step마다 실제로 어떻게 고르는지는 request 처리의 4번에서 다�
 
 ## request 처리
 
+이 파트는 request 하나가 들어와서 응답이 나갈 때까지를 따라간다. 기준은 앞과 같다. text 생성 model, API server 하나, EngineCore 하나, GPU 하나에 `/v1/chat/completions` request를 보내는 경우다. 다른 API나 multimodal 입력, streaming 입력처럼 이 가정에서 벗어나는 경로는 필요한 곳에서 따로 설명한다. 서버 초기화가 상자를 만드는 순서였다면, 여기서는 그 상자 사이의 화살표를 따라간다.
+
 <Figure
   src="/assets/images/post/2026-10-12-Inside-vLLM/03-request-flow-light.svg"
   darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-request-flow-dark.svg"
@@ -274,21 +276,365 @@ step마다 실제로 어떻게 고르는지는 request 처리의 4번에서 다�
 
 ### 계층별 request 객체
 
-### 1. FastAPI router의 request 수신
+같은 request도 계층을 지날 때마다 다른 객체가 된다. 각 계층은 자기에게 필요한 정보만 남기고 나머지는 버리거나 다음 계층에 넘긴다. 아래 표의 이름이 이후 각 절에 차례로 나온다.
 
-### 2. chat request의 token화
+| 위치 | 객체 | 담는 것 |
+| --- | --- | --- |
+| FastAPI | [`ChatCompletionRequest`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/protocol.py#L220) | HTTP JSON body를 Pydantic으로 검증한 결과 |
+| renderer | [`EngineInput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/inputs/engine.py#L266) | chat template과 tokenizer를 적용한 입력(prompt token ID) |
+| `AsyncLLM` | [`EngineCoreRequest`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/__init__.py#L109) | sampling parameter, LoRA, priority까지 묶어 엔진에 보낼 request |
+| EngineCore | [`Request`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L60) | scheduler가 상태와 KV block을 관리하는 request |
+| scheduler → worker | [`SchedulerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L232) | 이번 step에 request마다 계산할 token 수와 새 KV block |
+| worker → scheduler | [`ModelRunnerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/outputs.py#L267) | 뽑힌 token ID와 logprob |
+| EngineCore → `AsyncLLM` | [`EngineCoreOutputs`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/__init__.py#L259) | request별 [`EngineCoreOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/__init__.py#L199) 묶음 |
+| `AsyncLLM` → FastAPI | [`RequestOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/outputs.py#L129) | detokenize한 text와 응답 metadata |
 
-### 3. `AsyncLLM`에서 EngineCore로의 전달
+### 1. HTTP POST: FastAPI router의 request 수신
 
-### 4. scheduler의 step 구성
+1번은 HTTP request가 vLLM 코드에 처음 들어오는 단계다. router는 request 형식을 검증하고 handler에 넘길 뿐, model을 직접 실행하지 않는다. 예를 들어 client가 다음 request를 보낸다고 하자.
 
-### 5. worker의 forward와 sampling
+```console
+curl http://127.0.0.1:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"<model>","messages":[{"role":"user","content":"hi"}]}'
+```
 
-### 6. detokenize와 응답 생성
+이 request는 [`create_chat_completion()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/api_router.py#L41-L80) route로 들어온다. FastAPI가 이 함수를 호출하기 전에 JSON body를 [`ChatCompletionRequest`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/protocol.py#L220)로 검증한다. 함수는 [서버 초기화 6번](#6-http-serving-route-등록과-uvicorn-실행)에서 `app.state`에 만들어 둔 [`OpenAIServingChat`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L118)을 꺼내, 그 [`create_chat_completion()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L281)을 호출한다.
 
-### 7. request 종료와 KV block 정리
+chat completions만 있는 것은 아니다. model이 `generate` task를 지원하면, [서버 초기화 6번](#6-http-serving-route-등록과-uvicorn-실행)의 [`register_generate_api_routers()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/generate/api_router.py#L21)가 다른 생성 API의 route도 함께 등록한다. 모두 같은 방식으로 동작한다. FastAPI가 JSON body를 API마다 정의된 Pydantic model로 검증하고, route는 검증된 request를 그 API의 handler에 넘긴다.
+
+| API | 공식 문서 | vLLM route | vLLM request model |
+| --- | --- | --- | --- |
+| OpenAI Chat Completions | [API reference](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create) | [`/v1/chat/completions`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/api_router.py#L41) | [`ChatCompletionRequest`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/protocol.py#L220) |
+| OpenAI Completions | [API reference](https://developers.openai.com/api/reference/resources/completions/methods/create) | [`/v1/completions`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/completion/api_router.py#L35) | [`CompletionRequest`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/completion/protocol.py#L48) |
+| OpenAI Responses | [API reference](https://developers.openai.com/api/reference/resources/responses/methods/create) | [`/v1/responses`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/responses/api_router.py#L48) | [`ResponsesRequest`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/responses/protocol.py#L211) |
+| Anthropic Messages | [API reference](https://platform.claude.com/docs/en/api/messages) | [`/v1/messages`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/anthropic/api_router.py#L51) | [`AnthropicMessagesRequest`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/anthropic/protocol.py#L215) |
+| Cohere Chat | [API reference](https://docs.cohere.com/reference/chat) | [`/cohere/v2/chat`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/cohere/api_router.py#L119) | [`CohereChatV2Request`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/cohere/protocol.py#L131) |
+
+handler는 API마다 다르지만, 결국 모두 2번부터의 경로를 탄다. 입력을 token ID로 바꾸고 `AsyncLLM`의 `generate()`를 호출한다. 이 글은 chat completions를 예로 따라간다.
+
+handler가 돌려준 값에 따라 응답 형식이 갈린다. `ErrorResponse`면 오류 JSON을, `ChatCompletionResponse`면 완성된 JSON을 보낸다. 그 밖의 경우는 streaming이므로 `StreamingResponse`로 감싸 `text/event-stream`(SSE)으로 보낸다. route에 붙은 `with_cancellation` decorator는 client 연결이 끊기면 handler task를 취소한다. 이 취소가 7번의 정리로 이어진다.
+
+#### SSE: 응답을 조금씩 보내는 방식
+
+SSE(Server-Sent Events)는 HTTP 응답 하나를 열어 둔 채, server가 event를 하나씩 이어서 보내는 방식이다. 표준은 [HTML Living Standard](https://html.spec.whatwg.org/multipage/server-sent-events.html)에 있다. 응답의 `Content-Type`은 `text/event-stream`이고, event 하나는 `data: ...` 줄과 빈 줄 하나로 끝난다.
+
+```text
+data: {"choices":[{"delta":{"content":"Hel"}}]}
+
+data: {"choices":[{"delta":{"content":"lo"}}]}
+
+data: [DONE]
+```
+
+LLM 서버가 SSE를 쓰는 이유는 token이 step마다 하나씩 나오기 때문이다. 응답을 다 만들 때까지 기다리지 않고, 만든 부분부터 client에 보낼 수 있다. 통신은 server에서 client로 한 방향뿐이다. WebSocket처럼 양방향 연결이 필요 없어서, 평범한 HTTP 위에서 그대로 동작한다. 마지막 `data: [DONE]`은 SSE 표준이 아니라 OpenAI API가 정한 종료 표시이고, vLLM도 이를 따른다.
+
+vLLM에서는 route가 handler의 async generator를 Starlette의 [`StreamingResponse`](https://starlette.dev/responses/#streamingresponse)로 [감싼다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/api_router.py#L77-L80). generator가 `data: ...` 문자열을 하나 yield할 때마다 Starlette가 그것을 HTTP chunk로 보낸다. 이 문자열을 만드는 쪽은 6번의 `chat_completion_stream_generator()`다. 그 사이에는 [`with_sse_keep_alive()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/serve/utils/sse_keep_alive.py#L21)가 끼어 있다. 이 함수는 keep-alive 간격이 설정되어 있으면, 그 시간 동안 새 chunk가 없을 때 연결 유지용 SSE comment를 보낸다. 간격이 0 이하면 아무것도 하지 않는다.
+
+### 2. Tokenize: chat request를 model 입력으로
+
+2번은 chat 형식의 request를 엔진에 넘길 형태로 바꾸는 단계다. 하는 일은 세 가지다. messages를 token ID로 바꾸고, 생성할 token 수의 한도를 정하고, sampling parameter를 만든다. 이 일은 모두 API server 프로세스에서 일어나고, EngineCore는 이미 token화된 입력만 받는다.
+
+[`OpenAIServingChat`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L118)의 [`_create_chat_completion()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L296-L415)이 실제 일을 한다. 먼저 [`render_chat_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L258-L279)가 model 이름을 확인하고, renderer의 [`render_chat()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/renderers/online_renderer.py#L224-L317)을 호출한다. 여기서 messages, system prompt, tools를 model의 chat template에 넣어 prompt 문자열을 만들고, tokenizer로 token ID로 바꾼다. 결과가 [`EngineInput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/inputs/engine.py#L266)이다. [서버 초기화 4번](#4-engine-client-asyncllm-생성과-enginecore-연결)에서 본 renderer가 바로 이 일을 한다.
+
+생성 한도는 [`get_max_tokens()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/serve/utils/api_utils.py#L169-L205)가 정한다. 규칙의 핵심은 하나다. prompt와 생성 token을 합친 길이는 `max_model_len`을 넘을 수 없다. 그래서 prompt를 넣고 남은 공간이 상한이 되고, request나 서버 설정이 그보다 작은 값을 주면 그 값이 한도가 된다. 각 값의 정의와 관계는 2번 끝의 [생성 한도를 정하는 값들](#생성-한도를-정하는-값들)에서 자세히 다룬다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-2-max-tokens-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-2-max-tokens-dark.svg"
+  caption="max_model_len 안에서 max_tokens가 정해지는 방식. prompt(input_length)를 넣고 남은 공간이 생성 한도의 상한이다."
+/>
+
+코드의 변수 이름으로 쓰면 아래와 같다.
+
+$$
+\begin{aligned}
+\text{model\_max\_tokens} &= \text{max\_model\_len} - \text{input\_length} \\
+\text{max\_tokens} &= \min\big(\text{model\_max\_tokens},\ \text{fallback\_max\_tokens},\ \text{override\_max\_tokens},\ \text{platform\_max\_tokens}\big)
+\end{aligned}
+$$
+
+sampling parameter는 [`to_sampling_params()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/protocol.py#L715)가 만든다. 이 함수는 temperature, top-p, stop 같은 request 필드로 [`SamplingParams`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/sampling_params.py#L268)를 만든다. 마지막으로 `engine_client.generate()`를 호출한다. 이 서버에서 `engine_client`는 [서버 초기화 4번](#4-engine-client-asyncllm-생성과-enginecore-연결)에서 만든 [`AsyncLLM`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L84)이다.
+
+#### 생성 한도를 정하는 값들
+
+아래 값은 모두 token 단위다.
+
+- context length: model이 한 번에 다룰 수 있는 최대 token 수다. model의 HF `config.json`에 적혀 있다.
+- `max_model_len`: 이 서버가 허용하는 sequence 길이의 상한이다. sequence는 prompt와 생성 token을 합친 것이다.
+- `input_length`: prompt 길이(prompt_len). chat template을 적용해 token화한 prompt의 token 수다.
+- `model_max_tokens`: prompt를 넣고 남은 공간, 즉 `max_model_len - input_length`다.
+- `fallback_max_tokens`: request가 요청한 한도다. `max_completion_tokens`, 없으면 `max_tokens`, 그것도 없으면 model의 기본 sampling 설정 값을 쓴다.
+- `override_max_tokens`: 서버 운영자가 `--override-generation-config`의 `max_new_tokens`로 건 강제 상한이다.
+- `platform_max_tokens`: 외부 플랫폼 plugin을 위한 상한이다. CUDA를 포함한 기본 플랫폼에서는 [제한이 없다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/platforms/interface.py#L224-L225).
+
+`max_tokens`는 두 단계로 정해진다. 먼저 `max_model_len`은 context length를 넘지 못한다. 사용자가 `--max-model-len`을 주면 그 값을, 주지 않으면 context length를 쓰고, context length보다 큰 값을 주면 기본적으로 [오류가 난다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/model.py#L2639-L2664).
+
+$$
+\text{max\_model\_len} = \min\big(\texttt{--max-model-len},\ \text{context length}\big)
+$$
+
+context length는 model마다 키 이름이 달라서, vLLM은 `max_position_embeddings`, `n_positions`, `max_seq_len`, `seq_length` 같은 후보 키 중 config에 있는 값의 [최솟값을 쓴다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/transformers_utils/model_arch_config_convertor.py#L394-L427). Llama나 Qwen 같은 대부분의 model은 `max_position_embeddings`다. tokenizer config에 `model_max_length`가 있으면 그 값으로 더 줄어들 수 있다.
+
+그 다음 `max_tokens`는 `model_max_tokens`, `fallback_max_tokens`, `override_max_tokens`, `platform_max_tokens` 중 가장 작은 값이다. 값이 없는(`None`) 항은 `min`에서 빠진다. 그래서 request가 한도를 주지 않으면 `model_max_tokens`가 그대로 한도가 되고, request가 큰 값을 줘도 context 길이를 넘지는 못한다.
+
+`max_new_tokens`는 `max_tokens`와 같은 값의 다른 이름이다. Hugging Face의 `generation_config.json`과 `--override-generation-config`는 이 값을 `max_new_tokens`라고 적고, vLLM은 읽을 때 `max_tokens`로 [매핑한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/model.py#L1883-L1888). 아래에서 HF는 `generation_config.json`의 `max_new_tokens`를, override는 `--override-generation-config`의 `max_new_tokens`를 뜻한다.
+
+HF 파일을 어디서 읽는지는 `--generation-config` 값이 [정한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/model.py#L1824-L1837). `auto`(기본값)면 `--model`로 준 곳에서 읽는다. `--model`은 HF Hub repo id일 수도, local 폴더일 수도 있다. 폴더 경로를 주면 그 폴더에서 읽고, `vllm`이면 읽지 않는다.
+
+이 값들은 두 가지 역할 중 하나를 맡는다. 차이는 request가 값을 줬을 때 드러난다.
+
+- 기본값: request가 값을 주지 않았을 때만 그 자리를 채운다. request가 값을 주면 그 값이 더 커도 request 값을 쓴다.
+- 강제 상한: request가 무엇을 주든 그 값을 위에서 자른다. `min`에 항상 들어간다.
+
+`get_max_tokens()`는 세 단계로 `max_tokens`를 정한다.
+
+1. 원하는 값(requested)을 고른다. request의 `max_completion_tokens`, `max_tokens`, 서버 기본값 순서로 보고 처음 있는 값을 쓴다. 서버 기본값은 override가 있으면 override, 없으면 HF다.
+2. 강제 상한(cap)을 고른다. `--generation-config`가 폴더 경로면 서버 기본값이, 아니면 override가 [상한이 된다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L175-L181). 둘 다 없으면 상한도 없다.
+3. `model_max_tokens`, requested, cap 중 가장 작은 값을 고른다. 값이 없는 항은 빠진다.
+
+그림의 "override > HF"는 둘 다 있으면 override를 쓴다는 뜻이다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-2-max-tokens-flow-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-2-max-tokens-flow-dark.svg"
+  caption="get_max_tokens()가 max_tokens를 정하는 순서."
+/>
+
+예를 들어 `model_max_tokens`가 4000이고, model의 `generation_config.json`에 `max_new_tokens: 512`가 있다고 하자. 아래 표에서 열은 서버를 띄운 설정이고(`<dir>`은 `generation_config.json`이 있는 폴더 경로), 행은 client가 보낸 request 하나다. 칸의 값은 그 request에 실제로 적용되는 `max_tokens`다. 셋째 열은 `auto`에 `--override-generation-config '{"max_new_tokens": 1000}'`을 더한 설정이다.
+
+| client request의 `max_tokens` | `--generation-config auto` | `--generation-config <dir>` | `auto` + override 1000 |
+| --- | --- | --- | --- |
+| 없음 | 512 | 512 | 1000 |
+| 100 | 100 | 100 | 100 |
+| 2000 | 2000 | 512 | 1000 |
+
+`auto`에서 512는 기본값이라 request의 2000을 막지 않는다. 폴더 경로에서는 512가 강제 상한이라 2000이 512로 잘린다. override를 주면 1000이 강제 상한이 되고, 파일 값 위에 덮어써지므로 기본값 자리도 1000이 차지한다. `vllm`이면 파일을 읽지 않으므로 override만 적용된다.
+
+헷갈리기 쉬운 점을 정리하면 아래와 같다.
+
+- `input_length`는 prompt 길이(prompt_len)다. 이름에 input이 들어가지만 생성 token은 포함하지 않는다.
+- `max_model_len`은 context length와 같은 값이 아니다. 둘 중 작은 값이고, 대개 사용자가 `--max-model-len`으로 줄인 값이다.
+- `max_new_tokens`와 `max_tokens`는 같은 값이다. HF와 `--override-generation-config`는 앞의 이름을, vLLM 내부와 OpenAI API는 뒤의 이름을 쓴다.
+- HF 파일은 local 경로를 뜻하지 않는다. `auto`면 `--model`이 가리키는 곳(HF Hub 또는 local)의 파일이다.
+- `auto`에서 HF 값은 기본값일 뿐이다. request가 더 큰 값을 주면 막지 않는다.
+- override는 강제 상한이면서 기본값 자리도 덮어쓴다. 그래서 request가 비어 있으면 HF 값이 아니라 override 값이 쓰인다.
+
+### 3. ZMQ ADD: `AsyncLLM`에서 EngineCore로
+
+3번은 request를 엔진에 등록하고, 결과를 받을 자리를 마련하는 단계다. 등록은 API server와 EngineCore 양쪽에서 일어난다.
+
+[`AsyncLLM.generate()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L698-L809)는 먼저 [`add_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L388)를 호출한다. 여기서 [`InputProcessor`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L161)가 [`EngineInput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/inputs/engine.py#L266)과 [`SamplingParams`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/sampling_params.py#L268)를 검증하고 [`EngineCoreRequest`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/__init__.py#L109)로 묶는다. 그 다음 두 줄이 순서대로 실행된다.
+
+```python
+self.output_processor.add_request(request, prompt, parent_req, index, queue)
+await self.engine_core.add_request_async(request)
+```
+
+[첫 줄](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L572)은 API server 쪽에 이 request의 detokenizer, logprob 처리기, 결과 queue를 등록한다. [둘째 줄](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L575)은 EngineCore에 ADD message를 보낸다. 결과 queue를 먼저 만들어 두므로, 엔진 출력이 아무리 빨리 와도 받을 자리가 이미 있다. `generate()`는 이후 이 queue([`RequestOutputCollector`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/output_processor.py#L53))를 async generator로 읽으며 결과를 기다린다.
+
+ADD message는 [서버 초기화 4번](#4-engine-client-asyncllm-생성과-enginecore-연결)에서 bind한 ROUTER 소켓으로 간다. [`AsyncMPClient.add_request_async()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core_client.py#L1296)가 request를 msgspec으로 직렬화해 ZMQ로 보낸다. EngineCore 쪽에서는 입력 thread가 이 message를 받아 [`preprocess_add_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1089)로 [`Request`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L60) 객체로 바꾼다. busy loop는 이 객체를 [`_handle_client_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1674)로 넘기고, [`add_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L508)가 scheduler의 waiting queue에 넣는다.
+
+ADD를 보내기 전에 `add_request()`는 [`check_admission()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L316-L374)으로 admission을 검사한다. 끝나지 않은 request 수가 `--max-num-queued-reqs`를, prefill 중인 prompt token 합이 `--max-num-queued-tokens`를 넘으면 request를 거절하고 HTTP 503으로 응답한다. 503은 load balancer나 client SDK가 다른 instance로 retry하게 하려는 선택이다. 다만 두 값의 [기본값은 `None`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/scheduler.py#L92-L105)이라, 설정하지 않으면 API server는 request를 거절하지 않는다. ZMQ도 막지 않는다. vLLM은 ZMQ 소켓의 [high-water mark를 0](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/utils/network_utils.py#L372-L376)(무제한)으로 두므로, ZMQ는 메시지를 버리거나 막지 않는다. 그래서 기본 설정에서 몰린 request는 EngineCore의 입력 queue를 거쳐 scheduler의 waiting queue에 쌓이고, 그만큼 TTFT가 늘어난다. 이 waiting queue를 어떻게 비우는지는 4번에서 본다.
+
+입력 자체가 stream으로 들어오는 경우는 경로가 조금 다르다. 실시간 음성 인식 API는 오디오 조각이 도착할 때마다 [`StreamingInput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/speech_to_text/realtime/serving.py#L59-L89)을 yield한다. `add_request()`는 이런 입력을 [`_add_streaming_input_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L580-L673)로 넘긴다. 이 함수는 결과 queue를 먼저 만들어 바로 반환하고, 입력을 읽는 task를 따로 띄운다. 그 task가 입력 조각마다 request를 만들어 같은 queue로 EngineCore에 이어 붙인다. admission은 첫 조각을 보낼 때 한 번만 검사한다. 거절되면 그 오류가 queue를 통해 `generate()`로 전달된다. SSE는 출력을 조금씩 보내는 방식이라 이 경로와 관계가 없다. chat completions는 `stream: true`여도 위의 일반 경로를 탄다.
+
+### 4. Schedule: step마다 계산할 token 배정
+
+4번은 scheduler가 이번 step에 어떤 request의 token을 몇 개 계산할지 정하는 단계다. 기준은 [서버 초기화 5번](#5-enginecore-startup-model-load-kv-cache-allocation-scheduler-setup)의 Scheduler 소제목에서 본 두 가지, token budget과 KV block 여유다. 앞의 step timeline 그림이 보여 준 "step마다 여러 request가 함께 진행된다"는 동작이 여기서 만들어진다.
+
+EngineCore는 이 일을 queue 몇 개로 처리한다. [`run_busy_loop()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1547-L1556)는 step마다 두 가지를 반복한다. 먼저 [`_process_input_queue()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1573-L1602)가 input thread가 채운 `input_queue`를 비워, 새 request를 scheduler의 `waiting` queue에 넣는다. 그 다음 `step_fn`이 schedule, forward, 결과 처리를 한 번 실행한다. 결과는 `output_queue`로 가고, output thread가 이를 API server로 보낸다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-4-step-queues-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-4-step-queues-dark.svg"
+  caption="EngineCore step 하나에서 request가 queue를 지나는 순서."
+/>
+
+[`Scheduler.schedule()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L591)은 두 queue를 정해진 순서로 본다.
+
+1. `running`부터 본다. 이미 실행 중인 request마다 이번 step에 계산할 token 수를 정한다. prompt를 다 계산한 request는 보통 1개(decode), prompt가 남은 request는 남은 만큼이나 budget이 허락하는 만큼(chunked prefill)이다. 그만큼의 KV block을 `allocate_slots()`로 받고, token budget에서 뺀다.
+2. 그 다음 `waiting`을 앞에서부터 본다. 이번 step에 preempt가 없었고 budget이 남았을 때만 본다. 새 request는 먼저 [`get_computed_blocks()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L264)로 prefix cache에서 이미 계산된 block을 찾고, 나머지 token에 필요한 block을 `allocate_slots()`로 받는다. block을 받으면 `waiting`에서 꺼내 `running`에 넣는다. `running`의 request 수가 `max_num_seqs`에 닿으면 멈춘다.
+
+running을 먼저 보는 이유는 이미 시작한 request를 끝까지 진행시키기 위해서다. 새 request는 남은 budget과 block 안에서만 들어온다.
+
+배정 결과가 [`SchedulerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L232)이다. 여기에는 request별 계산할 token 수, 새로 받은 KV block, encoder 작업, structured output 정보가 들어 있다. 결국 한 step의 batch는 `{request_id: num_tokens}` 하나로 표현되고, 여기에 prefill 조각과 decode token이 섞여 들어간다.
+
+여러 request의 token을 padding 없이 한 forward로 묶는 방법은 뒤의 [padding 없는 continuous batching](#padding-없는-continuous-batching)에서 다룬다.
+
+#### KVCacheManager: block을 나눠 주고 돌려받는 방식
+
+[`KVCacheManager`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L328)는 서버 초기화 5번에서 할당한 KV cache를 고정 크기 block 단위로 관리한다. block 하나는 기본 [16 token](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/cache.py#L72)의 KV를 담는다. 일반 attention layer에서 block 하나의 byte 크기는 `2(K, V) × block_size × num_kv_heads × head_size × dtype 크기`다.
+
+빈 block은 [`BlockPool`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/block_pool.py#L136)의 [`free_block_queue`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/block_pool.py#L178)에 있다. 이 queue는 Python `deque`가 아니라 vLLM이 직접 만든 [이중 연결 리스트](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_utils.py#L246-L262)다. 중간의 block을 O(1)에 빼낼 수 있어야 하기 때문이다. 이 필요는 아래 prefix caching에서 나온다.
+
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-4-kv-block-manager-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-4-kv-block-manager-dark.svg"
+  caption="KVCacheManager가 KV block을 나눠 주고 돌려받는 경로. 번호는 아래 설명의 순서와 같다."
+/>
+
+[`allocate_slots()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L371)는 세 단계로 block을 나눠 준다.
+
+1. 필요한 block 수를 계산한다. 새 token이 17개면 `ceil(17 / 16) = 2`개다.
+2. `free_block_queue`에 block이 충분한지 확인한다. 모자라면 실패를 돌려준다.
+3. queue 앞에서 block을 꺼내 request에 붙이고, request별 block 목록(`req_to_blocks`)에 기록한다.
+
+실패하면 scheduler가 처리한다. running request라면 우선순위가 가장 낮은 running request를 [preempt](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L795-L802)한다. FCFS에서는 `running`의 마지막 request다. preempt된 request는 block을 모두 돌려주고, 계산한 token 수를 0으로 되돌린 채 [`waiting` 맨 앞](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L1612-L1613)으로 간다. 다시 들어오면 prompt부터 다시 계산한다(recompute). waiting request라면 이번 step에는 더 들이지 않는다.
+
+request가 끝나거나 preempt되면 block은 `free_block_queue`로 [돌아간다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/block_pool.py#L774-L804). 돌아가는 자리는 block에 hash가 있는지에 따라 다르다. hash가 없는 block은 queue 앞에 넣어 가장 먼저 재사용한다. 코드 주석은 그 이유를 GPU locality라고 적는다. hash가 있는 block, 즉 prefix cache로 다시 쓸 수 있는 block은 queue 뒤에 넣는다. 새 block은 앞에서부터 꺼내므로, cache된 block은 가장 오래 쓰지 않은 것부터 덮어써진다(LRU).
+
+prefix caching은 이 구조 위에서 동작한다. scheduler는 prompt를 16 token씩 잘라 block마다 hash를 계산한다. hash에는 앞 block의 hash가 들어가므로, 같은 hash는 "처음부터 그 block까지 token이 모두 같다"는 뜻이다. [`cached_block_hash_to_block`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/block_pool.py#L181)은 이 hash에서 block으로 가는 표다. 새 request가 오면 `get_computed_blocks()`가 이 표에서 가장 긴 일치를 찾는다. 찾은 block이 다른 request에서 쓰는 중이면 참조 수(`ref_cnt`)만 올린다. 이미 반납되어 `free_block_queue`에 있으면 queue 중간에서 빼내 다시 쓴다. 이것이 중간 삭제가 O(1)이어야 하는 이유다. 꽉 차지 않은 마지막 block은 hash가 없으므로 공유되지 않는다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-4-prefix-caching-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-4-prefix-caching-dark.svg"
+  caption="prefix caching이 앞 request의 KV block을 재사용하는 과정."
+/>
+
+#### 설계 결정: prefill과 decode를 나누지 않는다
+
+V1 scheduler에는 prefill phase와 decode phase가 따로 없다. [코드 주석](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L594)도 "There's no 'decoding phase' nor 'prefill phase' in the scheduler"라고 적어 둔다. prompt token과 생성된 token을 똑같이 "아직 계산하지 않은 token"으로 보고, 결정은 `{request_id: num_tokens}` 같은 dictionary 하나로 표현한다. V1 소개 글은 이 표현이 chunked prefill, prefix caching, speculative decoding까지 담을 만큼 일반적이라고 설명한다([vLLM V1 소개 글](https://blog.vllm.ai/2025/01/27/v1-alpha-release.html)). 앞의 step timeline 그림에서 prefill과 decode가 한 step에 섞이는 것도 이 덕분이다. V1을 다시 설계하며 정리한 [#8779](https://github.com/vllm-project/vllm/issues/8779)는 그 배경으로 "scheduling is not cheap"을 든다. 이전 scheduler는 step마다 `running` 전체를 Python으로 훑었고, 그 CPU 시간이 GPU를 놀게 했다. 표현을 하나로 줄인 것은 이 비용을 줄이는 방향과 맞닿아 있다.
+
+
+#### 설계 결정: free block queue는 직접 만든 이중 연결 리스트다
+
+`free_block_queue`는 Python `deque` 대신 vLLM이 직접 만든 이중 연결 리스트다. 이 구조는 V1에 prefix caching을 넣은 [#9972](https://github.com/vllm-project/vllm/pull/9972)에서 들어왔다. PR은 `deque`보다 나은 점을 두 가지로 든다. 중간의 block을 O(1)에 뺄 수 있고, 새 Python 객체를 만들지 않고 block 객체의 포인터만 바꾼다. 앞의 prefix caching에서 반납된 block을 queue 중간에서 다시 꺼내는 일이 바로 첫째 이유다. 같은 PR의 benchmark는 prefix cache 적중률 49%인 offline batch에서 입력 처리량이 약 1.8배(17,916에서 32,258 tok/s)로 늘었다고 보고한다.
+
+#### 설계 결정: prefix caching은 기본으로 켠다
+
+V1은 prefix caching을 처음부터 기본 기능으로 설계했다. [#8779](https://github.com/vllm-project/vllm/issues/8779)는 V1의 방향 중 하나로 "Prefix-caching as a first-class feature"를 들고, 그 overhead를 줄이는 것을 목표로 삼았다. v0.32.0에서도 model이 지원하면 prefix caching이 [기본으로 켜진다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/engine/arg_utils.py#L3021-L3027). 같은 system prompt나 대화 기록을 공유하는 request가 많을수록 prefill에서 아끼는 계산이 커진다.
+
+### 5. Forward: GPU forward와 sampling
+
+5번은 worker가 [`SchedulerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L232)대로 GPU에서 forward를 한 번 돌리고, request마다 다음 token을 뽑는 단계다.
+
+EngineCore의 busy loop는 step마다 [`step_fn`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L242-L246)을 호출한다. 가장 단순한 [`step()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L657-L687)은 아래 순서로 한 step을 처리한다.
+
+```python
+scheduler_output = self.scheduler.schedule(self._should_throttle_prefills())
+future = self.model_executor.execute_model(scheduler_output, non_block=True)
+grammar_output = self.scheduler.get_grammar_bitmask(scheduler_output)
+model_output = future.result()
+if model_output is None:
+    model_output = self.model_executor.sample_tokens(grammar_output)
+engine_core_outputs = self.scheduler.update_from_output(scheduler_output, model_output)
+```
+
+executor는 [서버 초기화 5번](#5-enginecore-startup-model-load-kv-cache-allocation-scheduler-setup)에서 본 [`collective_rpc()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/executor/abstract.py#L199)로 worker의 model runner를 호출한다. model runner의 [`execute_model()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1719-L2087)은 forward를 네 단계로 처리한다.
+
+1. request 상태를 갱신한다. [`finish_requests()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1733), `add_requests()`, `update_requests()`가 끝난 request를 빼고, 새 request를 넣고, 새로 받은 KV block을 block table에 더한다. worker는 request 상태를 step 사이에 계속 들고 있으므로, scheduler는 매 step 바뀐 부분만 보낸다.
+2. 입력을 준비한다. [`prepare_inputs()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1812)가 `input_ids`, `positions`, `query_start_loc`, `seq_lens`를 만들고, [`prepare_attn()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1815)이 block table과 `slot_mapping`을 만든다. 이 값으로 attention metadata를 조립한다.
+3. forward를 실행한다. CUDA graph 모드와 batch 크기에 따라 [full graph를 재생하거나](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2006), piecewise graph를 쓰거나, [model을 직접 호출한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2044).
+4. 결과를 저장하고 `None`을 반환한다. hidden state는 `ExecuteModelState`에 넣어 두고, sampling은 다음 호출에서 한다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-5-forward-sampling-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-5-forward-sampling-dark.svg"
+  caption="worker가 한 step의 forward와 sampling을 처리하는 순서. 번호는 본문의 execute_model() 단계와 같다."
+/>
+
+forward에 들어가는 입력은 세 가지다. 이번 step의 token을 한 줄로 이어 붙인 `input_ids`, 각 token의 위치인 `positions`, 그리고 attention metadata다. attention metadata는 attention layer가 이 한 줄을 request별로 나눠 계산하는 데 필요한 batch 구조 정보다. 어디서 어디까지가 같은 request인지(`query_start_loc`), request마다 KV cache까지 합친 길이가 얼마인지(`seq_lens`), 이전 KV가 어느 block에 있는지(block table), 새 KV를 어디에 쓸지(`slot_mapping`)를 담는다. v0.32.0에서는 [`CommonAttentionMetadata`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/attention/backend.py#L387)가 이 값을 담고, attention backend마다 [builder](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/attention/backend.py#L683)가 자기 kernel에 맞는 형태로 바꾼다.
+
+attention metadata는 model의 `forward()` 인자로 넘기지 않는다. model runner가 [`set_forward_context()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2015)로 전역 context에 올려 두면, 각 attention layer가 [`get_forward_context()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/model_executor/layers/attention/attention.py#L704)로 꺼내 쓴다. 그래서 model 코드는 `forward(input_ids, positions)` 형태를 그대로 유지할 수 있다. 각 배열의 실제 값은 뒤의 [step 안의 token packing](#step-안의-token-packing)과 [block table](#block-table-token-위치에서-kv-cache-주소로)에서 예시로 본다.
+
+sampling은 [`sample_tokens()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2088-L2175)가 따로 한다. 먼저 hidden state 중 [`logits_indices`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L968)가 가리키는 위치만 고른다. request마다 이번 step의 마지막 token 위치다. 고른 hidden state로 `compute_logits()`가 vocabulary 크기의 logits를 만들고, [`sample()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1592-L1660)이 penalty, `logit_bias`, temperature, top-k, top-p, min-p를 적용한 뒤 request마다 token을 뽑는다. MRV2는 이 sampler를 [Triton kernel](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/sample)로 다시 구현했다. 결과가 [`ModelRunnerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/outputs.py#L267)이다.
+
+forward와 sampling을 두 번의 호출로 나눈 이유는 structured output 때문이다. JSON schema나 정규식처럼 출력 형식을 강제하는 request는, sampling 전에 허용되지 않는 token의 logits를 지우는 grammar bitmask가 필요하다. 이 bitmask는 CPU에서 계산한다. 위의 `step()`을 보면 `execute_model(non_block=True)`로 forward를 시작한 뒤, GPU가 도는 동안 CPU가 `get_grammar_bitmask()`를 계산하고, 그 결과를 `sample_tokens()`에 넘긴다. 호출을 나눠야 bitmask 계산이 forward와 겹친다.
+
+structured output은 이 bitmask로 동작한다. request가 JSON schema나 정규식 같은 형식을 주면, EngineCore의 [`StructuredOutputManager`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/structured_output/__init__.py#L47)가 backend로 grammar를 [compile한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/structured_output/__init__.py#L126). backend는 기본값 `auto`에서 xgrammar, guidance, outlines, lm-format-enforcer 중 하나를 [고른다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/structured_outputs.py#L12-L20). compile은 thread pool에서 돌고, 그동안 request는 [`WAITING_FOR_STRUCTURED_OUTPUT_GRAMMAR`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L374) 상태로 기다린다. step마다 [`get_grammar_bitmask()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L1995)가 grammar의 현재 상태에서 허용되는 token을 bitmask로 만들고, sampler가 허용되지 않는 token의 logits를 지운다. token이 뽑히면 `update_from_output()`이 [`accept_tokens()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2186)로 grammar 상태를 그만큼 진행시킨다.
+
+#### 설계 결정: Model Runner V2를 처음부터 다시 만들었다
+
+위에서 본 `execute_model()`과 `sample_tokens()`는 Model Runner V2(MRV2)의 코드다. MRV2는 v0.12.0에서 실험 기능으로 들어와 v0.29.0부터 모든 model의 기본 실행 경로가 되었다([PR #25266](https://github.com/vllm-project/vllm/pull/25266)). [설계 문서](https://github.com/vllm-project/vllm/blob/v0.32.0/docs/design/model_runner_v2.md)는 V1 model runner를 다시 만든 이유로 "fundamental design mistakes"와 쌓인 기술 부채를 든다. 이 글의 흐름과 닿는 변경은 세 가지다.
+
+- persistent batch와 입력의 분리: 연속된 step의 batch는 거의 같으므로, V1부터 request 상태를 step 사이에 계속 들고 있었다(persistent batch). V1은 이 상태 tensor를 그대로 model 입력으로 써서, request가 들고 날 때마다 tensor 전체를 다시 정렬해야 했다. MRV2는 request마다 고정된 행을 주고, step마다 필요한 행을 GPU에서 모아 입력을 만든다. 위 1단계의 `add_requests()`와 `finish_requests()`가 이 행을 관리한다.
+- async-first: V1은 async scheduling을 나중에 덧붙였다. MRV2는 실행 loop를 CPU 동기화가 없는 CUDA stream으로 가정하고 처음부터 설계했다.
+- GPU에서 입력 준비: `input_ids`, `positions`, `query_start_loc`, `seq_lens`를 Python이 아니라 Triton kernel로 만든다. CPU 부담이 줄고, async scheduling에서 CPU가 아직 모르는 값(예: 직전 step의 token)을 GPU가 바로 쓸 수 있다.
+
+설계 문서는 MRV2가 아직 기능이 완전하지 않고 열린 설계 결정도 남아 있다고 적는다. 그래서 Triton이 없거나 MRV2가 아직 지원하지 않는 기능을 쓰면 [V1 runner로 돌아간다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L703-L738).
+
+#### 설계 결정: async scheduling으로 scheduling과 실행을 겹친다
+
+async scheduling이 꺼져 있으면 EngineCore는 `step()`으로 schedule, forward, 결과 처리를 차례로 한다. GPU가 step N을 마치면 CPU가 결과를 받아 상태를 갱신하고 step N+1을 짜는데, 그동안 GPU는 다음 일을 받지 못하고 기다린다. 순서대로 할 수밖에 없었던 이유는 step N+1을 짜려면 step N에서 뽑힌 token을 알아야 하기 때문이다.
+
+v0.32.0은 조건이 맞으면 [async scheduling을 자동으로 켠다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L1585). 이때 EngineCore는 [`step()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L657-L687) 대신 [`step_with_batch_queue()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L698)를 쓴다. 새 batch의 실행을 먼저 시작하고, 그 실행이 GPU에서 도는 동안 다음 step을 schedule한다. 앞선 batch의 결과는 queue가 차거나 더 넣을 수 없을 때 받는다. 동시에 진행하는 batch 수는 [`max_concurrent_batches`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L577)가 정한다.
+
+이 구조는 [#19970](https://github.com/vllm-project/vllm/pull/19970)에서 들어왔다. 목표는 scheduler를 실행보다 한 step 앞서 돌게 해서, scheduling에 드는 CPU 시간을 GPU 실행 뒤에 숨기는 것이다. PR은 이 방식이 [NanoFlow](https://arxiv.org/abs/2408.12757) 논문의 접근과 비슷하다고 밝힌다. 처음에는 `--async-scheduling`으로 켜는 실험 기능이었다. [`AsyncScheduler`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/async_scheduler.py)는 이 의존성을 placeholder로 푼다. step N의 결과를 기다리지 않고 request마다 다음 token이 하나 나온다고 가정해 `num_output_placeholders`를 올려 두고 step N+1을 짠다. 실제 token ID는 GPU에 남아 있는 step N의 sampling 결과를 worker가 바로 이어 붙이고, 결과가 CPU에 도착하면 placeholder를 실제 token으로 바꾼다. EOS로 끝난 request처럼 가정이 틀린 경우에는 미리 계산한 결과를 버린다. 이 기능은 v0.14.0부터 기본으로 켜졌다.
+
+### 6. Detokenize: token ID에서 응답까지
+
+6번은 뽑힌 token ID를 request별 출력으로 되돌리고, text로 바꿔 client에 보내는 단계다. 이 일은 EngineCore와 API server에 나뉘어 있다.
+
+EngineCore에서는 [`Scheduler.update_from_output()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2026)이 [`ModelRunnerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/outputs.py#L267)의 token ID와 logprob을 request별로 나누고, request 상태를 갱신한다. EOS token이나 `max_tokens`에 닿은 request는 여기서 끝난다. 결과는 client별 [`EngineCoreOutputs`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/__init__.py#L259)로 묶이고, [`_process_engine_step()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/core.py#L1603)이 이를 output queue에 넣는다. output thread가 queue에서 꺼내 PULL 소켓으로 보낸다.
+
+API server에서는 [`AsyncLLM`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L84)의 background loop인 [`output_handler()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L845)가 이 출력을 받아 [`OutputProcessor.process_outputs()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/output_processor.py#L681)에 넘긴다. 여기서 request별 [`IncrementalDetokenizer`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/detokenizer.py#L31)가 새 token ID를 text로 바꾼다. token을 하나씩 따로 decode하지 않고 request마다 상태를 들고 이어서 decode하는데, BPE token 하나가 UTF-8 문자의 일부일 수 있기 때문이다. 한 글자가 여러 token에 걸치면 마지막 token이 와야 그 글자가 나온다. fast tokenizer면 tokenizers 라이브러리의 [`DecodeStream`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/detokenizer.py#L179-L195)을 쓴다. 이어서 stop string을 확인하고, [`RequestOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/outputs.py#L129)을 만들어 3번에서 등록한 queue에 넣는다. queue를 기다리던 `generate()`가 깨어나 이 값을 handler에 넘긴다. streaming request는 [`DELTA`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/protocol.py#L774)로 만들어져 `RequestOutput`에 새로 생긴 부분만 담기고, non-streaming request는 `FINAL_ONLY`라 끝났을 때 한 번만 나온다. DELTA에서 handler가 queue를 늦게 읽으면, 그사이에 쌓인 delta는 하나로 합쳐진다.
+
+handler는 응답 형식에 맞게 마무리한다. 그 전에 reasoning parser와 tool parser가 [설정되어 있으면](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L131-L163), text에서 `reasoning_content`와 `tool_calls`를 따로 떼어 낸다. streaming이면 [`chat_completion_stream_generator()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L466)가 [`RequestOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/outputs.py#L129)마다 chat chunk를 만들어 `data: ...` 형식으로 보내고, 끝에 `data: [DONE]`을 보낸다. non-streaming이면 [`chat_completion_full_generator()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/serving.py#L935)가 generator를 끝까지 읽은 뒤 최종 text와 usage를 `ChatCompletionResponse` JSON 하나로 만든다. SSE chunk 수와 생성 token 수는 일대일이 아니다. 첫 role chunk와 마지막 usage chunk가 따로 있고, detokenizer가 문자를 다 만들 때까지 text를 미루기도 한다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-6-output-cleanup-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-6-output-cleanup-dark.svg"
+  caption="request의 출력 경로(위)와 정리(아래). 아래쪽은 7번에서 다룬다."
+/>
+
+#### 설계 결정: detokenize와 stop string은 API server에서 한다
+
+EOS token과 `max_tokens`는 token ID만 보면 되므로 EngineCore가 판단한다. 반면 detokenize와 stop string 검사는 API server 프로세스에서 한다. 이 분담은 4번의 프로세스 분리와 같은 RFC에서 나왔다. [RFC #6797](https://github.com/vllm-project/vllm/issues/6797)은 후속 과제로 "Decouple incremental detokenization logic so that it can also be used in the API server process"와 "The API server process can also intercept/process any stop strings, and just abort the request as needed"를 적었다. V1 `AsyncLLM`을 만든 [#9826](https://github.com/vllm-project/vllm/pull/9826)도 "stop strings are detected in the detokenizer and we send an abort message"라고 적는다. V1 설계를 정리한 [#8779](https://github.com/vllm-project/vllm/issues/8779)도 "De-tokenization is expensive"라며 batch가 클수록 이 비용이 커진다고 적는다. detokenize를 EngineCore loop 밖으로 빼면 이 CPU 작업이 GPU 실행과 겹친다.
+
+stop string을 만나면 API server는 [`abort_requests()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/output_processor.py#L552)로 frontend 상태를 정리하고, EngineCore에 abort를 보내 아직 실행 중인 request를 멈춘다. 이 abort가 7번의 정리로 이어진다.
+
+### 7. Free blocks: request 종료와 KV block 정리
+
+7번은 끝난 request가 쓰던 자원을 돌려주는 단계다. request는 정상 완료, stop string, client 취소, 오류 중 하나로 끝나고, 어느 경우든 같은 정리를 거친다. 정리는 세 곳에서 일어나고, 6번 그림의 아래쪽이 이를 보여 준다.
+
+- scheduler: 정상 완료는 6번의 `update_from_output()`에서, abort는 [`finish_requests()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2649)에서 request를 queue에서 빼낸다. 두 경로 모두 [`_free_request()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2714)로 모인다. 이 함수는 multimodal request의 [encoder cache를 비우고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2734), [`KVCacheManager.free()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L620)로 KV block을 돌려준다.
+- worker: scheduler는 끝난 request ID를 다음 step의 `SchedulerOutput.finished_req_ids`에 실어 보낸다. worker는 5번 ①의 [`finish_requests()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1152-L1160)에서 이 request가 쓰던 persistent batch의 행을 비운다. preempt된 request도 같은 방식으로 빠진다.
+- API server: `OutputProcessor`가 [request 상태와 detokenizer를 지운다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/output_processor.py#L855-L857). `generate()`는 마지막 출력을 handler에 넘기고 끝난다.
+
+여기서 free는 GPU 메모리를 CUDA allocator에 돌려주는 것이 아니다. block pool에서 참조를 풀어, 다음 request가 이 block을 다시 쓸 수 있게 하는 것이다. 반납이 늦춰지는 경우도 두 가지 있다. async scheduling에서는 GPU가 아직 그 block을 쓰는 step이 진행 중일 수 있어서, scheduler가 안전한 step까지 반납을 미룬다. disaggregated prefill이나 KV offloading처럼 KV connector가 block을 다른 곳으로 보내는 중이면, `_free_request()`가 [전송이 끝날 때까지](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2723-L2742) 반납을 미룬다.
+
+client가 연결을 끊으면 1번의 cancellation이 [`AsyncLLM.generate()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L698-L809)까지 전달된다. `generate()`는 [`asyncio.CancelledError`를 받아](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L779) [`abort()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L911)를 호출하고, 이 함수가 API server의 출력 상태와 EngineCore 양쪽에서 request를 지운다. 그래서 끊긴 request가 GPU에서 계속 token을 만들지 않는다.
 
 ## 실행 batch와 KV cache
+
+이 파트는 request 처리 4번과 5번에서 미뤄 둔 내용을 다룬다. 먼저 여러 request를 padding 없이 한 step에 묶는 방식을 보고, 이어서 scheduler가 request와 KV block을 어떻게 따로 관리하는지, 그리고 한 step의 token이 GPU에서 어떻게 한 줄로 묶이고 KV cache 주소를 찾는지를 본다. 예시의 숫자는 아래 그림과 같고, block 크기는 기본값인 16 token이다.
+
+### padding 없는 continuous batching
+
+continuous batching은 지금도 쓴다. 바뀐 것은 padding이다. 두 개념을 나눠서 보면 차이가 보인다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/03-4-batching-compare-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/03-4-batching-compare-dark.svg"
+  caption="같은 request 4개를 static batching과 vLLM의 continuous batching으로 처리할 때."
+/>
+
+그림의 위쪽은 batch 단위로 묶는 static batching이다. A, B, C를 한 batch로 묶으면 가장 긴 A가 끝날 때까지 batch가 유지된다. 먼저 끝난 B와 C의 자리는 padding으로 채우고, 그동안 도착한 D는 batch가 끝나는 step 7까지 기다린다. 아래쪽 vLLM은 batch를 step마다 다시 짠다. B와 C는 끝난 step 바로 다음부터 빠지고, step 2에 도착한 D는 step 3부터 들어온다. 그래서 step 3에서는 A, B, C의 decode token과 D의 prefill token이 한 줄로 묶여 forward 한 번에 들어간다.
+
+흔히 보는 continuous batching 그림은 batch 슬롯 몇 개를 고정해 두고, 슬롯이 비면 다음 request로 채우는 모습이다. vLLM에는 이런 슬롯도 없다. step마다 `running` request 중 token budget과 KV block이 허락하는 만큼의 token을 골라 한 줄로 이어 붙일 뿐이다. 그래서 step마다 들어가는 request 수와 token 수가 모두 달라진다.
+
+- continuous batching: batch 구성을 step마다 바꾼다. Orca 논문의 iteration-level scheduling에서 왔다([Yu et al., OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)).
+- padding 제거: request를 `[request 수 × 최대 길이]` 격자로 맞추지 않고, token을 한 줄로 이어 붙인다. request 경계는 position과 attention metadata로 따로 넘긴다([Anatomy of vLLM](https://vllm.ai/blog/2025-09-05-anatomy-of-vllm)).
+
+이 한 줄 배열과 block table이 실제로 어떻게 생겼는지는 아래에서 차례로 본다. padding이 완전히 사라진 것은 아니다. CUDA graph를 쓸 때는 batch 크기를 capture한 크기로 맞추느라 끝에 약간 남는다.
+
+### request와 KV block의 자료구조
+
+request와 KV block은 따로 관리된다. request 객체는 KV block을 직접 들고 있지 않고, KV block 쪽도 request를 가리키지 않는다. 둘은 request ID로만 이어진다. EngineCore 프로세스의 CPU 쪽에는 세 가지 자료구조가 있다.
+
+- [`Request`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L60): scheduler가 관리하는 request 상태다. `prompt_token_ids`, 지금까지 만든 output token, 계산을 마친 token 수(`num_computed_tokens`), 상태(`status`), `sampling_params`, prefix caching용 block hash 목록(`block_hashes`)을 담는다. `waiting`, `running` queue에 들어가는 것이 이 객체다.
+- [`KVCacheBlock`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_utils.py#L176-L200): KV block 하나의 metadata다. `block_id`, 참조 수(`ref_cnt`), block hash, 그리고 `free_block_queue`의 이중 연결 리스트용 `prev_free_block`과 `next_free_block`만 들고 있다. KV 값 자체는 들고 있지 않다.
+- [`req_to_blocks`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/single_type_kv_cache_manager.py#L122-L125): request ID에서 그 request가 쓰는 `KVCacheBlock` 목록으로 가는 dictionary다. `KVCacheManager` 안에 있고, request가 끝나면 이 목록으로 block을 돌려준다.
+
+실제 KV 값은 GPU에 있다. 서버 초기화 5번에서 layer마다 할당한 KV cache tensor를 block 단위로 나눈 것이고, `block_id`는 그 tensor 안의 block 위치다. 모든 `KVCacheBlock`은 [`BlockPool.blocks`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/block_pool.py#L172)에 미리 만들어져 있고, block 0은 [null block](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/block_pool.py#L184-L188)으로 따로 잡아 둔다. 그래서 실제로 나눠 주는 block ID는 1부터 시작한다.
+
+worker 쪽에는 이 정보의 사본이 있다. scheduler는 step마다 [`SchedulerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L232)에 새로 받은 block ID를 실어 보내고, worker는 이를 [`BlockTables`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/block_table.py#L17)에 쌓는다. block table은 request마다 한 행이고, 행에는 그 request의 block ID가 순서대로 들어 있다. 아래 예시에서 request A의 행은 `[7, 12]`, B는 `[3]`, C는 `[9, 4]`다.
+
+### step 안의 token packing
+
+한 step의 batch는 request별 격자가 아니라 token 한 줄이다. 그림의 step에서 A는 decode token 1개, B는 prefill token 2개, C는 prefill 조각 3개를 계산한다. worker의 [`InputBatch`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L39-L100)는 이를 아래 배열로 만든다.
 
 <Figure
   src="/assets/images/post/2026-10-12-Inside-vLLM/04-batch-kv-cache-light.svg"
@@ -296,12 +642,90 @@ step마다 실제로 어떻게 고르는지는 request 처리의 4번에서 다�
   caption="세 request의 token을 padding 없이 한 줄로 이어 붙인 입력과, 각 token이 block table을 거쳐 KV cache slot으로 가는 모습. 끝의 PAD는 CUDA graph 크기를 맞추는 padding이다."
 />
 
-### step 안의 token packing
+```text
+input_ids        = [A16, B0, B1, C14, C15, C16, PAD, PAD]
+positions        = [ 16,  0,  1,  14,  15,  16,   -,   -]
+query_start_loc  = [0, 1, 3, 6]
+seq_lens         = [17, 2, 17]
+```
+
+`input_ids`와 `positions`는 이번 step에 계산할 token만 담는다. A는 앞의 16 token을 이미 계산했으므로 A16 하나만 들어가고, 앞 token의 KV는 KV cache에서 읽는다. `query_start_loc`은 각 request의 token이 이 줄의 어디서 시작하는지 알려 준다. A는 0, B는 1, C는 3에서 시작하고, 끝은 6이다. `seq_lens`는 request마다 KV cache까지 포함한 전체 길이다. attention kernel은 이 두 배열로 request 경계를 알고, 각 token이 자기 request의 token만 보게 한다. 그래서 padding 없이 길이가 다른 request를 한 forward에 넣을 수 있다.
 
 ### block table: token 위치에서 KV cache 주소로
 
+forward 중에 attention layer는 각 token의 새 KV를 KV cache에 써야 한다. 어디에 쓸지는 `slot_mapping`이 알려 준다. slot은 KV cache를 token 단위로 센 주소이고, [slot mapping kernel](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/block_table.py#L341-L348)이 block table로 계산한다.
+
+$$
+\text{slot} = \text{block\_table}\big[\lfloor \text{position} / \text{block\_size} \rfloor\big] \times \text{block\_size} + (\text{position} \bmod \text{block\_size})
+$$
+
+C14는 position 14이므로 C의 첫 block(9)의 14번째 칸, `9 × 16 + 14 = 158`이다. C16은 position 16이라 첫 block을 넘어 둘째 block(4)의 0번째 칸, `4 × 16 + 0 = 64`가 된다. 같은 request의 token이라도 block 경계를 넘으면 KV cache에서 멀리 떨어진 곳에 쓰인다. 이것이 paged KV cache다. 이번 step의 `slot_mapping`은 아래와 같고, padding token은 `-1`로 채워 아무 데도 쓰지 않는다.
+
+```text
+slot_mapping = [192, 48, 49, 158, 159, 64, -1, -1]
+```
+
+다음 step에 decode할 때도 같은 계산을 한다. A가 position 17의 token을 계산하면 그 KV는 block 12의 1번째 칸(`12 × 16 + 1 = 193`)에 쓰인다. block이 꽉 차면 scheduler가 `allocate_slots()`로 새 block을 받아 block table에 한 칸을 더한다.
+
+### chunked prefill: 긴 prompt를 여러 step에 나누기
+
+prompt가 한 step의 token budget보다 길면 scheduler는 prompt를 여러 step에 나눠 계산한다. 위 예시의 C가 바로 이런 조각이다. C는 이번 step에 position 14부터 16까지 3 token만 계산하고, 나머지는 다음 step으로 넘긴다.
+
+나누는 방법은 단순하다. scheduler는 request마다 남은 token 수를 계산한 뒤, 이를 [남은 token budget으로 자른다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L704-L712). 남은 부분은 request의 `num_computed_tokens`에 기록되어, 다음 step에 이어서 배정된다. `enable_chunked_prefill`은 [기본으로 켜져 있다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/scheduler.py#L134). 끄면 budget보다 긴 새 request는 [그 step에 넣지 않는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L1158-L1167).
+
+긴 prompt 하나가 budget을 다 차지하면 다른 request의 decode가 밀린다. `--long-prefill-token-threshold`는 이를 막는 상한이다. request 하나가 한 step에 계산할 prefill token 수를 이 값으로 자른다. 기본값은 0(끔)이고, request가 하나뿐이면 밀릴 request가 없으므로 [적용하지 않는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L640-L649). encoder-decoder model은 chunked prefill을 지원하지 않아서 [자동으로 끈다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/scheduler.py#L294-L302).
+
+### speculative decoding: draft token이 batch와 KV에 들어가는 방식
+
+speculative decoding은 작은 drafter가 다음 token 몇 개를 미리 추측하고, 본 model이 한 forward에서 이를 한꺼번에 검증하는 방식이다. 추측이 맞으면 한 step에 token 여러 개를 얻는다. drafter의 종류는 다양하다. v0.32.0의 MRV2에는 n-gram, EAGLE, MTP, DFlash 등이 [들어 있다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode). 여기서는 알고리즘이 아니라, draft token이 지금까지 본 batch와 KV 구조에 어떻게 들어가는지만 본다.
+
+- request: draft token은 [`Request.spec_token_ids`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L183)에 붙는다. scheduler가 보는 길이 [`num_tokens_with_spec`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L299-L300)에는 draft token이 포함된다. 그래서 decode request도 이번 step에 1 token이 아니라 `1 + draft 수`만큼 배정된다.
+- batch: 배정된 draft token은 [`SchedulerOutput.scheduled_spec_decode_tokens`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L251)로 worker에 간다. worker는 이를 다른 token과 함께 한 줄에 넣어 forward 한 번으로 계산하고, rejection sampler가 어디까지 맞았는지 판정한다.
+- KV: draft token도 KV를 쓰므로, `allocate_slots()`는 draft 수만큼 [slot을 더 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L781)(`num_lookahead_tokens`). 틀린 draft는 `update_from_output()`이 [`num_computed_tokens`를 되돌린다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2113-L2127). 그 자리에 쓰였던 KV는 다음 step에 올바른 token의 KV로 덮어써진다.
+
 ### scheduler의 block 소유와 재사용
 
+block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 뿐, block을 할당하거나 반납하지 않는다. 할당, 반납, prefix cache 재사용 규칙은 request 처리 4번의 [KVCacheManager 소제목](#kvcachemanager-block을-나눠-주고-돌려받는-방식)에서 다뤘다. 여기서는 그 규칙이 위 자료구조에서 어떻게 보이는지만 정리한다.
+
+- 할당: `free_block_queue`에서 `KVCacheBlock`을 꺼내 `ref_cnt`를 1로 만들고, `req_to_blocks[request_id]`에 붙인다. worker에는 다음 `SchedulerOutput`으로 block ID가 전달된다.
+- 공유: prefix cache가 맞으면 같은 `KVCacheBlock`이 두 request의 `req_to_blocks`에 함께 들어가고, `ref_cnt`가 2가 된다. 두 request의 block table 행에 같은 block ID가 들어가므로, GPU의 같은 KV를 함께 읽는다.
+- 반납: request가 끝나면 그 request의 block마다 `ref_cnt`를 1씩 내린다. 0이 된 block만 `free_block_queue`로 돌아간다. GPU 메모리는 그대로이고, 다음에 이 block을 받는 request가 그 자리를 덮어쓴다.
+
+### 멀티턴 대화에서 KV cache를 다시 쓰는 방식
+
+멀티턴 대화는 이전 턴의 KV를 대부분 다시 쓴다. vLLM에는 대화 세션이라는 개념이 없지만, prefix caching이 같은 효과를 낸다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/04-multi-turn-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/04-multi-turn-dark.svg"
+  caption="두 번째 턴이 첫 번째 턴의 KV block을 다시 쓰는 과정."
+/>
+
+서버 입장에서 멀티턴 대화는 턴마다 새 request다. client가 이전 대화 전체를 `messages`에 다시 담아 보내고, 서버는 이를 처음 보는 request처럼 처리한다. 첫 번째 턴이 끝나면, 정상 종료든 stop string이나 연결 끊김에 따른 abort든 그 request의 block은 반납된다. 하지만 꽉 찬 block은 hash를 가진 채 `free_block_queue` 뒤에 들어가고, GPU의 KV 값도 그대로 남는다. 다른 request가 그 block을 받아 덮어쓰기 전까지는 다시 쓸 수 있다.
+
+두 번째 턴이 오면 renderer가 대화 전체를 다시 token화하고, scheduler가 block hash를 계산한다. 앞부분은 첫 번째 턴과 token이 같으므로 hash도 같고, `get_computed_blocks()`가 그 block을 찾아 다시 쓴다. 첫 번째 턴의 답변도 대부분 포함된다. 생성된 token도 block이 꽉 찰 때마다 [hash가 붙고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L272-L288), `allocate_slots()`가 계산을 마친 token까지 [cache에 등록하기](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L607-L615) 때문이다. 결국 새로 prefill하는 것은 처음으로 hash가 어긋나는 block부터다.
+
+다만 다시 계산되는 부분이 생기는 경우가 세 가지 있다.
+
+- 마지막 block: 꽉 차지 않은 block은 hash가 없어서 공유되지 않는다. 그래서 첫 번째 턴 끝의 최대 15 token은 다시 계산한다.
+- token이 달라지는 경우: 첫 번째 턴의 답변은 다음 턴에서 text로 돌아와 다시 token화된다. 이때 생성할 때와 다른 token이 될 수 있고, chat template이 턴 끝에 특수 token을 넣기도 한다. token이 처음 달라지는 block부터는 다시 계산한다.
+- eviction: 턴 사이에 다른 request가 많이 들어와 block이 모자라면, 오래 쓰지 않은 cache block부터 덮어써진다. 그 부분은 다시 prefill한다. KV offloading을 켜면 밀려난 block을 CPU 메모리나 디스크에서 다시 불러올 수 있다.
+
+여러 사용자가 한 서버를 쓸 때는 prefix cache가 사용자 사이에서도 공유된다는 점에 주의해야 한다. chat completions request의 [`cache_salt`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/protocol.py#L485-L492)를 사용자마다 다르게 주면, 첫 block의 hash에 salt가 섞여 다른 사용자의 cache와 맞지 않게 된다. 같은 이유로, system prompt를 턴마다 바꾸지 않아야 앞부분 block이 계속 재사용된다.
+
+### disaggregated prefill/decode: KV block이 instance 밖으로 나갈 때
+
+prefill은 계산이 많고, decode는 메모리 대역폭을 많이 쓴다. 두 일을 서로 다른 instance에 나누면 각각에 맞게 GPU를 쓸 수 있다. 이를 disaggregated prefill/decode(P/D)라고 한다. 이때 prefill instance가 만든 KV block을 decode instance로 옮겨야 하고, vLLM은 이 일을 KV connector에 맡긴다.
+
+KV connector는 [`--kv-transfer-config`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/kv_transfer.py#L60-L73)의 `kv_connector`로 고르고, `kv_role`로 이 instance가 KV를 보내는 쪽(`kv_producer`)인지 받는 쪽(`kv_consumer`)인지 정한다. NIXL 기반 [`NixlConnector`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/distributed/kv_transfer/kv_connector/factory.py#L178) 등이 있다. [connector](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/distributed/kv_transfer/kv_connector/v1/base.py#L180)는 scheduler 쪽과 worker 쪽으로 나뉜다. scheduler 쪽은 block 할당과 반납 시점을 정하고, worker 쪽은 실제로 KV를 layer마다 보내고 받는다.
+
+- prefill instance: request는 prefill을 마치면 끝난다. 이때 scheduler가 connector의 [`request_finished()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/distributed/kv_transfer/kv_connector/v1/base.py#L616-L636)를 호출하고, connector가 "아직 보내는 중"이라고 답하면 block 반납을 미룬다. 7번에서 본 "KV connector가 block을 보내는 중이면 반납을 미룬다"가 이 경우다.
+- decode instance: 새 request가 오면 scheduler가 [`get_num_new_matched_tokens()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/distributed/kv_transfer/kv_connector/v1/base.py#L501-L534)로 원격에서 받아올 수 있는 token 수를 묻는다. 그만큼 block을 할당하고, request를 [`WAITING_FOR_REMOTE_KVS`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L1320-L1323) 상태로 둔다. KV가 다 도착하면 받아 온 부분은 다시 계산하지 않고, 남은 token만 계산한 뒤 decode로 넘어간다.
+
+같은 connector 구조가 KV offloading에도 쓰인다. offloading connector는 GPU에서 밀려난 block을 CPU 메모리나 디스크에 보내 두고, 같은 prefix의 request가 오면 `get_num_new_matched_tokens()`로 다시 불러온다. 멀티턴 대화에서 eviction으로 사라진 block을 되살리는 것도 이 경로다.
+
 ### padding이 남는 곳: CUDA graph
+
+padding은 한 군데에 남아 있다. CUDA graph는 capture한 batch 크기로만 재생할 수 있어서, 이번 step의 token 수를 가장 가까운 capture 크기로 올린다. 그림의 step은 실제 token이 6개(`num_tokens`)지만, 크기 8의 graph를 쓰려고 2개를 padding해 8개(`num_tokens_after_padding`)로 만든다. padding token의 slot은 `-1`이라 KV cache에 쓰이지 않고, 그 출력은 버린다. 이 padding은 request마다 생기는 것이 아니라 batch 끝에 한 번만 생기므로, 낭비는 batch 크기를 맞추는 몇 token에 그친다.
 
 ## 마치며
