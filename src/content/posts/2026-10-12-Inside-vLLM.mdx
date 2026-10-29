@@ -460,7 +460,7 @@ running을 먼저 보는 이유는 이미 시작한 request를 끝까지 진행�
 
 배정 결과가 [`SchedulerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L232)이다. 여기에는 request별 계산할 token 수, 새로 받은 KV block, encoder 작업, structured output 정보가 들어 있다. 결국 한 step의 batch는 `{request_id: num_tokens}` 하나로 표현되고, 여기에 prefill 조각과 decode token이 섞여 들어간다.
 
-여러 request의 token을 padding 없이 한 forward로 묶는 방법은 뒤의 [prefill과 decode를 한 step에 섞는 continuous batching](#2-continuous-batching-prefill과-decode를-한-step에-섞기)에서 다룬다.
+여러 request의 token을 padding 없이 한 forward로 묶는 방법은 뒤의 [prefill과 decode를 한 step에 섞는 continuous batching](#12-continuous-batching-prefill과-decode를-한-step에-섞기)에서 다룬다.
 
 #### KVCacheManager: block을 나눠 주고 돌려받는 방식
 
@@ -537,7 +537,7 @@ executor는 [서버 초기화 5번](#5-enginecore-startup-model-load-kv-cache-al
 
 forward에 들어가는 입력은 세 가지다. 이번 step의 token을 한 줄로 이어 붙인 `input_ids`, 각 token의 위치인 `positions`, 그리고 attention metadata다. attention metadata는 attention layer가 이 한 줄을 request별로 나눠 계산하는 데 필요한 batch 구조 정보다. 어디서 어디까지가 같은 request인지(`query_start_loc`), request마다 KV cache까지 합친 길이가 얼마인지(`seq_lens`), 이전 KV가 어느 block에 있는지(block table), 새 KV를 어디에 쓸지(`slot_mapping`)를 담는다. v0.32.0에서는 [`CommonAttentionMetadata`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/attention/backend.py#L387)가 이 값을 담고, attention backend마다 [builder](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/attention/backend.py#L683)가 자기 kernel에 맞는 형태로 바꾼다.
 
-attention metadata는 model의 `forward()` 인자로 넘기지 않는다. model runner가 [`set_forward_context()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2015)로 전역 context에 올려 두면, 각 attention layer가 [`get_forward_context()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/model_executor/layers/attention/attention.py#L704)로 꺼내 쓴다. 그래서 model 코드는 `forward(input_ids, positions)` 형태를 그대로 유지할 수 있다. 각 배열의 실제 값은 뒤의 [step 안의 token packing](#3-step-안의-token-packing)과 [block table](#4-block-table-token-위치에서-kv-cache-주소로)에서 예시로 본다.
+attention metadata는 model의 `forward()` 인자로 넘기지 않는다. model runner가 [`set_forward_context()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2015)로 전역 context에 올려 두면, 각 attention layer가 [`get_forward_context()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/model_executor/layers/attention/attention.py#L704)로 꺼내 쓴다. 그래서 model 코드는 `forward(input_ids, positions)` 형태를 그대로 유지할 수 있다. 각 배열의 실제 값은 뒤의 [step 안의 token packing](#13-step-안의-token-packing)과 [block table](#14-block-table-token-위치에서-kv-cache-주소로)에서 예시로 본다.
 
 sampling은 [`sample_tokens()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L2088-L2175)가 따로 한다. 먼저 hidden state 중 [`logits_indices`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L968)가 가리키는 위치만 고른다. request마다 이번 step의 마지막 token 위치다. 고른 hidden state로 `compute_logits()`가 vocabulary 크기의 logits를 만들고, [`sample()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1592-L1660)이 penalty, `logit_bias`, temperature, top-k, top-p, min-p를 적용한 뒤 request마다 token을 뽑는다. MRV2는 이 sampler를 [Triton kernel](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/sample)로 다시 구현했다. 결과가 [`ModelRunnerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/outputs.py#L267)이다.
 
@@ -599,7 +599,11 @@ client가 연결을 끊으면 1번의 cancellation이 [`AsyncLLM.generate()`](ht
 
 ## 실행 batch와 KV cache
 
-이 파트는 request 처리 4번과 5번에서 미뤄 둔 내용을 다룬다. 한 step의 batch가 어떻게 만들어지고, 각 token의 KV가 KV cache의 어디에 쓰이는지를 본다. 예시에서 A, B, C는 서로 다른 request 세 개다. 사용자 세 명이 각자 보낸 chat request라고 보면 된다. A는 이미 16 token을 계산하고 다음 token을 decode하는 중이고, B는 2 token짜리 prompt를 처음 prefill하고, C는 긴 prompt를 position 14부터 이어서 prefill한다. block 크기는 기본값인 16 token이다.
+이 파트는 request 처리 4번과 5번에서 미뤄 둔 내용을 다룬다. 1번에서 한 step의 batch가 만들어지는 전체 구조를 보고 그 세부를 차례로 설명한 뒤, 2번부터 그 구조 위에서 동작하는 기능을 본다. 예시에서 A, B, C는 서로 다른 request 세 개다. 사용자 세 명이 각자 보낸 chat request라고 보면 된다. A는 이미 16 token을 계산하고 다음 token을 decode하는 중이고, B는 2 token짜리 prompt를 처음 prefill하고, C는 긴 prompt를 position 14부터 이어서 prefill한다. block 크기는 기본값인 16 token이다.
+
+### 1. 전체 구조: 한 step의 실행 batch
+
+한 step의 batch는 scheduler가 CPU에서 정한 token 수와 KV block 정보를 worker가 GPU 입력 배열과 KV cache 주소로 바꿔서 만든다. 아래 그림은 이 흐름 전체를 한 장에 담는다.
 
 <Figure
   src="/assets/images/post/2026-10-12-Inside-vLLM/04-step-overview-light.svg"
@@ -607,16 +611,14 @@ client가 연결을 끊으면 1번의 cancellation이 [`AsyncLLM.generate()`](ht
   caption="한 step의 실행 batch가 만들어지는 전체 구조."
 />
 
-그림은 위에서 아래로 읽는다. 그림의 번호는 아래 소제목 번호와 같고, 각 부분은 해당 소제목에서 따로 다룬다.
+그림은 위에서 아래로 읽는다. 그림의 번호 1–4는 아래 1.1–1.4 소제목과 같고, 각 부분은 해당 소제목에서 자세히 다룬다.
 
 1. scheduler는 CPU에서 request 상태와, request ID별 KV block 목록(`req_to_blocks`)을 관리한다. 그림의 `num_computed_tokens`는 token ID가 아니라 token 수다. KV를 이미 계산해 KV cache에 넣은 token이 몇 개인지를 센다. A는 16 token을 계산했으므로 다음 token은 position 16이다.
 2. scheduler는 step마다 request별로 계산할 token 수를 정하고, 새로 할당한 block ID와 함께 `SchedulerOutput`으로 worker에 보낸다.
 3. worker는 token 수로 `input_ids`, `positions`, `query_start_loc`, `seq_lens`를 만든다.
 4. worker는 block ID를 `BlockTables`에 쌓고, position과 block table로 `slot_mapping`을 계산한다. attention layer는 이 slot에 새 KV를 쓴다.
 
-5번부터는 이 구조 위에서 동작하는 기능을 본다. chunked prefill, speculative decoding, block 재사용, 멀티턴 대화, disaggregated prefill/decode, CUDA graph padding이다.
-
-### 1. request와 KV block의 자료구조
+#### 1.1 request와 KV block의 자료구조
 
 request와 KV block은 따로 관리된다. request 객체는 KV block을 직접 들고 있지 않고, KV block 쪽도 request를 가리키지 않는다. 둘은 request ID로만 이어진다. EngineCore 프로세스의 CPU 쪽에는 세 가지 자료구조가 있다.
 
@@ -634,7 +636,7 @@ request와 KV block은 따로 관리된다. request 객체는 KV block을 직접
 
 worker 쪽에는 이 정보의 사본이 있다. scheduler는 step마다 [`SchedulerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L232)에 새로 받은 block ID를 실어 보내고, worker는 이를 [`BlockTables`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/block_table.py#L17)에 쌓는다. block table은 request마다 한 행이고, 행에는 그 request의 block ID가 순서대로 들어 있다. 아래 예시에서 request A의 행은 `[7, 12]`, B는 `[3]`, C는 `[9, 4]`다.
 
-### 2. continuous batching: prefill과 decode를 한 step에 섞기
+#### 1.2 continuous batching: prefill과 decode를 한 step에 섞기
 
 vLLM의 batching은 batch를 step마다 다시 짜는 continuous batching이고, 여기에 prefill token과 decode token을 한 step에 섞는다. 그림은 같은 request 네 개를 세 방식으로 처리한다.
 
@@ -650,7 +652,7 @@ vLLM의 batching은 batch를 step마다 다시 짜는 continuous batching이고,
 
 vLLM에는 batch 슬롯도 없다. 흔히 보는 continuous batching 그림은 슬롯 몇 개를 고정해 두고 빈 슬롯을 다음 request로 채운다. vLLM은 step마다 `running` request 중 token budget과 KV block이 허락하는 만큼의 token을 골라 한 줄로 이어 붙인다. request를 `[request 수 × 최대 길이]` 격자로 맞추지 않으므로 request별 padding도 없다. request 경계는 position과 attention metadata로 따로 넘긴다. 이 한 줄 배열이 실제로 어떻게 생겼는지는 아래에서 차례로 본다. padding이 완전히 사라진 것은 아니다. CUDA graph를 쓸 때는 batch 크기를 capture한 크기로 맞추느라 끝에 약간 남는다.
 
-### 3. step 안의 token packing
+#### 1.3 step 안의 token packing
 
 한 step의 batch는 request별 격자가 아니라 token 한 줄이다. 그림의 step에서 A는 decode token 1개, B는 prefill token 2개, C는 prefill 조각 3개를 계산한다. worker의 [`InputBatch`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L39-L100)는 이를 아래 배열로 만든다.
 
@@ -674,7 +676,7 @@ seq_lens         = [17, 2, 17]
 - [`query_start_loc`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L66): 각 request의 token이 이 줄의 어디서 시작하는지를 담는다. 길이는 request 수 + 1이다. request i의 token은 `query_start_loc[i]`부터 `query_start_loc[i+1]` 전까지다. 예시에서 A는 0, B는 1–2, C는 3–5다.
 - [`seq_lens`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L69): request마다 이번 step이 끝났을 때의 전체 길이다. KV cache에 이미 있는 token도 센다. A는 cache의 16 token과 새 token 1개를 더해 17이다. attention은 새 token이 이 길이만큼의 KV를 보게 한다.
 
-attention kernel은 `query_start_loc`으로 request 경계를 알고, `seq_lens`로 각 request가 읽을 KV 길이를 안다. 그래서 각 token은 자기 request의 KV만 보고, 길이가 다른 request도 padding 없이 한 forward에 들어간다. #### 자료구조에서 배열로
+attention kernel은 `query_start_loc`으로 request 경계를 알고, `seq_lens`로 각 request가 읽을 KV 길이를 안다. 그래서 각 token은 자기 request의 KV만 보고, 길이가 다른 request도 padding 없이 한 forward에 들어간다. ##### 자료구조에서 배열로
 
 이 배열들은 앞에서 본 자료구조로 만든다. 재료는 세 가지다. request마다 이미 계산한 token 수(`Request.num_computed_tokens`), scheduler가 이번 step에 배정한 token 수(`SchedulerOutput.num_scheduled_tokens`), 그리고 그 request의 block table 행(`req_to_blocks`의 사본)이다. worker는 `query_start_loc`을 배정 수의 [누적합으로 만들고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1430), `positions`와 `seq_lens`를 [`num_computed_tokens`에서 계산한다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1460-L1466).
 
@@ -689,9 +691,9 @@ attention kernel은 `query_start_loc`으로 request 경계를 알고, `seq_lens`
 | `seq_lens` | `num_computed_tokens` + 배정 수 | 17 | 2 | 17 |
 | `slot_mapping` | position으로 block table 행을 찾아 계산 | 192 | 48, 49 | 158, 159, 64 |
 
-정리하면, request 상태는 어떤 token을 넣을지 정하고, block table은 그 token의 KV를 어디에 쓸지 정한다. 마지막 행의 계산은 다음 소제목에서 본다.
+정리하면, request 상태는 어떤 token을 넣을지 정하고, block table은 그 token의 KV를 어디에 쓸지 정한다. 마지막 행의 계산은 1.4에서 본다.
 
-### 4. block table: token 위치에서 KV cache 주소로
+#### 1.4 block table: token 위치에서 KV cache 주소로
 
 forward 중에 attention layer는 각 token의 새 KV를 KV cache에 써야 한다. 어디에 쓸지는 `slot_mapping`이 알려 준다. slot은 KV cache를 token 단위로 센 주소이고, [slot mapping kernel](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/block_table.py#L341-L348)이 block table로 계산한다.
 
@@ -709,7 +711,7 @@ slot_mapping = [192, 48, 49, 158, 159, 64, -1, -1]
 
 다음 step에 decode할 때도 같은 계산을 한다. A가 position 17의 token을 계산하면 그 KV는 block 12의 1번째 칸(`12 × 16 + 1 = 193`)에 쓰인다. block이 꽉 차면 scheduler가 `allocate_slots()`로 새 block을 받아 block table에 한 칸을 더한다.
 
-### 5. chunked prefill: 긴 prompt를 여러 step에 나누기
+### 2. chunked prefill: 긴 prompt를 여러 step에 나누기
 
 prompt가 한 step의 token budget보다 길면 scheduler는 prompt를 여러 step에 나눠 계산한다. 위 예시의 C가 바로 이런 조각이다. C는 이번 step에 position 14부터 16까지 3 token만 계산하고, 나머지는 다음 step으로 넘긴다.
 
@@ -717,7 +719,7 @@ prompt가 한 step의 token budget보다 길면 scheduler는 prompt를 여러 st
 
 긴 prompt 하나가 budget을 다 차지하면 다른 request의 decode가 밀린다. `--long-prefill-token-threshold`는 이를 막는 상한이다. request 하나가 한 step에 계산할 prefill token 수를 이 값으로 자른다. 기본값은 0(끔)이고, request가 하나뿐이면 밀릴 request가 없으므로 [적용하지 않는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L640-L649). encoder-decoder model은 chunked prefill을 지원하지 않아서 [자동으로 끈다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/scheduler.py#L294-L302).
 
-### 6. speculative decoding: draft token이 batch와 KV에 들어가는 방식
+### 3. speculative decoding: draft token이 batch와 KV에 들어가는 방식
 
 speculative decoding은 작은 drafter가 다음 token 몇 개를 미리 추측하고, 본 model이 한 forward에서 이를 한꺼번에 검증하는 방식이다. 추측이 맞으면 한 step에 token 여러 개를 얻는다. drafter의 종류는 다양하다. v0.32.0의 MRV2에는 n-gram, EAGLE, MTP, DFlash 등이 [들어 있다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode). 여기서는 알고리즘이 아니라, draft token이 지금까지 본 batch와 KV 구조에 어떻게 들어가는지만 본다.
 
@@ -725,7 +727,7 @@ speculative decoding은 작은 drafter가 다음 token 몇 개를 미리 추측�
 - batch: 배정된 draft token은 [`SchedulerOutput.scheduled_spec_decode_tokens`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L251)로 worker에 간다. worker는 이를 다른 token과 함께 한 줄에 넣어 forward 한 번으로 계산하고, rejection sampler가 어디까지 맞았는지 판정한다.
 - KV: draft token도 KV를 쓰므로, `allocate_slots()`는 draft 수만큼 [slot을 더 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L781)(`num_lookahead_tokens`). 틀린 draft는 `update_from_output()`이 [`num_computed_tokens`를 되돌린다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2113-L2127). 그 자리에 쓰였던 KV는 다음 step에 올바른 token의 KV로 덮어써진다.
 
-### 7. scheduler의 block 소유와 재사용
+### 4. scheduler의 block 소유와 재사용
 
 block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 뿐, block을 할당하거나 반납하지 않는다. 할당, 반납, prefix cache 재사용 규칙은 request 처리 4번의 [KVCacheManager 소제목](#kvcachemanager-block을-나눠-주고-돌려받는-방식)에서 다뤘다. 여기서는 그 규칙이 위 자료구조에서 어떻게 보이는지만 정리한다.
 
@@ -733,7 +735,7 @@ block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 �
 - 공유: prefix cache가 맞으면 같은 `KVCacheBlock`이 두 request의 `req_to_blocks`에 함께 들어가고, `ref_cnt`가 2가 된다. 두 request의 block table 행에 같은 block ID가 들어가므로, GPU의 같은 KV를 함께 읽는다.
 - 반납: request가 끝나면 그 request의 block마다 `ref_cnt`를 1씩 내린다. 0이 된 block만 `free_block_queue`로 돌아간다. GPU 메모리는 그대로이고, 다음에 이 block을 받는 request가 그 자리를 덮어쓴다.
 
-### 8. 멀티턴 대화에서 KV cache를 다시 쓰는 방식
+### 5. 멀티턴 대화에서 KV cache를 다시 쓰는 방식
 
 멀티턴 대화는 이전 턴의 KV를 대부분 다시 쓴다. vLLM에는 대화 세션이라는 개념이 없지만, prefix caching이 같은 효과를 낸다.
 
@@ -755,7 +757,7 @@ block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 �
 
 여러 사용자가 한 서버를 쓸 때는 prefix cache가 사용자 사이에서도 공유된다는 점에 주의해야 한다. chat completions request의 [`cache_salt`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/openai/chat_completion/protocol.py#L485-L492)를 사용자마다 다르게 주면, 첫 block의 hash에 salt가 섞여 다른 사용자의 cache와 맞지 않게 된다. 같은 이유로, system prompt를 턴마다 바꾸지 않아야 앞부분 block이 계속 재사용된다.
 
-### 9. disaggregated prefill/decode: KV block이 instance 밖으로 나갈 때
+### 6. disaggregated prefill/decode: KV block이 instance 밖으로 나갈 때
 
 prefill은 계산이 많고, decode는 메모리 대역폭을 많이 쓴다. 두 일을 서로 다른 instance에 나누면 각각에 맞게 GPU를 쓸 수 있다. 이를 disaggregated prefill/decode(P/D)라고 한다. 이때 prefill instance가 만든 KV block을 decode instance로 옮겨야 하고, vLLM은 이 일을 KV connector에 맡긴다.
 
@@ -766,7 +768,7 @@ KV connector는 [`--kv-transfer-config`](https://github.com/vllm-project/vllm/bl
 
 같은 connector 구조가 KV offloading에도 쓰인다. offloading connector는 GPU에서 밀려난 block을 CPU 메모리나 디스크에 보내 두고, 같은 prefix의 request가 오면 `get_num_new_matched_tokens()`로 다시 불러온다. 멀티턴 대화에서 eviction으로 사라진 block을 되살리는 것도 이 경로다.
 
-### 10. padding이 남는 곳: CUDA graph
+### 7. padding이 남는 곳: CUDA graph
 
 padding은 한 군데에 남아 있다. CUDA graph는 capture한 batch 크기로만 재생할 수 있어서, 이번 step의 token 수를 가장 가까운 capture 크기로 올린다. 그림의 step은 실제 token이 6개(`num_tokens`)지만, 크기 8의 graph를 쓰려고 2개를 padding해 8개(`num_tokens_after_padding`)로 만든다. padding token의 slot은 `-1`이라 KV cache에 쓰이지 않고, 그 출력은 버린다. 이 padding은 request마다 생기는 것이 아니라 batch 끝에 한 번만 생기므로, 낭비는 batch 크기를 맞추는 몇 token에 그친다.
 
