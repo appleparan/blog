@@ -725,7 +725,20 @@ speculative decoding은 작은 drafter가 다음 token 몇 개를 미리 추측�
 
 - request: draft token은 [`Request.spec_token_ids`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L183)에 붙는다. scheduler가 보는 길이 [`num_tokens_with_spec`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L299-L300)에는 draft token이 포함된다. 그래서 decode request도 이번 step에 1 token이 아니라 `1 + draft 수`만큼 배정된다.
 - batch: 배정된 draft token은 [`SchedulerOutput.scheduled_spec_decode_tokens`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L251)로 worker에 간다. worker는 이를 다른 token과 함께 한 줄에 넣어 forward 한 번으로 계산하고, rejection sampler가 어디까지 맞았는지 판정한다.
-- KV: draft token도 KV를 쓰므로, `allocate_slots()`는 draft 수만큼 [slot을 더 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L781)(`num_lookahead_tokens`). 틀린 draft는 `update_from_output()`이 [`num_computed_tokens`를 되돌린다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2113-L2127). 그 자리에 쓰였던 KV는 다음 step에 올바른 token의 KV로 덮어써진다.
+- KV: draft token도 일반 token처럼 KV cache에 KV를 쓴다. 자세한 처리는 아래에서 본다.
+
+#### draft token의 KV cache 처리
+
+draft token의 KV는 일반 token과 같은 block, 같은 slot 계산으로 쓰이고, 틀린 draft의 KV는 지우지 않고 다음 step에 덮어쓴다. 예시의 A가 draft 2개(d17, d18)를 받았다고 하자.
+
+1. 배정: A는 이번 step에 3 token(A16, d17, d18)을 배정받는다. `allocate_slots()`의 `num_new_tokens`에는 [검증 전 draft token도 포함된다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L450). position 16–18은 모두 block 12 안이므로 새 block은 필요 없다.
+2. forward: 세 token은 [1.3](#13-step-안의-token-packing)의 배열에 함께 들어간다. `positions`는 16, 17, 18이고, [1.4](#14-block-table-token-위치에서-kv-cache-주소로)와 같은 계산으로 `slot_mapping`은 192, 193, 194다. 본 model은 forward 한 번으로 세 token의 KV를 모두 쓰고, 각 위치의 다음 token을 예측한다.
+3. 검증: rejection sampler가 d17은 맞고 d18은 틀렸다고 판정하면, d17을 받고 position 18에는 본 model이 뽑은 token을 쓴다. scheduler는 `num_computed_tokens`를 19에서 틀린 draft 수만큼 [되돌려 18로 만든다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2113-L2127).
+4. 덮어쓰기: slot 194에는 틀린 d18의 KV가 남아 있다. 하지만 `num_computed_tokens`가 18이므로 다음 step은 position 18부터 다시 계산하고, 새 token의 KV가 slot 194를 덮어쓴다. block을 반납하거나 KV를 지우는 작업은 없다.
+
+prefix cache에는 검증된 token만 올라간다. block hash를 등록할 token 수를 [`request.num_tokens`로 자르므로](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L455-L456), 검증 전 draft가 든 block은 hash가 붙지 않는다. 그래서 다른 request가 틀린 draft의 KV를 prefix cache로 재사용하는 일은 없다.
+
+`num_lookahead_tokens`는 이와 별개다. EAGLE처럼 자기 KV cache를 쓰는 drafter를 위한 값이다([docstring](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L395-L397)). drafter는 다음 step에 쓸 draft를 만들면서 그 위치의 KV를 쓴다. 그래서 `allocate_slots()`는 본 model이 쓸 slot에 이 수를 더한 만큼 [block을 미리 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L542-L544).
 
 ### 4. scheduler의 block 소유와 재사용
 
