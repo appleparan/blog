@@ -519,20 +519,20 @@ $$
 
 $$
 \begin{align}
-\mathcal{L}_{SM} (\phi; \sigma) := \dfrac{1}{2} \mathbb{E}_{\tilde{\mathbf{x}} \sim p_\sigma} \left[ \|\mathbf{s}_\phi (\tilde{\mathbf{x}};\sigma) -  \nabla_\tilde{\mathbf{x}} \log p_\sigma (\tilde{\mathbf{x}})\|^2_2 \right] 
+\mathcal{L}_{SM} (\phi; \sigma) := \dfrac{1}{2} \mathbb{E}_{\tilde{\mathbf{x}} \sim p_\sigma} \left[ \|\mathbf{s}_\phi (\tilde{\mathbf{x}};\sigma) -  \nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}})\|^2_2 \right] 
 \end{align}
 $$
 
-그냥 단순히 $$\sigma$$와 $$\tilde{\mathbf{x}}$$를 도입한 것에 지나지 않아 $$\nabla_\tilde{\mathbf{x}} \log p_\sigma (\tilde{\mathbf{x}})$$가 여전히 intractable하지만, Vincent는 결국 $$\mathbf{x} \sim p_{data}$$에 conditioning을 추가하면 다음과 같은 Loss가 되고 이는 위의 Loss와 동일하다는 것을 보였다.
+그냥 단순히 $$\sigma$$와 $$\tilde{\mathbf{x}}$$를 도입한 것에 지나지 않아 $$\nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}})$$가 여전히 intractable하지만, Vincent는 결국 $$\mathbf{x} \sim p_{data}$$에 conditioning을 추가하면 다음과 같은 Loss가 되고 이는 위의 Loss와 동일하다는 것을 보였다.
 
 $$
 \begin{align}
-\mathcal{L}_{DSM} (\phi; \sigma) := \dfrac{1}{2} \mathbb{E}_{\mathbf{x} \sim p_{data}, \tilde{\mathbf{x}} \sim p_\sigma (\cdot \mid \mathbf{x})} \left[ \|\mathbf{s}_\phi (\tilde{\mathbf{x}};\sigma) -  \nabla_\tilde{\mathbf{x}} \log p_\sigma (\tilde{\mathbf{x}} \mid \mathbf{x})\|^2_2 \right] 
+\mathcal{L}_{DSM} (\phi; \sigma) := \dfrac{1}{2} \mathbb{E}_{\mathbf{x} \sim p_{data}, \tilde{\mathbf{x}} \sim p_\sigma (\cdot \mid \mathbf{x})} \left[ \|\mathbf{s}_\phi (\tilde{\mathbf{x}};\sigma) -  \nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}} \mid \mathbf{x})\|^2_2 \right] 
 \end{align}
 $$
 
 이렇게 구해서 최적화된 신경망 (optimal minimizer) $$\mathbf{s}^*$$은 conditioning을 처음 도입했을 때 신경망이 도달하고자 했던 목표
-$\nabla_\tilde{\mathbf{x}} \log p_\sigma (\tilde{\mathbf{x}})$가 된다.
+$\nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}})$가 된다.
 
 $$
 \begin{equation}
@@ -568,3 +568,290 @@ $$
 
 #### Special Case: Additive Gaussian Noise
 
+가장 흔한 경우는 데이터 $\mathbf{x} \sim p_{\textrm{data}}$에 분산이 $\sigma^2$인 Gaussian noise를 더하는 것이다.
+
+$$
+\begin{equation}
+\tilde{\mathbf{x}} = \mathbf{x} + \sigma \mathbf{\epsilon}, \quad \mathbf{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})
+\end{equation}
+$$
+
+이 때 조건부 분포는 $$p_\sigma (\tilde{\mathbf{x}} \mid \mathbf{x}) = \mathcal{N}(\tilde{\mathbf{x}}; \mathbf{x}, \sigma^2 \mathbf{I})$$이고, 이 분포의 score는 직접 계산할 수 있다.
+Gaussian의 log를 취하면 $\tilde{\mathbf{x}}$와 무관한 정규화 상수를 제외하고 이차식만 남기 때문이다.
+
+$$
+\begin{align*}
+\log p_\sigma (\tilde{\mathbf{x}} \mid \mathbf{x}) &= -\dfrac{\| \tilde{\mathbf{x}} - \mathbf{x} \|^2_2}{2 \sigma^2} + C \\
+\nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}} \mid \mathbf{x}) &= \dfrac{\mathbf{x} - \tilde{\mathbf{x}}}{\sigma^2} = -\dfrac{\mathbf{\epsilon}}{\sigma}
+\end{align*}
+$$
+
+<Figure src="/assets/images/post/2025-12-13-EBM-to-NCSN/06-Illustration-of-DSM.png" caption={<><a href="https://www.arxiv.org/abs/2510.21890">
+Illustration of DSM via the conditioning technique</a></>} alt="Illustration of DSM via the conditioning technique" align="center" background="#fff" />
+
+위 그림처럼 깨끗한 데이터의 score $\nabla_\mathbf{x} \log p_{\textrm{data}} (\mathbf{x})$는 모르지만, 노이즈를 더한 뒤의 조건부 score $\nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}} \mid \mathbf{x})$는 closed form으로 알 수 있다.
+이를 DSM Loss에 대입하면 다음과 같다.
+
+$$
+\begin{align}
+\mathcal{L}_{DSM} (\phi; \sigma) &= \dfrac{1}{2} \mathbb{E}_{\mathbf{x}, \tilde{\mathbf{x}} \mid \mathbf{x}} \left[ \left\| \mathbf{s}_\phi (\tilde{\mathbf{x}}; \sigma) - \dfrac{\mathbf{x} - \tilde{\mathbf{x}}}{\sigma^2} \right\|^2_2 \right] \\
+&= \dfrac{1}{2} \mathbb{E}_{\mathbf{x}, \mathbf{\epsilon}} \left[ \left\| \mathbf{s}_\phi (\mathbf{x} + \sigma \mathbf{\epsilon}; \sigma) + \dfrac{\mathbf{\epsilon}}{\sigma} \right\|^2_2 \right]
+\end{align}
+$$
+
+결국 신경망은 노이즈가 섞인 $\tilde{\mathbf{x}}$를 입력받아서 $-\mathbf{\epsilon}/\sigma$를 맞히는 regression 문제를 푼다.
+[이전 포스트](https://blog.liam.kim/posts/2025/11/VAE-to-DDPMs/)의 DDPM $\epsilon$-prediction과 scale만 다를 뿐 거의 같은 형태이다. 이 관계는 아래 NCSN에서 정확히 보인다.
+
+한 가지 주의할 점은 DSM이 학습하는 대상이 $p_{\textrm{data}}$의 score가 아니라 Gaussian으로 smoothing된 분포의 score라는 것이다.
+
+$$
+\begin{equation*}
+p_\sigma = p_{\textrm{data}} * \mathcal{N}(\mathbf{0}, \sigma^2 \mathbf{I})
+\end{equation*}
+$$
+
+$\sigma$가 작으면 $p_\sigma$는 데이터 분포의 국소적인 구조를 거의 그대로 유지하므로, 그 score는 노이즈 낀 샘플을 데이터 쪽으로 되돌리는 방향을 잘 알려준다.
+$\sigma$가 크면 세부 구조가 지워지고 가까운 mode들이 하나로 합쳐져서 score는 거친 전역 구조만 담게 된다.
+이 성질은 단점이 아니라 NCSN이 의도적으로 이용하는 성질이다. 큰 $\sigma$로 넓게 탐색하고, 작은 $\sigma$로 세부를 다듬는다.
+
+### Sampling
+
+학습된 score 모델 $\mathbf{s}_{\phi^\times} (\tilde{\mathbf{x}}; \sigma)$가 있으면 앞에서 본 Langevin dynamics에서 실제 score 자리에 모델을 넣어서 샘플을 만든다.
+
+$$
+\begin{equation}
+\tilde{\mathbf{x}}_{n+1} = \tilde{\mathbf{x}}_n + \eta \underbrace{\mathbf{s}_{\phi^\times} (\tilde{\mathbf{x}}_n; \sigma)}_{\approx \nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}}_n)} + \sqrt{2 \eta} \mathbf{\epsilon}_n, \quad \mathbf{\epsilon}_n \sim \mathcal{N}(\mathbf{0}, \mathbf{I})
+\end{equation}
+$$
+
+$\sigma$가 충분히 작고 반복을 충분히 하면 $\tilde{\mathbf{x}}_n$은 $p_{\textrm{data}}$의 샘플에 가까워진다.
+
+노이즈를 주입하면 vanilla score matching에 비해 두 가지 이점이 생긴다 [@song2019generative].
+
+1. **Gradient가 모든 곳에서 정의된다.** 실제 데이터는 고차원 공간 안의 저차원 manifold 위에 몰려 있다. 노이즈가 데이터를 manifold 밖으로 퍼뜨리면 $p_\sigma$는 $\mathbb{R}^D$ 전체에서 0이 아닌 값을 가지므로 score $\nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}})$가 어디서나 정의된다.
+2. **Low density region을 덮는다.** 노이즈가 mode 사이의 빈 공간을 부드럽게 채우므로 그 영역에서도 학습 신호가 생기고, Langevin dynamics가 mode 사이를 건너기 쉬워진다.
+
+앞에서 본 [Inherent Challenges of Langevin Sampling](#inherent-challenges-of-langevin-sampling)의 두 문제, 즉 빈 공간과 mode 사이 이동을 노이즈가 직접 완화하는 셈이다.
+
+### Why DSM is Denoising: Tweedie's Formula
+
+DSM이라는 이름에 왜 *Denoising*이 붙는지는 Tweedie's formula [@efron2011tweedie]로 설명할 수 있다.
+결론부터 말하면 **score를 알면 노이즈 낀 관측 하나만 보고도 깨끗한 신호의 평균적인 추정값을 얻을 수 있다.**
+
+#### Tweedie's Formula
+
+$\mathbf{x} \sim p_{\textrm{data}}$이고 $\mathbf{x}$가 주어졌을 때 $\tilde{\mathbf{x}} \sim \mathcal{N}(\cdot; \alpha \mathbf{x}, \sigma^2 \mathbf{I})$ ($\alpha \neq 0$)라고 하자.
+노이즈 낀 marginal은 다음과 같다.
+
+$$
+\begin{equation*}
+p_\sigma (\tilde{\mathbf{x}}) := \int \mathcal{N}(\tilde{\mathbf{x}}; \alpha \mathbf{x}, \sigma^2 \mathbf{I}) p_{\textrm{data}} (\mathbf{x}) d \mathbf{x}
+\end{equation*}
+$$
+
+이 때 Tweedie's formula는 다음을 만족한다.
+
+$$
+\begin{equation}
+\alpha \mathbb{E} [\mathbf{x} \mid \tilde{\mathbf{x}}] = \tilde{\mathbf{x}} + \sigma^2 \nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}})
+\end{equation}
+$$
+
+여기서 기대값은 posterior $p(\mathbf{x} \mid \tilde{\mathbf{x}})$에 대한 것이다.
+
+증명은 marginal의 score를 직접 미분하면 된다.
+먼저 Gaussian 조건부 밀도의 gradient는 다음과 같다.
+
+$$
+\begin{equation*}
+\nabla_{\tilde{\mathbf{x}}} p (\tilde{\mathbf{x}} \mid \mathbf{x}) = - p (\tilde{\mathbf{x}} \mid \mathbf{x}) \dfrac{\tilde{\mathbf{x}} - \alpha \mathbf{x}}{\sigma^2}
+\end{equation*}
+$$
+
+이를 marginal의 score에 대입하고, 적분 안에서 $\dfrac{p (\tilde{\mathbf{x}} \mid \mathbf{x}) p_{\textrm{data}} (\mathbf{x})}{p_\sigma (\tilde{\mathbf{x}})} = p (\mathbf{x} \mid \tilde{\mathbf{x}})$ (Bayes rule)를 쓰면 다음과 같다.
+
+$$
+\begin{align*}
+\nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}}) &= \dfrac{1}{p_\sigma (\tilde{\mathbf{x}})} \int \nabla_{\tilde{\mathbf{x}}} p (\tilde{\mathbf{x}} \mid \mathbf{x}) p_{\textrm{data}} (\mathbf{x}) d \mathbf{x} \\
+&= -\dfrac{1}{\sigma^2} \int (\tilde{\mathbf{x}} - \alpha \mathbf{x}) \dfrac{p (\tilde{\mathbf{x}} \mid \mathbf{x}) p_{\textrm{data}} (\mathbf{x})}{p_\sigma (\tilde{\mathbf{x}})} d \mathbf{x} \\
+&= -\dfrac{1}{\sigma^2} \int (\tilde{\mathbf{x}} - \alpha \mathbf{x}) p (\mathbf{x} \mid \tilde{\mathbf{x}}) d \mathbf{x} \\
+&= -\dfrac{1}{\sigma^2} \left( \tilde{\mathbf{x}} - \alpha \mathbb{E} [\mathbf{x} \mid \tilde{\mathbf{x}}] \right)
+\end{align*}
+$$
+
+양변에 $\sigma^2$를 곱하고 정리하면 Tweedie's formula가 나온다.
+
+#### Score Prediction is Denoising
+
+Tweedie's formula를 $\mathbb{E}[\mathbf{x} \mid \tilde{\mathbf{x}}]$에 대해 정리하면 score와 denoiser의 관계가 바로 보인다.
+
+$$
+\begin{equation}
+\underbrace{\mathbb{E} [\mathbf{x} \mid \tilde{\mathbf{x}}]}_{\textrm{denoiser}} = \dfrac{1}{\alpha} \left( \tilde{\mathbf{x}} + \sigma^2 \nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}}) \right)
+\end{equation}
+$$
+
+즉 노이즈 낀 log-likelihood 위에서 step size $\sigma^2$로 gradient ascent를 *한 번* 하면 그것이 곧 denoising 결과(깨끗한 신호의 조건부 평균)이다.
+DSM으로 $\mathbf{s}_\phi (\tilde{\mathbf{x}}) \approx \nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}})$를 학습했다면 $\dfrac{1}{\alpha} (\tilde{\mathbf{x}} + \sigma^2 \mathbf{s}_\phi (\tilde{\mathbf{x}}))$가 그대로 denoiser가 된다.
+
+노이즈 관점에서도 같은 말을 할 수 있다. $\alpha = 1$, $\tilde{\mathbf{x}} = \mathbf{x} + \sigma \mathbf{\epsilon}$이면 $\mathbb{E}[\mathbf{\epsilon} \mid \tilde{\mathbf{x}}] = (\tilde{\mathbf{x}} - \mathbb{E}[\mathbf{x} \mid \tilde{\mathbf{x}}]) / \sigma$이므로 다음이 성립한다.
+
+$$
+\begin{equation}
+\nabla_{\tilde{\mathbf{x}}} \log p_\sigma (\tilde{\mathbf{x}}) = -\dfrac{1}{\sigma} \mathbb{E} [\mathbf{\epsilon} \mid \tilde{\mathbf{x}}]
+\end{equation}
+$$
+
+이전 포스트에서 DDPM의 최적 noise predictor가 $\mathbf{\epsilon}^* = \mathbb{E}[\mathbf{\epsilon} \mid \mathbf{x}_i]$였다는 것을 떠올리면, **score를 예측하는 것과 노이즈를 예측하는 것과 깨끗한 데이터를 예측하는 것은 scale만 다른 같은 정보**라는 것을 알 수 있다.
+
+## Noise Conditional Score Networks (NCSN)
+
+### Motivation: One Noise Level Is Not Enough
+
+노이즈 크기 $\sigma$를 하나만 쓰면 trade-off에 갇힌다.
+
+- **$\sigma$가 작을 때**: $p_\sigma$가 데이터 분포에 가깝지만, mode 사이의 low density region에서는 학습 샘플이 거의 없어서 score 추정이 부정확하고 gradient도 거의 사라진다. Langevin dynamics가 mode 사이를 건너기 어렵다.
+- **$\sigma$가 클 때**: 샘플링은 쉬워지지만 모델이 거친 구조만 배우므로 세부가 없는 흐릿한 샘플이 나온다.
+
+게다가 Langevin dynamics는 log-density의 gradient만 보고 움직이기 때문에, plateau나 saddle point 근처에서 시작하면 탐색이 멈추거나 한 mode에 갇힌다.
+
+[@song2019generative]는 이 문제를 **여러 크기의 노이즈를 동시에 쓰는 방식**으로 해결했다.
+하나의 noise-conditional score network가 여러 노이즈 크기의 score를 모두 학습하고, 생성할 때는 큰 노이즈에서 시작해서 작은 노이즈로 내려가며(annealing) Langevin dynamics를 돌린다.
+
+<Figure src="/assets/images/post/2025-12-13-EBM-to-NCSN/07-Illustration-of-NCSN.png" caption={<><a href="https://www.arxiv.org/abs/2510.21890">
+Illustration of NCSN</a></>} alt="Illustration of NCSN" align="center" background="#fff" />
+
+위 그림의 실선은 데이터 $\mathbf{x}$에 각 크기의 노이즈를 더하는 forward 과정이고, 점선은 생성 과정이다.
+각 노이즈 레벨에서 Langevin sampling(아래 고리)을 하고, 그 결과를 다음으로 작은 노이즈 레벨의 초기값으로 넘긴다.
+
+### Training
+
+$L$개의 노이즈 레벨을 다음과 같이 잡는다.
+
+$$
+\begin{equation*}
+0 < \sigma_1 < \sigma_2 < \cdots < \sigma_L
+\end{equation*}
+$$
+
+$\sigma_1$은 데이터의 세부를 거의 유지할 만큼 작게, $\sigma_L$은 분포를 충분히 평평하게 만들 만큼 크게 잡는다.
+각 레벨에서 노이즈 낀 샘플은 $\mathbf{x}_\sigma = \mathbf{x} + \sigma \mathbf{\epsilon}$으로 만들고, 이로부터 perturbation kernel과 marginal이 정의된다.
+
+$$
+\begin{equation}
+p_\sigma (\mathbf{x}_\sigma \mid \mathbf{x}) := \mathcal{N}(\mathbf{x}_\sigma; \mathbf{x}, \sigma^2 \mathbf{I}), \quad p_\sigma (\mathbf{x}_\sigma) = \int p_\sigma (\mathbf{x}_\sigma \mid \mathbf{x}) p_{\textrm{data}} (\mathbf{x}) d \mathbf{x}
+\end{equation}
+$$
+
+NCSN $\mathbf{s}_\phi (\mathbf{x}, \sigma)$는 $\sigma$를 입력으로 함께 받는 **하나의 네트워크**이고, 모든 $\sigma \in \{\sigma_i\}_{i=1}^L$에서 $\nabla_\mathbf{x} \log p_\sigma (\mathbf{x})$를 근사하도록 학습한다.
+Loss는 각 레벨의 DSM Loss를 가중합한 것이다.
+
+$$
+\begin{equation}
+\mathcal{L}_{NCSN} (\phi) := \sum_{i=1}^L \lambda(\sigma_i) \mathcal{L}_{DSM} (\phi; \sigma_i)
+\end{equation}
+$$
+
+$\lambda(\sigma_i) > 0$은 레벨별 가중치이다.
+각 항이 DSM Loss이므로 minimizer는 모든 레벨에서 실제 score가 된다.
+
+$$
+\begin{equation*}
+\mathbf{s}^* (\cdot, \sigma) = \nabla_\mathbf{x} \log p_\sigma (\cdot), \quad \textrm{for all } \sigma \in \{\sigma_i\}_{i=1}^L
+\end{equation*}
+$$
+
+[@song2019generative]는 $\lambda(\sigma) = \sigma^2$를 썼다.
+최적 score의 크기가 대략 $\| \mathbf{s} \|_2 \propto 1/\sigma$이므로, $\sigma^2$를 곱하면 레벨마다 Loss의 크기가 비슷해지기 때문이다.
+
+#### Relationship with DDPM Loss
+
+$\lambda(\sigma) = \sigma^2$를 넣고 DSM Loss를 다시 쓰면 DDPM과의 관계가 드러난다.
+
+$$
+\begin{equation*}
+\sigma^2 \left\| \mathbf{s}_\phi (\mathbf{x}_\sigma, \sigma) + \dfrac{\mathbf{\epsilon}}{\sigma} \right\|^2_2 = \left\| \sigma \mathbf{s}_\phi (\mathbf{x}_\sigma, \sigma) + \mathbf{\epsilon} \right\|^2_2
+\end{equation*}
+$$
+
+여기서 $\mathbf{\epsilon}_\phi := -\sigma \mathbf{s}_\phi$로 두면 이는 DDPM의 simplified loss $\| \mathbf{\epsilon}_\phi - \mathbf{\epsilon} \|^2_2$와 같은 식이다.
+최적해 관점에서도 앞의 Tweedie's formula에 의해 둘은 정확히 대응한다.
+
+$$
+\begin{equation}
+\mathbf{s}^* (\mathbf{x}_\sigma, \sigma) = -\dfrac{1}{\sigma} \mathbf{\epsilon}^* (\mathbf{x}_\sigma, \sigma), \quad \mathbf{\epsilon}^* (\mathbf{x}_\sigma, \sigma) = \mathbb{E} [\mathbf{\epsilon} \mid \mathbf{x}_\sigma]
+\end{equation}
+$$
+
+DDPM에서도 $\sigma_i := \sqrt{1 - \bar{\alpha}_i^2}$로 두면 $\mathbf{x}_i = \bar{\alpha}_i \mathbf{x}_0 + \sigma_i \mathbf{\epsilon}$이고, $\mathbf{s}^* (\mathbf{x}_i, i) = -\mathbb{E}[\mathbf{\epsilon} \mid \mathbf{x}_i] / \sigma_i$가 성립한다.
+즉 **DDPM의 노이즈 예측은 알려진 scale $1/\sigma_i$를 빼면 NCSN의 score 예측과 같다.**
+변분 관점(VAE → DDPM)과 score 관점(EBM → NCSN)이라는 서로 다른 출발점이 같은 학습 목표에 도착한 것이다.
+
+### Sampling: Annealed Langevin Dynamics
+
+학습이 끝나면 $\mathbf{s}_{\phi^\times} (\cdot, \sigma_L), \dots, \mathbf{s}_{\phi^\times} (\cdot, \sigma_1)$를 큰 노이즈부터 차례로 쓰면서 Langevin dynamics를 돌린다. 이를 **Annealed Langevin Dynamics**라고 한다.
+
+```text
+Input: score s(·, σ_ℓ), step size η_ℓ, iterations N_ℓ  (ℓ = L, ..., 1)
+
+x ~ p_init                              # 가장 큰 노이즈 레벨에서 시작
+for ℓ = L, L-1, ..., 1:
+    x̃_0 = x                             # 이전 레벨의 결과로 초기화
+    for n = 0, ..., N_ℓ - 1:
+        ε_n ~ N(0, I)
+        x̃_{n+1} = x̃_n + η_ℓ · s(x̃_n, σ_ℓ) + sqrt(2 η_ℓ) · ε_n
+    x = x̃_{N_ℓ}                         # 다음으로 작은 노이즈 레벨에 넘김
+return x
+```
+
+Step size는 보통 노이즈 레벨에 비례하게 잡는다.
+
+$$
+\begin{equation}
+\eta_\ell = \delta \dfrac{\sigma_\ell^2}{\sigma_1^2}, \quad \delta > 0
+\end{equation}
+$$
+
+큰 $\sigma_L$에서는 분포가 평평하므로 큰 step으로 mode 사이를 자유롭게 이동하고, $\sigma$가 작아질수록 작은 step으로 세부를 다듬는다.
+이전 포스트에서 DDPM이 초반에 전역 구조를, 후반에 세부를 만든다고 했던 coarse-to-fine 구조와 같은 아이디어이다.
+
+#### Slow Sampling Speed of NCSN
+
+문제는 속도이다. 노이즈 레벨 $L$개마다 Langevin을 $K$번 돌리면 총 $O(LK)$번의 network forward pass가 *순차적으로* 필요하다.
+$L \times K$를 줄이기 어려운 이유는 두 가지이다.
+
+1. **국소 정확도와 안정성**: 학습된 score는 작은 이동에서만 믿을 수 있으므로 step size를 작게, 반복 횟수를 많게 잡아야 한다.
+2. **고차원에서의 느린 mixing**: Langevin 같은 국소 MCMC는 고차원 multimodal 분포를 비효율적으로 탐색한다.
+
+각 반복은 이전 반복의 결과에 의존하므로 병렬화도 할 수 없다.
+
+## Summary: NCSN vs DDPM
+
+두 모델은 출발점이 다르지만 구조는 거울처럼 대칭이다.
+NCSN은 $\mathbf{x}_i \mid \mathbf{x}$를 정의하고 transition을 유도하는 반면, DDPM은 transition을 정의하고 $\mathbf{x}_i \mid \mathbf{x}$를 유도한다.
+
+|                                    | NCSN                                                                                                                     | DDPM                                                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| $\mathbf{x}_{i+1} \mid \mathbf{x}_i$ | 유도: $\mathbf{x}_{i+1} = \mathbf{x}_i + \sqrt{\sigma_{i+1}^2 - \sigma_i^2} \, \mathbf{\epsilon}$                          | 정의: $\mathbf{x}_{i+1} = \sqrt{1 - \beta_i} \, \mathbf{x}_i + \sqrt{\beta_i} \, \mathbf{\epsilon}$          |
+| $\mathbf{x}_i \mid \mathbf{x}$     | 정의: $\mathbf{x}_i = \mathbf{x} + \sigma_i \mathbf{\epsilon}$                                                             | 유도: $\mathbf{x}_i = \bar{\alpha}_i \mathbf{x} + \sqrt{1 - \bar{\alpha}_i^2} \, \mathbf{\epsilon}$            |
+| $p_{\textrm{prior}}$               | $\mathcal{N}(\mathbf{0}, \sigma_L^2 \mathbf{I})$                                                                         | $\mathcal{N}(\mathbf{0}, \mathbf{I})$                                                                       |
+| Loss                               | $\mathbb{E}_i \mathbb{E}_{\mathbf{x}, \mathbf{\epsilon}} \lVert \mathbf{s}_\phi (\mathbf{x}_i, \sigma_i) + \mathbf{\epsilon} / \sigma_i \rVert_2^2$ | $\mathbb{E}_i \mathbb{E}_{\mathbf{x}, \mathbf{\epsilon}} \lVert \mathbf{\epsilon}_\phi (\mathbf{x}_i, i) - \mathbf{\epsilon} \rVert_2^2$ |
+| Sampling                           | 레벨마다 Langevin, 결과를 다음 레벨 초기값으로 사용                                                                         | 학습된 $p_{\phi^\times} (\mathbf{x}_{i-1} \mid \mathbf{x}_i)$로 Markov chain을 거꾸로 따라감                  |
+
+공통된 한계도 있다. 둘 다 노이즈 레벨(시간)을 촘촘하게 나누어야 하므로 샘플 하나를 만드는 데 수백에서 수천 번의 반복이 필요하다.
+
+## Conclusion
+
+이번 포스트의 흐름을 한 줄로 요약하면 **"Partition function을 피하려고 score로 갔고, score를 쉽게 배우려고 노이즈를 더했고, 노이즈를 여러 단계로 쌓으니 diffusion model이 되었다"**이다.
+
+1. EBM은 표현력이 좋지만 $Z_\phi$ 때문에 MLE 학습이 intractable하다.
+2. Score $\nabla_\mathbf{x} \log p(\mathbf{x})$는 $Z_\phi$와 무관하고 분포를 완전히 표현하므로, score를 학습 대상으로 삼는다.
+3. Score matching은 부분적분으로 data score를 없앴지만 Jacobian trace 계산이 비싸다. Sliced score matching은 이를 줄였지만 분산과 안정성 문제가 남는다.
+4. DSM은 데이터에 노이즈를 더하고 $\mathbf{x}$로 conditioning해서 target을 closed form인 $-\mathbf{\epsilon}/\sigma$로 바꾼다. DDPM에서 썼던 conditioning trick과 같다.
+5. Tweedie's formula에 의해 score 예측은 곧 denoising이다.
+6. NCSN은 여러 노이즈 레벨의 score를 하나의 네트워크로 학습하고, Annealed Langevin dynamics로 큰 노이즈에서 작은 노이즈로 내려가며 샘플을 만든다. 그 학습 목표는 DDPM의 $\epsilon$-prediction과 scale만 다르다.
+
+NCSN과 DDPM이 같은 곳에 도착한 것은 우연이 아니다.
+다음 단계는 노이즈 레벨을 이산적인 사다리가 아니라 연속적인 시간으로 보는 것이다.
+그러면 NCSN과 DDPM 모두 하나의 SDE를 서로 다르게 이산화한 것으로 통합되는데, 이것이 Score SDE [@song2020score]이다.
+NCSN과 DDPM이 공유하는 느린 샘플링 문제도 이 연속 시간 관점에서 ODE solver 같은 수치해석 도구로 다룰 수 있게 된다.
