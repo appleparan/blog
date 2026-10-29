@@ -847,6 +847,14 @@ block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 �
 
 #### 생성 중에 새 입력이 들어올 때
 
+생성 중에 들어온 입력은 일반 request와 streaming 입력 세션에서 다르게 처리된다. 일반 request는 새 request로 함께 돌고, streaming 세션은 현재 턴이 끝날 때까지 다음 조각을 기다리게 한다.
+
+<Figure
+  src="/assets/images/post/2026-10-12-Inside-vLLM/05-input-during-gen-light.svg"
+  darkSrc="/assets/images/post/2026-10-12-Inside-vLLM/05-input-during-gen-dark.svg"
+  caption="생성 중에 들어온 입력: 새 request와 streaming 입력 세션."
+/>
+
 일반 chat이나 agent request는 이미 돌고 있는 생성에 입력을 끼워 넣을 수 없다. 생성 중에 새 메시지가 오면 vLLM은 이를 새 HTTP request로 처리한다. 앞 request는 그대로 생성을 이어 가고, 두 request는 같은 step의 batch에 함께 들어간다. 앞 request를 멈추려면 client가 연결을 끊어야 하고, 그러면 [request 처리 7번](#7-free-blocks-request-종료와-kv-block-정리)의 abort 경로를 탄다.
 
 새 request는 보통 대화 전체를 다시 담아 오므로 prefix cache 효과를 본다. 앞 request가 계산을 마친 꽉 찬 block에는 이미 hash가 붙어 있다. 그래서 앞 request가 아직 생성 중이어도, 새 request는 그 block을 `ref_cnt` 2로 공유한다. agent의 tool 호출도 같은 구조다. model이 tool 호출을 출력하면 그 request는 정상 종료되고, tool 결과를 붙인 다음 턴은 새 request로 들어와 이전 턴의 KV를 prefix cache로 다시 쓴다.
