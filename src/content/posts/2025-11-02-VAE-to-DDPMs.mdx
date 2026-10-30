@@ -143,7 +143,7 @@ $$
 생성모델은 고차원 데이터로부터 확률 분포를 학습하여 데이터셋과 유사한 새로운 샘플을 생성해 내는 것이다.
 
 훈련 데이터 분포를 $p_{\text{data}}$라고 하고, 모델의 확률분포를 $p_\phi (x)$라고 가정하자.
-이 떄 모델의 파라미터 $\phi$를 훈련하여 $p_{\text{data}}$를 $p_\phi (x)$에 근사하게 만드는것이 생성모델의 목표이다.
+이 때 모델의 파라미터 $\phi$를 훈련하여 $p_\phi (\mathbf{x})$를 $p_{\text{data}}$에 근사하게 만드는것이 생성모델의 목표이다.
 두 분포가 얼마나 멀리 떨어져있는가? (KL Divergence 등) 를 측정하는것이 loss function의 역할을 하게 된다.
 
 $$
@@ -177,7 +177,7 @@ $$
 \end{align}
 $$
 
-하지만 forward KL $$\mathcal{D}_{\mathrm{KL}}(p_{\text{data}} \| p_{\phi})$$를 최소화하는 과정은 모드 커버링(mode covering)이라는 생성하게 된다. 이는, 데이터가 존재하는 영역 $p_{\text{data}} > 0$이지만, 모델이 그 영역에 확률을 주지 않으면 $p_{\phi}(\mathbf{x}) = 0$이 되고
+하지만 forward KL $$\mathcal{D}_{\mathrm{KL}}(p_{\text{data}} \| p_{\phi})$$를 최소화하는 과정은 모드 커버링(mode covering)이라는 현상을 만든다. 이는, 데이터가 존재하는 영역 $p_{\text{data}} > 0$이지만, 모델이 그 영역에 확률을 주지 않으면 $p_{\phi}(\mathbf{x}) = 0$이 되고
 
 $$
 \begin{equation*}
@@ -188,8 +188,7 @@ $$
 
 그러나 반대로 reverse KL $$\mathcal{D}_{\mathrm{KL}}(p_{\phi} \| p_{\text{data}} )$$에서는 데이터가 존재하는 일부 영역을 놓쳐도 큰 손해가 나지 않아 페널티가 크지 않다. 이를 큰 모드에 집중하는 mode seeking 이라고 한다.
 
-또한 $p_{\text{data}}$는 직접 구할 수 없으므로 forward KL은 다음과 같이 쓸 수 있다. 이 떄, $$\mathcal{H}(p_{\text{data}})
-:= - \mathbb{E}_{\mathbf{x} \sim p_{\text{data}}}$$는 데이터의 entropy이다.
+또한 $p_{\text{data}}$는 직접 구할 수 없으므로 forward KL은 다음과 같이 쓸 수 있다. 이 때, $$\mathcal{H}(p_{\text{data}}) := - \mathbb{E}_{\mathbf{x} \sim p_{\text{data}}} [\log p_{\text{data}}(\mathbf{x})]$$는 데이터의 entropy이다.
 
 $$
 \begin{align}
@@ -232,26 +231,26 @@ Illustration of a VAE</a></>} alt="Illustration of a VAE" align="center" backgro
 * 가정:
   * 가우시안 같은 단순한 prior 분포($\mathbf{z} \sim p_{\text{prior}} := \mathbf{\mathcal{N}(0, I)}$)로부터 $\mathbf{x}$를 생성
 * $\mathbf{x}$와 $\mathbf{z}$의 생성
-  * Decoder 분포를 $p_\theta(\mathbf{x} \mid \mathbf{z})$라고 했을때,
+  * Decoder 분포를 $p_\phi(\mathbf{x} \mid \mathbf{z})$라고 했을때,
   * Sampling: $\mathbf{z} \sim p_{\text{prior}}$
-  * Decoding: $\mathbf{x} \sim p_\theta(\mathbf{x} \mid \mathbf{z})$
+  * Decoding: $\mathbf{x} \sim p_\phi(\mathbf{x} \mid \mathbf{z})$
 
-VAE는 다음과 같은 **marignal likelihood**에 의해 latent-variable generative model로 정의된다.
-이게 $p_\theta(\mathbf{x} \mid \mathbf{z})$는 $z$라는 원인으로부터 $x$가 생성(결과)이므로 (결과 $\mid$ 원인)인 likelihood이기 때문이다.
+VAE는 다음과 같은 **marginal likelihood**에 의해 latent-variable generative model로 정의된다.
+$p_\phi(\mathbf{x} \mid \mathbf{z})$는 $z$라는 원인으로부터 $x$가 생성(결과)되므로 (결과 $\mid$ 원인) 형태의 likelihood이다.
 
 $$
 \begin{equation}
-p_\phi (x) = \int p_\phi(\mathbf{x} \mid \mathbf{z}) p(\mathbf{z}) d\mathbf{z}
+p_\phi (\mathbf{x}) = \int p_\phi(\mathbf{x} \mid \mathbf{z}) p(\mathbf{z}) d\mathbf{z}
 \end{equation}
 $$
 
-이상적으로는 decoder 파라미터 $\phi$는 marignal likelihood를 최대화해서 학습할 수 있지만. $p(\mathbf{z})$를 구하기가 힘들다.
+이상적으로는 decoder 파라미터 $\phi$는 marginal likelihood를 최대화해서 학습할 수 있지만, 모든 $\mathbf{z}$에 대한 적분을 계산하기가 힘들다.
 
-왜냐하면 $\mathbf{z}$가 $m$개의 변수라고 하고, 각 변수마다 $n$개씩 쪼개서 계산한다 하더라도 $m \times n$이라는 엄청난 수의 grid point가 필요하기 때문이다. 따라서 이를 변수를 바꿔서 계산(변분법)하게 된다.
+왜냐하면 $\mathbf{z}$가 $m$개의 변수라고 하고, 각 변수마다 $n$개씩 쪼개서 계산한다 하더라도 $n^m$이라는 엄청난 수의 grid point가 필요하기 때문이다. 따라서 근사 분포를 도입하는 변분(variational) 방법으로 우회하게 된다.
 
 #### Construction of Encoder (Inference Network)
 
-반대로 $\mathbf{x}$로 부터 $\mathbf{z}$를 생성하기 위해서는 $p_\theta(\mathbf{z} \mid \mathbf{x})$가 필요하고 베이즈 정리에 따라 다음과 같이 계산한다.
+반대로 $\mathbf{x}$로 부터 $\mathbf{z}$를 생성하기 위해서는 $p_\phi(\mathbf{z} \mid \mathbf{x})$가 필요하고 베이즈 정리에 따라 다음과 같이 계산한다.
 
 $$
 \begin{equation*}
@@ -259,7 +258,7 @@ p_\phi(\mathbf{z} \mid \mathbf{x}) = \dfrac{p_\phi(\mathbf{x} \mid \mathbf{z}) p
 \end{equation*}
 $$
 
-Decoder와 마찬가지로 $p(\mathbf{x})$를 일반적인 계산으로 구하기 어렵다. (intractable) 즉, $\mathbf{x}$로부터 $\mathbf{z}$를 구하는 것은 불가능하다.
+Decoder와 마찬가지로 $p(\mathbf{x})$를 일반적인 계산으로 구하기 어렵다. (intractable) 즉, posterior $p_\phi(\mathbf{z} \mid \mathbf{x})$를 정확히 계산하는 것은 불가능하다.
 
 따라서, **intractable posterior를 tractable approximation으로 교체**하는 것이 필수적이며 이걸 변분법적 접근이라고 한다.
 Encoder 네트워크 $q_\theta(\mathbf{z} \mid \mathbf{x})$를 가정해서 다음과 같이 정의하자.
@@ -272,7 +271,7 @@ $$
 
 여기서 $q_\theta(\mathbf{z} \mid \mathbf{x})$는 근사 사후 확률(Approximate Posterior)가 된다.
 
-즉 Decoder는 Likelihood $\phi_\phi(x \mid z)$를, Encoder는 Approximate posterior $q_\theta(z \mid x)$를 훈련한다.
+즉 Decoder는 Likelihood $p_\phi(\mathbf{x} \mid \mathbf{z})$를, Encoder는 Approximate posterior $q_\theta(z \mid x)$를 훈련한다.
 
 ### Training via the Evidence Lower Bound (ELBO)
 
@@ -281,7 +280,7 @@ $$
 1. VAE(생성 모델)의 목표: Marginal Likelihood $\log p_\phi(\mathbf{x})$의 최대화
 2. 필요한 것: $p (\mathbf{z} \mid \mathbf{x})$
 3. 문제점:
-   1. $p_\phi (x) = \int p_\phi(\mathbf{x} \mid \mathbf{z}) p(\mathbf{z}) d\mathbf{z}$의 모든 $\mathbf{z}$에 대해서 구하는건 불가능
+   1. $p_\phi (\mathbf{x}) = \int p_\phi(\mathbf{x} \mid \mathbf{z}) p(\mathbf{z}) d\mathbf{z}$의 모든 $\mathbf{z}$에 대해서 구하는건 불가능
    2. $\mathbf{z}$에 대해 샘플링해서 구하자니 효율적으로 샘플링하지 않으면 대부분 0이 나올 가능성이 높음
    3. $\mathbf{x}$가 주어졌을때 $\mathbf{x}$를 만들었을 $\mathbf{z}$의 분포 $p(\mathbf{z} \mid \mathbf{x})$가 필요
    4. $$p_\phi (\mathbf{z} \mid \mathbf{x}) = \frac{p_\phi(\mathbf{x} \mid \mathbf{z}) p(\mathbf{z})}{p(\mathbf{x})}$$
@@ -290,14 +289,14 @@ $$
 4. 해결책
    1. True $$p_\phi (\mathbf{z} \mid \mathbf{x})$$는 찾을 수 없음
    2. $$q_\theta (\mathbf{z} \mid \mathbf{x}) \approx p_\phi (\mathbf{z} \mid \mathbf{x})$$를 훈련하여 $q_\theta (z \mid x)$를 사용하자 (Variational Inference)
-   3. 즉 $\log p_\phi(\mathbf{x})$를 최대화를 변수를 바꿔서 (변분 추론, Varaitional Inference)를 통해서 $$q_\theta (z \mid x)$$를 사용하자.
+   3. 즉 $\log p_\phi(\mathbf{x})$를 직접 최대화하는 대신 변분 추론(Variational Inference)을 통해서 $$q_\theta (z \mid x)$$를 사용하자.
 
 이렇게 된것이다. 여기서 ELBO가 나오게 된다.
 
 #### Deriving ELBO
 
 우리의 목표는 $$p_\phi (\mathbf{z} \mid \mathbf{x})$$와 근사한 $$q_\theta (z \mid x)$$를 찾는 것이다.
-또한 $p_\phi (\mathbf{z})$를 $q_\theta (z \mid x)$로 변수를 바꾸는 것이 목표이다.
+또한 $p_\phi (\mathbf{z} \mid \mathbf{x})$ 자리에 $q_\theta (z \mid x)$를 쓰는 것이 목표이다.
 즉, 기존의 $\log p_\phi(\mathbf{x})$를 $q_\theta (z \mid x)$에 대해서 표현하는 것이다.
 
 $$
@@ -327,42 +326,39 @@ $$
 &= \mathbb{E}_{\mathbf{z} \sim q_\theta (z \mid x)} \left[ \log p_\phi(\mathbf{x \mid z})p_\phi(\mathbf{z}) - \log q_\theta (z \mid x) \right] \\
 &= \mathbb{E}_{\mathbf{z} \sim q_\theta (z \mid x)} \left[ \log p_\phi(\mathbf{x \mid z}) + \log p_\phi(\mathbf{z}) - \log q_\theta (z \mid x) \right] \\
 &= \underbrace{\mathbb{E}_{\mathbf{z} \sim q_\theta (z \mid x)} \left[ \log p_\phi(\mathbf{x \mid z}) \right]}_{\text{Reconstruction Term}} +  \underbrace{\mathbb{E}_{\mathbf{z} \sim q_\theta (z \mid x)} \left[ \log p_\phi(\mathbf{z}) - \log q_\theta (z \mid x) \right]}_{\text{Latent Regularization}} \\
-
-&= \underbrace{\mathbb{E}_{\mathbf{z} \sim q_\theta (z \mid x)} \left[ \log p_\phi(\mathbf{x \mid z}) \right]}_{\text{Reconstruction Term}} - \underbrace{ \mathcal{D}_{KL} (q_\theta (z \mid x) \| p(\mathbf{z}))}_{\text{Latent Regularization}} \\
-
+&= \underbrace{\mathbb{E}_{\mathbf{z} \sim q_\theta (z \mid x)} \left[ \log p_\phi(\mathbf{x \mid z}) \right]}_{\text{Reconstruction Term}} - \underbrace{ \mathcal{D}_{KL} (q_\theta (z \mid x) \| p(\mathbf{z}))}_{\text{Latent Regularization}}
 \end{align*}
 $$
 
 이 때 ELBO는 두 가지 term으로 구성된다.
 
-* Reconstruction (디코더 $z -> x$)
+* Reconstruction (디코더 $\mathbf{z} \rightarrow \mathbf{x}$)
   * $$\mathbb{E}_{\mathbf{z} \sim q_\theta (z \mid x)} \left[ \log p_\phi(\mathbf{x \mid z}) \right]$$
   * 방향: $\mathbf{z} \rightarrow \mathbf{x}$ (Decoder, 생성)
   * 목표: 데이터 충실도 (Data Fidelity). 즉, $z$로부터 원본 $x$를 얼마나 잘 복원하는가?
   * 최대화가 목표 (그래서 +)
-  * 디코더 출력 분포 $p_\phi (\mathbf{x} \mid \mathbf{z})$가 실제 데이터 분포 $$p_{\text{data}} (\mathbf{x})$$ (입력 $x$로 대표됨)을 모델링할 떄의 비용
-    * $$D_{KL}(p_{\text{data}} (\mathbf{x}) || p_\phi (\mathbf{x} \mid \mathbf{z}))$$
-* Latent KL (인코더 $x -> z$)
+  * Gaussian decoder $p_\phi (\mathbf{x} \mid \mathbf{z}) = \mathcal{N}(\mathbf{x}; \mathbf{\mu}_\phi (\mathbf{z}), \sigma^2 \mathbf{I})$라면, 이 항의 부호를 바꾼 것은 squared reconstruction error $$\dfrac{1}{2\sigma^2} \| \mathbf{x} - \mathbf{\mu}_\phi (\mathbf{z}) \|^2$$에 상수를 더한 것이다.
+* Latent KL (인코더 $\mathbf{x} \rightarrow \mathbf{z}$)
   * $$\mathcal{D}_{KL} (q_\theta (z \mid x) \| p(\mathbf{z}))$$
   * 방향: $\mathbf{x} \rightarrow \mathbf{z}$ (Encoder, 압축/추론)
-  * 목표: 잠재 공간 정규화. 즉, 인코더가 $z$를 $x$로 매핑할 때, 그 $z$의 분포가 우리가 원하는 단순한 형태 (보통 Gaussian인 $p(x)$)를 따르도록 강제
+  * 목표: 잠재 공간 정규화. 즉, 인코더가 $z$를 $x$로 매핑할 때, 그 $z$의 분포가 우리가 원하는 단순한 형태 (보통 Gaussian인 $p(\mathbf{z})$)를 따르도록 강제
   * 최소화가 목표 (그래서 -)
-  * 단순한 사전 분포 $p(x)$가 인코더의 출력분포 $q_\theta (z \mid x)$를 모델링할 때의 비용
-    * $$D_{KL}(q_\theta (z \mid x) || p(x))$$
+  * 단순한 사전 분포 $p(\mathbf{z})$가 인코더의 출력분포 $q_\theta (z \mid x)$를 모델링할 때의 비용
+    * $$D_{KL}(q_\theta (z \mid x) \| p(\mathbf{z}))$$
 
 여기서 다음과 같이 Trade-off가 있다.
 
-복원력에 초점을 두면 Reconstruction은 최대화할 수 있겠지만, 암기(memorization)에만 초점을 둬 $$q_\theta (z \mid x)$$가 뾰족해지고, Latent KL $$D_{KL}(q_\theta (z \mid x) || p(x))$$은 커지게된다.
-반대로 잠재 공간을 너무 단순하게 만들면, $$q_\theta (z \mid x) $$와 $$p(x)$$가 같아진다고 볼 수 있고,
+복원력에 초점을 두면 Reconstruction은 최대화할 수 있겠지만, 암기(memorization)에만 초점을 둬 $$q_\theta (z \mid x)$$가 뾰족해지고, Latent KL $$D_{KL}(q_\theta (z \mid x) \| p(\mathbf{z}))$$은 커지게된다.
+반대로 잠재 공간을 너무 단순하게 만들면, $$q_\theta (z \mid x) $$와 $$p(\mathbf{z})$$가 같아진다고 볼 수 있고,
 이는 인코더가 $x$의 정보를 $z$에 반영하지 않아 (독립) 디코더의 입장에서는 $$p_{\text{data}} (\mathbf{x})$$의 평균을 내놓게 될 뿐이다.
-이로 인해 Reconstruction $$\mathbb{E}_{\mathbf{z} \sim q_\theta (z \mid x)} \left[ \log p_\phi(\mathbf{x \mid z}) \right]$$은 커지게 된다.
+이로 인해 Reconstruction $$\mathbb{E}_{\mathbf{z} \sim q_\theta (z \mid x)} \left[ \log p_\phi(\mathbf{x \mid z}) \right]$$은 작아진다. 즉 reconstruction error가 커진다.
 
 #### Blurry Generations in VAEs
 
 VAE를 실제로 훈련하다보면 Blurry하게 생성되는 경우가 많다. 처음에는 Autoencoder보다 더 안좋은 결과 같아서 당황하지만, 알고보면 당연하다.
 
 어떤 고정된 Gaussian encoder $$q_{enc} (\mathbf{z} \mid \mathbf{x})$$와 Gaussian Decoder $$p_{dec} (\mathbf{x} \mid \mathbf{z})$$가 있다고 하자. 이는 Encoder와 Decoder를 모두 생각해야하는 기존 VAE의 문제를 Decoder에만 집중하게만 해준다.
-이 떄, $$p_{dec} (\mathbf{x} \mid \mathbf{z})$$은 Gussian 관점에서 다음과 같이 표현할 수 있다.
+이 때, $$p_{dec} (\mathbf{x} \mid \mathbf{z})$$은 Gaussian 관점에서 다음과 같이 표현할 수 있다.
 
 $$
 \begin{equation}
@@ -389,14 +385,16 @@ $$
 \end{equation}
 $$
 
-이 떄 중요한 것은 $$q_{enc} (\mathbf{x} \mid \mathbf{z})$$이라는 건데, 오타가 아니고 정말 $$x$$와 $$z$$의 방향이 바뀐 것이다.
+이 때 중요한 것은 $$q_{enc} (\mathbf{x} \mid \mathbf{z})$$이라는 건데, 오타가 아니고 정말 $$x$$와 $$z$$의 방향이 바뀐 것이다.
 이는 별도의 $$p_{dec} (\mathbf{x} \mid \mathbf{z})$$가 아닌 일종의 역함수처럼 $$q_{enc}$$의 방향을 뒤집은 것이고 다음과 같이 정의한다.
 
 $$
 \begin{equation}
-q_{enc} (\mathbf{x} \mid \mathbf{z}) = \dfrac{q_{enc} (\mathbf{z} \mid \mathbf{x}) p_{\text{data}} (\mathbf{x})}{p_{\text{prior}} (\mathbf{z})}
+q_{enc} (\mathbf{x} \mid \mathbf{z}) = \dfrac{q_{enc} (\mathbf{z} \mid \mathbf{x}) p_{\text{data}} (\mathbf{x})}{q_{enc} (\mathbf{z})}
 \end{equation}
 $$
+
+이 때 분모 $$q_{enc} (\mathbf{z}) := \int q_{enc} (\mathbf{z} \mid \mathbf{x}) p_{\text{data}} (\mathbf{x}) d\mathbf{x}$$는 prior $p_{\text{prior}} (\mathbf{z})$가 아니라, 인코더가 데이터 전체에 대해 만드는 latent의 분포(aggregated posterior)이다.
 
 $\mathbf{\mu}^*$을 기대값의 형태로 풀어쓰고 여기에 다시 $$q_{enc} (\mathbf{x} \mid \mathbf{z})$$를 대입해서 정리해볼 수 있다.
 참고로 베이즈 정리에 따른 적분식 $P(B) = \int P(B \mid A) P(A) dA$를 사용한다.
@@ -405,11 +403,11 @@ $$
 \begin{align*}
 \mathbf{\mu}^* (\mathbf{z}) &= \mathbb{E}_{q_{enc} (\mathbf{x} \mid \mathbf{z})} [\mathbf{x}] \\
 &= \int \mathbf{x} \cdot  q_{enc} (\mathbf{x} \mid \mathbf{z}) d\mathbf{x} \\
-&= \int \mathbf{x} \cdot \dfrac{q_{enc} (\mathbf{z} \mid \mathbf{x}) p_{\text{data}} (\mathbf{x})}{p_{\text{prior}} (\mathbf{z})} d\mathbf{x} \\
-&= \dfrac{1}{p_{\text{prior}} (\mathbf{z})} \int \mathbf{x} \cdot q_{enc} (\mathbf{z} \mid \mathbf{x}) p_{\text{data}} (\mathbf{x}) d\mathbf{x} \\
+&= \int \mathbf{x} \cdot \dfrac{q_{enc} (\mathbf{z} \mid \mathbf{x}) p_{\text{data}} (\mathbf{x})}{q_{enc} (\mathbf{z})} d\mathbf{x} \\
+&= \dfrac{1}{q_{enc} (\mathbf{z})} \int \mathbf{x} \cdot q_{enc} (\mathbf{z} \mid \mathbf{x}) p_{\text{data}} (\mathbf{x}) d\mathbf{x} \\
 &= \dfrac{1}{\int q_{enc}(\mathbf{z} \mid \mathbf{x}) p_{\text{data}}(\mathbf{x}) d\mathbf{x}} \int \mathbf{x} \cdot q_{enc} (\mathbf{z} \mid \mathbf{x}) p_{\text{data}} (\mathbf{x}) d\mathbf{x} \\
 &= \dfrac{1}{\mathbb{E}_{p_{\text{data}}} q_{enc} (\mathbf{z} \mid \mathbf{x})} \int \mathbf{x} \cdot q_{enc} (\mathbf{z} \mid \mathbf{x}) p_{\text{data}} (\mathbf{x}) d\mathbf{x} \\
-&= \dfrac{1}{\mathbb{E}_{p_{\text{data}}} q_{enc} (\mathbf{z} \mid \mathbf{x})} \mathbb{E}_{p_{\text{data}}} [q_{enc} (\mathbf{z} \mid \mathbf{x})] \\
+&= \dfrac{1}{\mathbb{E}_{p_{\text{data}}} q_{enc} (\mathbf{z} \mid \mathbf{x})} \mathbb{E}_{p_{\text{data}}} [q_{enc} (\mathbf{z} \mid \mathbf{x}) \mathbf{x}]
 \end{align*}
 $$
 
@@ -435,15 +433,15 @@ L2 손실(Reconstruction Error)을 최소화하는 최적의 Decoder $$\mu^*(\ma
 ## Variational Perspective: DDPM
 
 기존 책에는 HVAE와 왜 HVAE로도 기존 VAE의 문제를 완전히 해결하지 못하는지에 대한 이야기가 담겨있다.
-요약하면 (1) Encoder의 문제: 깊은 모델이어도 결국 Encoder는 Gaussian으로 근사하고, multi-peaked인 경우에는 이를 모두 포함하기 위해 매우 loose한 Guassian으로 근사하게 된단 점, (2) Decoder의 문제: Decoder가 너무 강력해서 $\mathbf{z}$를 무시하게 되어 controllable하지 않다.라는 문제를 지적했다.
+요약하면 (1) Encoder의 문제: 깊은 모델이어도 결국 Encoder는 Gaussian으로 근사하고, multi-peaked인 경우에는 이를 모두 포함하기 위해 매우 loose한 Gaussian으로 근사하게 된단 점, (2) Decoder의 문제: Decoder가 너무 강력해서 $\mathbf{z}$를 무시하게 되어 controllable하지 않다.라는 문제를 지적했다.
 
 DDPM(Denoising Diffusion Probabilistic Models)은 이를 해결하기 위해 Encoder를 고정하고 Decoder만을 학습한다.
 
 * The forward pass (Fixed Encoder):
   * $$p(\mathbf{x}_i \mid \mathbf{x}_{i-1})$$이라는 transition kernel을 통해 데이터에 Gaussian noise를 서서히 주입하여 데이터를 왜곡한다.
   * 결국 데이터는 isotropic Gaussian data로 전환되게 되고, 이 과정은 항상 일정하므로 고정된 Encoder라고 할 수 있다.
-* The reverse Denoising Process (Learnables Decoder):
-  * Decoder에서는 parameterized된 $$p_{\phi}(\mathbf{x}_{i_1} \mid\mathbf{x}_{i})$$을 통해 노이즈 주입을 **reverse**하는 과정을 배우게 된다.
+* The reverse Denoising Process (Learnable Decoder):
+  * Decoder에서는 parameterized된 $$p_{\phi}(\mathbf{x}_{i-1} \mid\mathbf{x}_{i})$$을 통해 노이즈 주입을 **reverse**하는 과정을 배우게 된다.
   * VAE에서 한번에 denoising하는 것보다는 훨씬 더 controllable하다.
 
 <Figure src="/assets/images/post/2025-11-02-VAE-to-DDPMs/02-DDPM.png" caption={<><a href="https://www.arxiv.org/abs/2510.21890">
@@ -470,9 +468,9 @@ p(\mathbf{x}_i \mid \mathbf{x}_{i-1}) := \mathcal{N}(\mathbf{x}_i ; \sqrt{1-\bet
 $$
 
 조금 더 디테일하게 설명하자면, 맨 처음에는 실제 데이터 분포 $p_{\text{data}}$로부터 샘플링된 $\mathbf{x}_0$부터 시작한다.
-그리고 $$\lbrace \beta_i \rbrace_{i=1}^L$$는 서서히 증가하는 noise scheudle이다.
-$\beta_i \in \lbrace 0, 1 \rbrace$는 step $i$에 주입되는 Gaussian noise의 양을 결정한다.
-만약 $\alpha_i := \sqrt{1-\beta^2}$라고 가정하면 다음과 같이 단순히 iterative하게 노이즈 주입하는 식인 것일 뿐이다.
+그리고 $$\lbrace \beta_i \rbrace_{i=1}^L$$는 서서히 증가하는 noise schedule이다.
+$\beta_i \in (0, 1)$는 step $i$에 주입되는 Gaussian noise의 양을 결정한다.
+만약 $\alpha_i := \sqrt{1-\beta_i^2}$라고 가정하면 다음과 같이 단순히 iterative하게 노이즈 주입하는 식인 것일 뿐이다.
 
 $$
 \begin{align}
@@ -489,7 +487,7 @@ $$
 $$
 \begin{align}
 p(\mathbf{x}_i \mid \mathbf{x}_0) &:= \mathcal{N}(\mathbf{x}_i ; \bar{\alpha}_i \mathbf{x}_0, (1-\bar{\alpha}_i^2)\mathbf{I}) \\
-\bar{\alpha}_i &:= \Pi_{k=1}^i \sqrt{1-\beta_k^2} = \Pi_{k=1}^i \alpha_k
+\bar{\alpha}_i &:= \prod_{k=1}^i \sqrt{1-\beta_k^2} = \prod_{k=1}^i \alpha_k
 \end{align}
 $$
 
@@ -497,7 +495,7 @@ $$
 
 $$
 \begin{align}
-\mathbf{x}_i = \bar{\alpha}_i \mathbf{x}_0 + (1-\bar{\alpha}_i^2) \mathbf{\epsilon}_i, \quad \mathbf{\epsilon}_i \sim \mathcal{N}(\mathbf{0}, \mathbf{I})
+\mathbf{x}_i = \bar{\alpha}_i \mathbf{x}_0 + \sqrt{1-\bar{\alpha}_i^2} \mathbf{\epsilon}, \quad \mathbf{\epsilon} \sim \mathcal{N}(\mathbf{0}, \mathbf{I})
 \end{align}
 $$
 
@@ -523,7 +521,7 @@ Encoder는 고정된 스케줄이니 모델이라고 할 수는 없지만 실제
 다음 그림과 같이 $x_{L} \sim p_{\text{prior}}$로부터 시작해서 denoise과정을 통해 일관성 있고(coherent) 의미있는(meaningful) 데이터 분포를 도출하는 것이 Decoder의 목적이다.
 
 <Figure src="/assets/images/post/2025-11-02-VAE-to-DDPMs/04-DDPM-reverse.png" caption={<><a href="https://www.arxiv.org/abs/2510.21890">
-Illustration of a DDPM forward process</a></>} alt="Illustration of a DDPM forward process" align="center" background="#fff" />
+Illustration of a DDPM reverse process</a></>} alt="Illustration of a DDPM reverse process" align="center" background="#fff" />
 
 즉 **복잡한 분포 $$\mathbf{x}_i \sim p_i (\mathbf{x})$$를 고려할 때, 정확하게 혹은 최소한 효과적으로 reverse transition kernel $$p(\mathbf{x}_{i-1} \mid \mathbf{x}_{i})$$를 근사할 수 있는가?**라는 질문으로 문제를 정의할 수 있다.
 
@@ -560,7 +558,7 @@ $$
 | 알고 싶은 분포 | true posterior  $p(\mathbf{z} \mid \mathbf{x})$                                                      | true reverse kernel  $p(\mathbf{x}_{i-1} \mid \mathbf{x}_i) $                                                                                 |
 | 베이즈 정리    | $p(\mathbf{z} \mid \mathbf{x}) = \frac{p(\mathbf{x} \mid \mathbf{z}) p(\mathbf{z})}{p(\mathbf{x})} $ | $$p(\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) = \frac{p(\mathbf{x}_{i} \mid \mathbf{x}_{i-1}) p_{i-1}(\mathbf{x}_{i-1})}{p_{i}(\mathbf{x}_{i})}$$ |
 | Intractable 항 | $$p(\mathbf{x}) = \int p(\mathbf{x} \mid \mathbf{z}) p(\mathbf{z}) d\mathbf{z}$$                     | $$p_i(\mathbf{x}_i) = \int p_i(\mathbf{x}_i \mid \mathbf{x}_0) p_{\text{data}}(\mathbf{x}_0) d\mathbf{x}_0$$                                  |
-| 해결책 (근사)  | 근사 posterior:  $$q_\phi(\mathbf{z} \mid \mathbf{x})$$                                              | 근사 reverse kernel:  $$p_\phi(\mathbf{x}_{i-1} \mid \mathbf{x}_{i})$$                                                                        |
+| 해결책 (근사)  | 근사 posterior:  $$q_\theta(\mathbf{z} \mid \mathbf{x})$$                                              | 근사 reverse kernel:  $$p_\phi(\mathbf{x}_{i-1} \mid \mathbf{x}_{i})$$                                                                        |
 
 #### Overcoming Intractability with Conditioning
 
@@ -569,7 +567,7 @@ $p_{i} (\mathbf{x}_{i})$를 직접 계산하는건 intractable하다는 것은 �
 
 $$
 \begin{equation}
-p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) = p (\mathbf{x}_{i} \mid \mathbf{x}_{i-1}) \underbrace{\dfrac{p (\mathbf{x}_{i-1} \mid \mathbf{x})}{p (\mathbf{x}_{i} \mid \mathbf{x})}}_{\text{tractable}}
+p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}) = p (\mathbf{x}_{i} \mid \mathbf{x}_{i-1}) \underbrace{\dfrac{p (\mathbf{x}_{i-1} \mid \mathbf{x})}{p (\mathbf{x}_{i} \mid \mathbf{x})}}_{\text{tractable}}
 \end{equation}
 $$
 
@@ -601,9 +599,9 @@ $$
 
 $$
 \begin{align*}
-\mathbb{E}_{p_{\text{data}} (\mathbf{x})} \mathbb{E}_{p(\mathbf{x}_i \mid \mathbf{x}) } \left[ f(\mathbf{x}_0, \mathbf{x}_i) \right] &=\int p_{\text{data}} (\mathbf{x}) \left( \int p(\mathbf{x}_i \mid \mathbf{x}) f(\mathbf{x}_0, \mathbf{x}_i)  d\mathbf{x}_i \right) d \mathbf{x}_0 \\
-&= \int \int p_{\text{data}} (\mathbf{x})  p(\mathbf{x}_i \mid \mathbf{x}) f(\mathbf{x}_0, \mathbf{x}_i)  d\mathbf{x}_i d \mathbf{x}_0 \\
-&= \int \int p(\mathbf{x}_0, \mathbf{x_i}) p(\mathbf{x}_i \mid \mathbf{x}) f(\mathbf{x}_0, \mathbf{x}_i)  d\mathbf{x}_i d \mathbf{x}_0 \\
+\mathbb{E}_{p_{\text{data}} (\mathbf{x}_0)} \mathbb{E}_{p(\mathbf{x}_i \mid \mathbf{x}_0) } \left[ f(\mathbf{x}_0, \mathbf{x}_i) \right] &=\int p_{\text{data}} (\mathbf{x}_0) \left( \int p(\mathbf{x}_i \mid \mathbf{x}_0) f(\mathbf{x}_0, \mathbf{x}_i)  d\mathbf{x}_i \right) d \mathbf{x}_0 \\
+&= \int \int p_{\text{data}} (\mathbf{x}_0)  p(\mathbf{x}_i \mid \mathbf{x}_0) f(\mathbf{x}_0, \mathbf{x}_i)  d\mathbf{x}_i d \mathbf{x}_0 \\
+&= \int \int p(\mathbf{x}_0, \mathbf{x}_i) f(\mathbf{x}_0, \mathbf{x}_i)  d\mathbf{x}_i d \mathbf{x}_0 \\
 &= \mathbb{E}_{\mathbf{x}_0, \mathbf{x_i}} [ f(\mathbf{x}_0, \mathbf{x}_i) ]
 \end{align*}
 $$
@@ -625,7 +623,7 @@ $$
 $$
 \begin{equation*}
 \begin{aligned}
-&\mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))  = \\
+&\mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))  = \\
 & \int p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0) \log{\dfrac{p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0)}{p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i})}} d \mathbf{x}_{i-1}
 \end{aligned}
 \end{equation*}
@@ -635,7 +633,7 @@ $$
 $$
 \begin{equation*}
 \begin{aligned}
-&\mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] = \\
+&\mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] = \\
 & \int \int \int p (\mathbf{x}_0, \mathbf{x}_i) p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0) \log{\dfrac{p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0)}{p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i})}} d \mathbf{x}_{i-1} d \mathbf{x}_0 d \mathbf{x}_i
 \end{aligned}
 \end{equation*}
@@ -654,7 +652,7 @@ $$
 $$
 \begin{equation*}
 \begin{aligned}
-&\mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right]  \\
+&\mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right]  \\
 &= \int p(\mathbf{x}_i) \int p(\mathbf{x}_0 \mid \mathbf{x}_i) \int p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0) \log{\dfrac{p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0)}{p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i})}} d \mathbf{x}_{i-1} d \mathbf{x}_0 d \mathbf{x}_i
 \end{aligned}
 \end{equation*}
@@ -665,7 +663,7 @@ $$
 $$
 \begin{equation*}
 \begin{aligned}
-&\mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] = \\
+&\mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] = \\
 & \mathbb{E}_{p(\mathbf{x}_i)} \left[ \mathbb{E}_{p(\mathbf{x}_0 \mid \mathbf{x}_i)} \left[ \mathbb{E}_{p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0)} \left[ \log{\dfrac{p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0)}{p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i})}} \right] \right] \right]
 \end{aligned}
 \end{equation*}
@@ -685,7 +683,7 @@ $$
 
 $$
 \begin{align*}
-\mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} & \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] \\
+\mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} & \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] \\
 &= \mathbb{E}_{p(\mathbf{x}_i)} \left[ \mathbb{E}_{p(\mathbf{x}_0 \mid \mathbf{x}_i)} \left[ \mathbb{E}_{p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0)} \left[ \log{\dfrac{p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0)}{p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i})}} \right] \right] \right] \\
 &+ \mathbb{E}_{p(\mathbf{x}_i)} \left[ \mathbb{E}_{p(\mathbf{x}_0 \mid \mathbf{x}_i)} \left[ \mathbb{E}_{p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0)} \left[ \log{\dfrac{p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i})}{p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i})}} \right] \right] \right] \\
 &= \mathbb{E}_{p(\mathbf{x}_i)} \mathbb{E}_{p(\mathbf{x}_0 \mid \mathbf{x}_i)} \left[ \mathcal{D}_{KL}
@@ -704,11 +702,11 @@ $$
 
 $$
 \begin{align*}
-\mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} & \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] \\
+\mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} & \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] \\
 &= \mathbb{E}_{p(\mathbf{x}_i)} \left[ \mathbb{E}_{p(\mathbf{x}_0 \mid \mathbf{x}_i)} \left[ \mathcal{D}_{KL}
 (p(\mathbf{x} _{i-1} \mid \mathbf{x}_i, \mathbf{x}_0) \| p (\mathbf{x}_{i-1} \mid \mathbf{x}_i)) \right] \right] \\
 &+ \mathbb{E}_{p(\mathbf{x}_i)}  \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i})) \right] \\
-&= \mathbb{E}_{p(\mathbf{x}_i)}  \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i})) \right] + C
+&= \mathbb{E}_{p(\mathbf{x}_i)}  \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i})) \right] + C'
 \end{align*}
 $$
 
@@ -727,17 +725,17 @@ $-$는 상수니까 상관없으므로 $C = -C'$라고 하면 맨 처음 증명�
 $$
 \begin{align*}
 \mathbb{E}_{p(\mathbf{x}_i)} &\left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i})) \right] \\
-&= \mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] + C \\
-&= \mathbb{E}_{p_{\text{data}} (\mathbf{x})} \mathbb{E}_{p (\mathbf{x}_i \mid \mathbf{x})} \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] + C
+&= \mathbb{E}_{p (\mathbf{x}_0, \mathbf{x}_i)} \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}_0) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] + C \\
+&= \mathbb{E}_{p_{\text{data}} (\mathbf{x})} \mathbb{E}_{p (\mathbf{x}_i \mid \mathbf{x})} \left[ \mathcal{D}_{KL} (p (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}, \mathbf{x}) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_{i}))\right] + C
 \end{align*}
 $$
 
-이 식은 DDPM을 관통하는 중요한 원리이다. 현재 포스트와 같은 Variational한 접근뿐만 다른 접근에서도 통찰하는 원리인 것이다.
+이 식은 DDPM을 관통하는 중요한 원리이다. 현재 포스트와 같은 Variational한 접근뿐만 아니라 다른 접근에서도 관통하는 원리인 것이다.
 
-**marginal distribution의 KL divergence를 minimize하는 것은 실제로는 특정 condiitional distribution을 minimize하는 것과 같다.**
+**marginal distribution의 KL divergence를 minimize하는 것은 실제로는 특정 conditional distribution의 KL divergence를 minimize하는 것과 같다.**
 
 
-이것을 바탕으로 다음과 같은  Reverse Conditional Transition Kerne에 대한 Lemma를 도출할 수 있다.
+이것을 바탕으로 다음과 같은  Reverse Conditional Transition Kernel에 대한 Lemma를 도출할 수 있다.
 
 $p(\mathbf{x}_{i-1} \mid \mathbf{x}_i, \mathbf{x})$는 다음과 같이 closed Gaussian form으로 표현된다.
 
@@ -754,9 +752,9 @@ $$
 \begin{align}
 \mathbf{\mu}(\mathbf{x}_i, \mathbf{x}, i ) &:=
 \dfrac{\bar{\alpha}_{i-1} \beta^2_i}{1-\bar{\alpha}_{i}^2 } \mathbf{x}+ \dfrac{(1-\bar{\alpha}^2_{i-1}) \alpha_i}{1-\bar{\alpha}^2_{i}} \mathbf{x}_i \\
-\sigma^2 (i) &:= \dfrac{1-\bar{\alpha}_{i-1}}{1-\bar{\alpha}_{i} } \beta^2_i \\
-\alpha_i &= \sqrt{1-\beta^2} \\
-\bar{\alpha}_i &= \Pi_{k=1}^i \sqrt{1-\beta_k^2} = \Pi_{k=1}^i \alpha_k
+\sigma^2 (i) &:= \dfrac{1-\bar{\alpha}^2_{i-1}}{1-\bar{\alpha}^2_{i} } \beta^2_i \\
+\alpha_i &= \sqrt{1-\beta_i^2} \\
+\bar{\alpha}_i &= \prod_{k=1}^i \sqrt{1-\beta_k^2} = \prod_{k=1}^i \alpha_k
 \end{align}
 $$
 
@@ -772,13 +770,13 @@ p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_i) := \mathcal{N}(\mathbf{x}_{i-1};\mat
 $$
 
 이 때 $\mathbf{\mu}_\phi (\cdot, i): \mathbb{R}^D \rightarrow \mathbb{R}^D$는 learnable한 mean function이고,
-$\sigma^2(i) \geq 0$은 Lemma에 정의된 것처럼 positive한 양수이다.
+$\sigma^2(i) > 0$은 Lemma에 정의된 값으로 고정된다.
 
 결국 loss function은 모든 step에 대해 평균을 낸 KL Divergence이다.
 
 $$
 \begin{align}
-\mathcal{L}_{\text{diffusion}} (\mathbf{x}_0 ; \phi) := \sum_{i=1}^L \mathbb{E}_{p(\mathbf{x}_i \mid \mathbf{x}_0)} \left[ \mathcal{D}_{KL} (p(\mathbf{x}_{i-1} \mid \mathbf{x}_i, \mathbf{x}_0) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_i)) \right]
+\mathcal{L}_{\text{diffusion}} (\mathbf{x}_0 ; \phi) := \sum_{i=2}^L \mathbb{E}_{p_i(\mathbf{x}_i \mid \mathbf{x}_0)} \left[ \mathcal{D}_{KL} (p(\mathbf{x}_{i-1} \mid \mathbf{x}_i, \mathbf{x}_0) \| p_\phi (\mathbf{x}_{i-1} \mid \mathbf{x}_i)) \right]
 \end{align}
 $$
 
@@ -786,7 +784,7 @@ $$
 
 $$
 \begin{align*}
-\mathcal{L}_{\text{diffusion}} (\mathbf{x}_0 ; \phi) = \sum_{i=1}^L \dfrac{1}{\sqrt{2\sigma^2 (i)}} \| \mathbf{\mu}_\phi (\mathbf{x}_i, i) - \mathbf{\mu} (\mathbf{x}_i, \mathbf{x}_0, i)  \|^2_2 + C
+\mathcal{L}_{\text{diffusion}} (\mathbf{x}_0 ; \phi) = \sum_{i=2}^L \dfrac{1}{2\sigma^2 (i)} \mathbb{E}_{p_i(\mathbf{x}_i \mid \mathbf{x}_0)} \| \mathbf{\mu}_\phi (\mathbf{x}_i, i) - \mathbf{\mu} (\mathbf{x}_i, \mathbf{x}_0, i)  \|^2_2 + C
 \end{align*}
 $$
 
@@ -794,13 +792,13 @@ $C$는 minimize 할 때는 필요가 없는 상수이고, 위 식을 전체 data
 
 $$
 \begin{align}
-\mathcal{L}_{\text{DDPM}} (\phi) := \sum_{i=1}^L \dfrac{1}{\sqrt{2\sigma^2 (i)}} \mathbb{E}_{\mathbf{x}_0} \mathbb{E}_{p(\mathbf{x}_i \mid \mathbf{x}_0)} \left[ \| \mathbf{\mu}_\phi (\mathbf{x}_i, i) - \mathbf{\mu} (\mathbf{x}_i, \mathbf{x}_0, i)  \|^2_2 \right]
+\mathcal{L}_{\text{DDPM}} (\phi) := \sum_{i=2}^L \dfrac{1}{2\sigma^2 (i)} \mathbb{E}_{\mathbf{x}_0} \mathbb{E}_{p_i(\mathbf{x}_i \mid \mathbf{x}_0)} \left[ \| \mathbf{\mu}_\phi (\mathbf{x}_i, i) - \mathbf{\mu} (\mathbf{x}_i, \mathbf{x}_0, i)  \|^2_2 \right]
 \end{align}
 $$
 
 ### Practical Choices of Predictions and Loss
 
-하지만 실제로는 위 loss를 직접 사용하는 일은 없다. 왜냐하면, $$\| \mathbf{\mu}_\phi (\mathbf{x}_i, i) - \mathbf{\mu} (\mathbf{x}_i, \mathbf{x}_0, i)  \|^2_2$$ 이 값이 복잡한 $\mathbf{\mu}$는 복잡하여 예측하기도 어렵고, 타임스텝에 따라 $\mu$의 중요도가 변하며 (노이즈가 적은 초반에는 $\mu$에 민감, 후반에는 noise에 의해 $\mu$가 묻힘), 앞으로 증명하겠지만 $\epsilon$이 $\mu$와 동등(reparameterization trick)하기 때문이다.
+하지만 실제로는 위 loss를 직접 사용하는 일은 없다. 왜냐하면, $$\| \mathbf{\mu}_\phi (\mathbf{x}_i, i) - \mathbf{\mu} (\mathbf{x}_i, \mathbf{x}_0, i)  \|^2_2$$ 이 값에서 $\mathbf{\mu}$는 복잡하여 예측하기도 어렵고, 타임스텝에 따라 $\mu$의 중요도가 변하며 (노이즈가 적은 초반에는 $\mu$에 민감, 후반에는 noise에 의해 $\mu$가 묻힘), 앞으로 증명하겠지만 $\epsilon$이 $\mu$와 동등(reparameterization trick)하기 때문이다.
 
 #### $\epsilon$-prediction
 
@@ -820,7 +818,7 @@ $$
 \end{align*}
 $$
 
-이 때, $$\bar{\alpha}_i = \alpha_i \bar{\alpha}_{i-1}$$ 과 $$\beta_i^2 = 1 - \alpha_i^2$$를 조합하면
+이 때, $$\bar{\alpha}_i = \alpha_i \bar{\alpha}_{i-1}$$ 과 $$\beta_i^2 = 1 - \alpha_i^2$$를 조합하면 다음과 같다. 두 계수는 각각 $A := \dfrac{\bar{\alpha}_{i-1} \beta^2_i}{1-\bar{\alpha}_{i}^2}$, $B := \dfrac{(1-\bar{\alpha}^2_{i-1}) \alpha_i}{1-\bar{\alpha}^2_{i}}$로 둔다.
 
 $$
 \begin{align*}
@@ -849,7 +847,7 @@ $$
 \| \mathbf{\mu}_\phi (\mathbf{x}_i, i) - \mathbf{\mu} (\mathbf{x}_i, \mathbf{x}_0, i)  \|^2_2 &\propto
 \| \mathbf{\epsilon}_\phi (\mathbf{x}_i, i) - \mathbf{\epsilon} \|^2_2 \\
 \| \mathbf{\mu}_\phi (\mathbf{x}_i, i) - \mathbf{\mu} (\mathbf{x}_i, \mathbf{x}_0, i)  \|^2_2 &= C_i
-\| \mathbf{\epsilon}_\phi (\mathbf{x}_i, i) - \mathbf{\epsilon} \|^2_2 \\
+\| \mathbf{\epsilon}_\phi (\mathbf{x}_i, i) - \mathbf{\epsilon} \|^2_2
 \end{align}
 $$
 
