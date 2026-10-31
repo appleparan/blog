@@ -1103,7 +1103,7 @@ hybrid manager는 `--disable-hybrid-kv-cache-manager`로 끌 수 있다. 꺼지�
 
 대가는 제약이다. 모든 group의 page size가 같아야 하므로 block 크기를 키우거나 page를 padding해야 하고, group 크기를 맞추려고 빈 layer를 넣기도 한다. MLA처럼 padding할 수 없는 spec은 page size가 맞지 않으면 [`NotImplementedError`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_utils.py#L1341-L1354)를 낸다.
 
-SGLang은 같은 문제를 반대 방향으로 푼다. 종류마다 물리적인 pool을 따로 두고, 하나의 radix tree의 node에 종류별 데이터를 붙인다. 이 차이는 SGLang을 다루는 다음 글에서 비교한다.
+SGLang은 같은 문제를 반대 방향으로 푼다. 종류마다 물리적인 pool을 따로 두고, 하나의 radix tree의 node에 종류별 데이터를 붙인다. 이 차이는 [Inside SGLang](https://blog.liam.kim/posts/2026/10/Inside-sglang/#8-여러-종류의-attention-종류별-pool-위에-tree-하나를-둔다)에서 비교한다.
 
 ## 마치며
 
@@ -1111,6 +1111,6 @@ SGLang은 같은 문제를 반대 방향으로 푼다. 종류마다 물리적인
 
 글이 너무 길어져서 아래 주제는 이번 글에서 뺐다. 각 주제는 별도 포스트에서 다룰 예정이다.
 
-- SGLang의 구조: 같은 문제를 푸는 다른 serving engine인 SGLang이 server, scheduler, KV cache를 어떻게 나누는지 vLLM과 비교한다.
+- SGLang의 구조: 같은 문제를 푸는 다른 serving engine인 SGLang이 server, scheduler, KV cache를 어떻게 나누는지 vLLM과 비교한다. [Inside SGLang](https://blog.liam.kim/posts/2026/10/Inside-sglang/)에서 다뤘다.
 - NCCL 초기화: 이 글은 GPU 하나를 가정했다. GPU 여러 개로 model을 나눠 띄울 때 worker process가 NCCL 통신을 언제, 어떻게 초기화하는지 본다.
 - FlashInfer 같은 attention backend의 결합: [1.4](#14-block-table-token-위치에서-kv-cache-주소로)에서 본 `slot_mapping`과 attention metadata가 FlashAttention, FlashInfer 같은 backend로 어떻게 넘어가고, backend를 어떻게 고르는지 본다.
