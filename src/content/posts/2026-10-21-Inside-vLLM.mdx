@@ -488,7 +488,7 @@ running을 먼저 보는 이유는 이미 시작한 request를 끝까지 진행�
 
 #### KVCacheManager: block을 나눠 주고 돌려받는 방식
 
-[`KVCacheManager`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L328)는 [서버 초기화 5번](#5-enginecore-startup-model-load-kv-cache-allocation-scheduler-setup)에서 할당한 KV cache를 고정 크기 block 단위로 관리한다. block 하나는 기본 [16 token](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/cache.py#L72)의 KV를 담는다. 일반 attention layer에서 block 하나의 byte 크기는 `2(K, V) × block_size × num_kv_heads × head_size × dtype 크기`다.
+[`KVCacheManager`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L328)는 [서버 초기화 5번](#5-enginecore-startup-model-load-kv-cache-allocation-scheduler-setup)에서 할당한 KV cache를 고정 크기 block 단위로 관리한다. block 하나는 기본 [16 token](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/cache.py#L72)의 KV를 담는다. 일반 attention layer에서 block 하나의 byte 크기는 `2(K, V) * block_size * num_kv_heads * head_size * dtype 크기`다.
 
 KVCacheManager는 빈 block queue에서 block을 꺼내 request에 나눠 주고, 끝난 request의 block을 다시 queue에 넣는다. hash가 있는 block은 queue에 있는 동안 prefix cache로 다시 쓸 수 있다. 빈 block은 [`BlockPool`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/block_pool.py#L136)의 [`free_block_queue`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/block_pool.py#L178)에 있다. 아래 그림은 block이 이 queue를 오가는 네 경로이고, 각 경로는 그림 뒤에서 차례로 설명한다.
 
@@ -664,7 +664,7 @@ client가 연결을 끊으면 [1번](#1-http-post-fastapi-router의-request-수�
   caption="한 step의 실행 batch가 만들어지는 전체 구조."
 />
 
-그림은 위에서 아래로 읽는다. 그림의 번호 1–4는 아래 1.1–1.4 소제목과 같고, 각 부분은 해당 소제목에서 자세히 다룬다.
+그림은 위에서 아래로 읽는다. 그림의 번호 1-4는 아래 1.1-1.4 소제목과 같고, 각 부분은 해당 소제목에서 자세히 다룬다.
 
 1. scheduler 영역에는 자료구조 세 개가 있다. request 상태(`Request`), request ID별 KV block 목록(`req_to_blocks`), 그리고 block pool이다. 그림의 `Request` 상자는 request마다 두 수를 보여 준다. 하나는 지금까지의 token 수이고, 다른 하나는 그중 KV를 이미 계산해 KV cache에 넣은 token 수([`num_computed_tokens`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L184))다. 두 수의 차이가 아직 계산하지 않은 token이다. A는 17 token 중 16 token을 계산했으므로 남은 것은 position 16 token 하나다.
 2. scheduler는 1의 두 자료구조로 `SchedulerOutput`을 만들어 worker에 보낸다. `Request`의 `num_computed_tokens`에서 이번 step에 계산할 token 수가 나오고, `req_to_blocks`에서 새로 할당한 block ID가 나온다. 그림에서 1에서 2로 가는 화살표 두 개가 이것이다.
@@ -689,7 +689,7 @@ request와 KV block은 따로 관리된다. request 객체는 KV block을 직접
 
 **block과 slot: KV cache의 칸 번호**
 
-slot은 KV cache 안에서 token 하나의 K와 V가 들어가는 칸 하나에 붙인 번호다. block 하나는 token 16개를 담으므로, KV cache 전체는 `num_blocks × 16`개의 칸이 한 줄로 늘어선 것으로 볼 수 있다. 이 칸에 앞에서부터 0, 1, 2, … 번호를 붙인 것이 slot이다. 번호는 `slot = block ID × 16 + offset`으로 정해진다. offset은 block 안에서의 위치다. 예를 들어 request C의 position 14 token(이 글에서는 C14로 쓴다)은 block 9의 offset 14에 들어가므로 slot 158이고, C16은 block 4의 offset 0이라 slot 64다.
+slot은 KV cache 안에서 token 하나의 K와 V가 들어가는 칸 하나에 붙인 번호다. block 하나는 token 16개를 담으므로, KV cache 전체는 `num_blocks * 16`개의 칸이 한 줄로 늘어선 것으로 볼 수 있다. 이 칸에 앞에서부터 0, 1, 2, … 번호를 붙인 것이 slot이다. 번호는 `slot = block ID * 16 + offset`으로 정해진다. offset은 block 안에서의 위치다. 예를 들어 request C의 position 14 token(이 글에서는 C14로 쓴다)은 block 9의 offset 14에 들어가므로 slot 158이고, C16은 block 4의 offset 0이라 slot 64다.
 
 <Figure
   src="/assets/images/post/2026-10-12-Inside-vLLM/04-slot-layout-light.svg"
@@ -705,7 +705,7 @@ KV cache tensor는 layer마다 따로 있지만 slot 번호는 모든 layer가 �
 
 layer마다 같은 번호를 써도 충돌하지 않는다. layer마다 tensor가 따로 있어서, 같은 번호라도 서로 다른 메모리를 가리키기 때문이다. request 사이에서도 slot은 겹치지 않는다. block pool은 block 하나를 한 번에 한 request에게만 나눠 주고, slot은 block에서 나오므로 그 block의 slot 16개도 그 request만 쓴다. 예외는 prefix caching이다. 여러 request가 같은 prefix의 꽉 찬 block을 `ref_cnt`를 올려 함께 쓰는데, 이 block은 내용이 같고 읽기만 하므로 문제가 없다. 새 KV는 각 request가 따로 받은 block의 slot에 쓴다.
 
-worker도 같은 정보를 따로 들고 있다. scheduler는 step마다 새로 할당한 block ID를 [`SchedulerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L232)에 실어 보내고, worker는 이를 [`BlockTables`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/block_table.py#L17)에 request별로 이어 붙인다. 그래서 `BlockTables`에는 request마다 block ID 목록이 하나씩 있고, 목록의 n번째 값은 그 request의 n번째 block이 KV cache의 몇 번 block인지 나타낸다. 위 그림에서 request A의 목록은 `[7, 12]`다. A의 position 0–15 token의 KV는 block 7에, position 16–31 token의 KV는 block 12에 있다는 뜻이다. B와 C의 목록은 [전체 구조 그림](#1-전체-구조-한-step의-실행-batch)의 4번 상자에 있고, 각각 `[3]`과 `[9, 4]`다.
+worker도 같은 정보를 따로 들고 있다. scheduler는 step마다 새로 할당한 block ID를 [`SchedulerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L232)에 실어 보내고, worker는 이를 [`BlockTables`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/block_table.py#L17)에 request별로 이어 붙인다. 그래서 `BlockTables`에는 request마다 block ID 목록이 하나씩 있고, 목록의 n번째 값은 그 request의 n번째 block이 KV cache의 몇 번 block인지 나타낸다. 위 그림에서 request A의 목록은 `[7, 12]`다. A의 position 0-15 token의 KV는 block 7에, position 16-31 token의 KV는 block 12에 있다는 뜻이다. B와 C의 목록은 [전체 구조 그림](#1-전체-구조-한-step의-실행-batch)의 4번 상자에 있고, 각각 `[3]`과 `[9, 4]`다.
 
 #### 1.2 scheduler 출력: prefill과 decode를 한 step에 섞는다
 
@@ -716,7 +716,7 @@ scheduler는 1.1의 두 자료구조로 [`SchedulerOutput`](https://github.com/v
 
 이 배정 하나에 A의 decode와 B, C의 prefill이 함께 들어간다. 이렇게 섞을 수 있는 이유를 batching 방식의 차이로 보자.
 
-vLLM의 batching은 batch를 step마다 다시 짜는 continuous batching이고, 여기에 prefill token과 decode token을 한 step에 섞는다. 그림은 같은 request 네 개를 세 방식으로 처리한다. 이 그림의 A–D는 1.3 예시와 다른 request다.
+vLLM의 batching은 batch를 step마다 다시 짜는 continuous batching이고, 여기에 prefill token과 decode token을 한 step에 섞는다. 그림은 같은 request 네 개를 세 방식으로 처리한다. 이 그림의 A-D는 1.3 예시와 다른 request다.
 
 <FigureSteps
   base="/assets/images/post/2026-10-12-Inside-vLLM/03-4-batching-compare"
@@ -737,7 +737,7 @@ vLLM의 batching은 batch를 step마다 다시 짜는 continuous batching이고,
 - continuous batching: batch를 step마다 다시 짜므로 B와 C는 끝나는 대로 빠지고 D는 바로 들어온다. Orca 논문의 iteration-level scheduling에서 온 방식이다([Yu et al., OSDI 2022](https://www.usenix.org/conference/osdi22/presentation/yu)). 다만 한 step이 prefill과 decode 중 하나만 돌리면, D가 prefill하는 step 3에 A, B, C의 decode는 한 step 쉰다. vLLM V0의 기본 scheduler가 이렇게 동작했다. prefill을 배정한 step에는 [decode를 배정하지 않았다](https://github.com/vllm-project/vllm/blob/v0.6.0/vllm/core/scheduler.py#L917).
 - vLLM의 continuous batching: V1 scheduler에는 [prefill 단계도 decode 단계도 없다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L594-L600). request마다 아직 계산하지 않은 token 수만 보고 token budget 안에서 배정한다. 그래서 step 3에는 A, B, C의 decode token과 D의 prefill token이 함께 들어가고, 아무도 쉬지 않는다.
 
-vLLM에는 batch 슬롯도 없다. 흔히 보는 continuous batching 그림은 슬롯 몇 개를 고정해 두고 빈 슬롯을 다음 request로 채운다. vLLM은 step마다 `running` request 중 token budget과 KV block이 허락하는 만큼의 token을 골라 1차원 배열 하나로 이어 붙인다. request를 `[request 수 × 최대 길이]` 격자로 맞추지 않으므로 request별 padding도 없다. request 경계는 position과 attention metadata로 따로 넘긴다. 이 배열이 실제로 어떻게 생겼는지는 아래에서 차례로 본다. padding이 완전히 사라진 것은 아니다. CUDA graph를 쓸 때는 batch 크기를 capture한 크기로 맞추느라 끝에 약간 남는다.
+vLLM에는 batch 슬롯도 없다. 흔히 보는 continuous batching 그림은 슬롯 몇 개를 고정해 두고 빈 슬롯을 다음 request로 채운다. vLLM은 step마다 `running` request 중 token budget과 KV block이 허락하는 만큼의 token을 골라 1차원 배열 하나로 이어 붙인다. request를 `[request 수 * 최대 길이]` 격자로 맞추지 않으므로 request별 padding도 없다. request 경계는 position과 attention metadata로 따로 넘긴다. 이 배열이 실제로 어떻게 생겼는지는 아래에서 차례로 본다. padding이 완전히 사라진 것은 아니다. CUDA graph를 쓸 때는 batch 크기를 capture한 크기로 맞추느라 끝에 약간 남는다.
 
 #### 1.3 step 안의 token packing
 
@@ -749,13 +749,13 @@ vLLM에는 batch 슬롯도 없다. 흔히 보는 continuous batching 그림은 �
   caption="이번 step 직전의 request 상태. 회색은 이전 step에서 KV를 계산해 KV cache에 있는 token이고, 주황색은 이번 step에 계산할 token이다."
 />
 
-- A는 오래전에 들어온 request다. 이전 step들에서 prompt를 prefill하고 token을 몇 개 생성했다. 그래서 A0–A15의 KV는 이미 KV cache에 있다. A16은 바로 앞 step에서 sampling으로 뽑은 token이고, 아직 KV가 없다. 이번 step은 A16의 KV를 계산하고, 그 결과로 다음 token A17을 뽑는다. 이것이 decode다.
+- A는 오래전에 들어온 request다. 이전 step들에서 prompt를 prefill하고 token을 몇 개 생성했다. 그래서 A0-A15의 KV는 이미 KV cache에 있다. A16은 바로 앞 step에서 sampling으로 뽑은 token이고, 아직 KV가 없다. 이번 step은 A16의 KV를 계산하고, 그 결과로 다음 token A17을 뽑는다. 이것이 decode다.
 - B는 방금 들어온 request다. prompt가 2 token이라 B0, B1을 한 번에 prefill한다.
-- C는 prompt가 긴 request다. 앞 step에서 prompt의 첫 조각 C0–C13을 prefill했다. 이번 step은 다음 조각 C14–C16을 계산하고, C17부터는 다음 step으로 넘긴다(chunked prefill).
+- C는 prompt가 긴 request다. 앞 step에서 prompt의 첫 조각 C0-C13을 prefill했다. 이번 step은 다음 조각 C14-C16을 계산하고, C17부터는 다음 step으로 넘긴다(chunked prefill).
 
 그래서 세 request는 이번 step에 계산하는 token 수도, 지금까지의 길이도 다르다. 이번 step에 들어가는 것은 주황색 token 6개뿐이다. 회색 token은 다시 계산하지 않고, attention이 KV cache에서 그 KV를 읽기만 한다.
 
-한 step에 계산할 token은 request별로 따로 담지 않고, 1차원 배열 하나에 이어 붙인다. 이 배열을 packed batch라고 부르자. 아래 그림의 step에서 A는 decode token 1개, B는 prefill token 2개, C는 prefill 조각 3개를 계산하므로, 6 token이 차례로 배열의 index 0–5에 들어간다. 끝의 index 6–7은 CUDA graph 크기를 맞추는 padding이다. worker의 [`InputBatch`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L39-L100)는 이 배열과 함께 request 경계를 알려 주는 배열을 만든다.
+한 step에 계산할 token은 request별로 따로 담지 않고, 1차원 배열 하나에 이어 붙인다. 이 배열을 packed batch라고 부르자. 아래 그림의 step에서 A는 decode token 1개, B는 prefill token 2개, C는 prefill 조각 3개를 계산하므로, 6 token이 차례로 배열의 index 0-5에 들어간다. 끝의 index 6-7은 CUDA graph 크기를 맞추는 padding이다. worker의 [`InputBatch`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L39-L100)는 이 배열과 함께 request 경계를 알려 주는 배열을 만든다.
 
 <Figure
   src="/assets/images/post/2026-10-12-Inside-vLLM/04-batch-kv-cache-light.svg"
@@ -783,9 +783,9 @@ request마다 값이 있는 배열은 request 순서(A, B, C)로 읽는다.
 
 `query_start_loc`은 실제로는 `[0, 1, 3, 6]`이다. 마지막 6은 C가 끝나는 index다.
 
-- [`input_ids`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L88): 각 칸에서 계산할 token의 ID다. 실제 배열에는 tokenizer vocabulary의 정수 ID가 들어간다. 이미 KV를 계산한 token은 넣지 않는다. 그래서 A는 앞의 16 token(A0–A15)을 건너뛰고 A16 하나만 들어간다.
+- [`input_ids`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L88): 각 칸에서 계산할 token의 ID다. 실제 배열에는 tokenizer vocabulary의 정수 ID가 들어간다. 이미 KV를 계산한 token은 넣지 않는다. 그래서 A는 앞의 16 token(A0-A15)을 건너뛰고 A16 하나만 들어간다.
 - [`positions`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L90): 각 칸의 token이 자기 request의 문장 안에서 몇 번째 token인지를 담는다. packed batch의 index와는 다르다. 예를 들어 C15는 packed batch의 index 4에 있지만, request C 안에서는 15번째 위치이므로 position은 15다. 여러 request를 이어 붙였기 때문에 index만 보면 원래 위치를 알 수 없고, 그래서 이 배열이 따로 필요하다. model은 RoPE 같은 위치 encoding에 이 값을 쓰고, [1.4](#14-block-table-token-위치에서-kv-cache-주소로)의 slot 계산도 이 값을 쓴다.
-- [`query_start_loc`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L66): 각 request의 token이 packed batch의 어느 index에서 시작하는지를 담는다. 길이는 request 수 + 1이다. request i의 token은 index `query_start_loc[i]`부터 `query_start_loc[i+1]` 바로 앞까지다. A는 index 0, B는 1–2, C는 3–5다.
+- [`query_start_loc`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L66): 각 request의 token이 packed batch의 어느 index에서 시작하는지를 담는다. 길이는 request 수 + 1이다. request i의 token은 index `query_start_loc[i]`부터 `query_start_loc[i+1]` 바로 앞까지다. A는 index 0, B는 1-2, C는 3-5다.
 - [`seq_lens`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/input_batch.py#L69): request마다 이번 step이 끝났을 때의 전체 길이다. KV cache에 이미 있는 token도 센다. A는 cache의 16 token과 새 token 1개를 더해 17이다. attention은 새 token이 이 길이만큼의 KV를 보게 한다.
 
 그림 아래쪽의 `slot_mapping`은 token마다 KV를 쓸 slot 번호다. slot은 [1.1](#11-request와-kv-block의-자료구조)에서 본 KV cache의 칸 번호이고, 이 번호를 구하는 방법은 [1.4](#14-block-table-token-위치에서-kv-cache-주소로)에서 본다.
@@ -806,8 +806,8 @@ worker는 이 재료로 배열을 계산한다. `query_start_loc`은 `num_schedu
 
 | 배열 | 계산식 | A | B | C |
 | --- | --- | --- | --- | --- |
-| `input_ids` | token 목록의 `num_computed_tokens`번째부터 `num_scheduled_tokens`개 | A16 | B0, B1 | C14–C16 |
-| `positions` | `num_computed_tokens`부터 1씩 증가 | 16 | 0, 1 | 14–16 |
+| `input_ids` | token 목록의 `num_computed_tokens`번째부터 `num_scheduled_tokens`개 | A16 | B0, B1 | C14-C16 |
+| `positions` | `num_computed_tokens`부터 1씩 증가 | 16 | 0, 1 | 14-16 |
 | `query_start_loc` | `num_scheduled_tokens`의 누적합 | 0 | 1 | 3 (끝은 6) |
 | `seq_lens` | `num_computed_tokens` + `num_scheduled_tokens` | 17 | 2 | 17 |
 | `slot_mapping` | position과 block ID 목록으로 계산(1.4) | 192 | 48, 49 | 158, 159, 64 |
@@ -844,9 +844,9 @@ request C의 token C14가 KV를 쓸 위치를 찾는 과정은 세 단계다. C�
 
 1. block: position 14를 block 크기 16으로 나눈 몫은 0이다. C의 목록에서 0번째 값은 block 9다.
 2. offset: 14를 16으로 나눈 나머지는 14다.
-3. slot: block 9의 offset 14이므로 `9 × 16 + 14 = 158`이다.
+3. slot: block 9의 offset 14이므로 `9 * 16 + 14 = 158`이다.
 
-C16은 position 16이라 몫이 1이다. C의 목록에서 1번째 값인 block 4로 넘어가고, offset은 0이므로 slot은 `4 × 16 + 0 = 64`다. C14와 C16은 position으로는 두 칸 차이지만, KV cache 안에서는 block 9와 block 4로 멀리 떨어져 있다. 이것이 paged KV cache다. 세 단계를 한 식으로 쓰면 아래와 같다.
+C16은 position 16이라 몫이 1이다. C의 목록에서 1번째 값인 block 4로 넘어가고, offset은 0이므로 slot은 `4 * 16 + 0 = 64`다. C14와 C16은 position으로는 두 칸 차이지만, KV cache 안에서는 block 9와 block 4로 멀리 떨어져 있다. 이것이 paged KV cache다. 세 단계를 한 식으로 쓰면 아래와 같다.
 
 $$
 \text{slot} = \text{block\_table}\big[\lfloor \text{position} / \text{block\_size} \rfloor\big] \times \text{block\_size} + (\text{position} \bmod \text{block\_size})
@@ -861,7 +861,7 @@ slot_mapping = [192, 48, 49, 158, 159,  64,  -1,  -1]
 
 **다음 step**
 
-다음 step도 같은 계산을 한다. A가 position 17의 token을 계산하면, 몫은 1이므로 A의 목록 `[7, 12]`에서 block 12를 고르고, offset 1을 더해 slot `12 × 16 + 1 = 193`에 쓴다. A가 position 32에 이르러 block 12가 꽉 차면, scheduler가 `allocate_slots()`로 새 block을 받아 A의 목록 끝에 붙인다.
+다음 step도 같은 계산을 한다. A가 position 17의 token을 계산하면, 몫은 1이므로 A의 목록 `[7, 12]`에서 block 12를 고르고, offset 1을 더해 slot `12 * 16 + 1 = 193`에 쓴다. A가 position 32에 이르러 block 12가 꽉 차면, scheduler가 `allocate_slots()`로 새 block을 받아 A의 목록 끝에 붙인다.
 
 ### 2. chunked prefill: 긴 prompt를 여러 step에 나누기
 
@@ -875,9 +875,9 @@ prompt가 한 step의 token budget보다 길면 scheduler는 prompt를 여러 st
 
 예시의 C로 [전체 구조](#1-전체-구조-한-step의-실행-batch)의 각 단계가 어떻게 바뀌는지 보면 아래와 같다.
 
-- [1.1](#11-request와-kv-block의-자료구조) 자료구조: 이번 step 전 C의 `num_computed_tokens`는 14다. position 16은 첫 block(0–15)을 넘으므로, `allocate_slots()`가 block 4를 새로 꺼내 `req_to_blocks`의 C 목록에 붙인다.
+- [1.1](#11-request와-kv-block의-자료구조) 자료구조: 이번 step 전 C의 `num_computed_tokens`는 14다. position 16은 첫 block(0-15)을 넘으므로, `allocate_slots()`가 block 4를 새로 꺼내 `req_to_blocks`의 C 목록에 붙인다.
 - [1.2](#12-scheduler-출력-prefill과-decode를-한-step에-섞는다) scheduler 출력: `num_scheduled_tokens`에서 C는 budget으로 잘린 3이다. 새 block ID는 [`CachedRequestData.new_block_ids`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L150)로 가고, worker는 이를 [C의 기존 block ID 목록 뒤에 붙인다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L140-L150). 그래서 C의 목록은 `[9]`에서 `[9, 4]`가 된다.
-- [1.3](#13-step-안의-token-packing) 배열: `positions`는 14–16이고, `seq_lens`는 14 + 3 = 17이다. 나머지 prompt는 배열에 없다.
+- [1.3](#13-step-안의-token-packing) 배열: `positions`는 14-16이고, `seq_lens`는 14 + 3 = 17이다. 나머지 prompt는 배열에 없다.
 - [1.4](#14-block-table-token-위치에서-kv-cache-주소로) slot: 158, 159, 64다. step이 끝나면 `num_computed_tokens`는 17이 되고, 다음 step의 C는 position 17(slot 65)부터 같은 목록으로 이어 간다.
 
 ### 3. speculative decoding: draft token이 batch와 KV에 들어가는 방식
@@ -896,14 +896,14 @@ draft token의 KV는 일반 token과 같은 block, 같은 slot 계산으로 쓰�
   base="/assets/images/post/2026-10-12-Inside-vLLM/04-spec-decode-kv"
   caption="draft 검증 step과 다음 step의 KV slot."
   labels={[
-    '1. Schedule: A는 A16, d17, d18 세 token을 배정받는다. position 16–18은 block 12 안이라 새 block이 필요 없다.',
-    '2. Forward: forward 한 번으로 slot 192–194에 세 token의 KV를 쓴다.',
+    '1. Schedule: A는 A16, d17, d18 세 token을 배정받는다. position 16-18은 block 12 안이라 새 block이 필요 없다.',
+    '2. Forward: forward 한 번으로 slot 192-194에 세 token의 KV를 쓴다.',
     '3. Verify: d17은 맞고 d18은 틀렸다. num_computed_tokens는 18로 돌아가고, slot 194에는 틀린 KV가 남는다.',
     '4. Overwrite: 다음 step은 position 18부터 다시 계산하고, 새 KV가 slot 194를 덮어쓴다.',
   ]}
 />
 
-1. Schedule: A는 이번 step에 3 token(A16, d17, d18)을 배정받는다. `allocate_slots()`의 `num_new_tokens`에는 [검증 전 draft token도 포함된다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L450). position 16–18은 모두 block 12 안이므로 새 block은 필요 없다.
+1. Schedule: A는 이번 step에 3 token(A16, d17, d18)을 배정받는다. `allocate_slots()`의 `num_new_tokens`에는 [검증 전 draft token도 포함된다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L450). position 16-18은 모두 block 12 안이므로 새 block은 필요 없다.
 2. Forward: 세 token은 [1.3](#13-step-안의-token-packing)의 배열에 함께 들어간다. `positions`는 16, 17, 18이고, [1.4](#14-block-table-token-위치에서-kv-cache-주소로)와 같은 계산으로 `slot_mapping`은 192, 193, 194다. 본 model은 forward 한 번으로 세 token의 KV를 모두 쓰고, 각 위치의 다음 token을 예측한다. 세 token을 계산했으므로 `num_computed_tokens`는 16 + 3 = 19가 된다.
 3. Verify: rejection sampler가 d17은 맞고 d18은 틀렸다고 판정하면, d17을 받고 position 18에는 본 model이 sampling한 token을 쓴다. scheduler는 `num_computed_tokens`를 19에서 틀린 draft 수만큼 [되돌려 18로 만든다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2113-L2127).
 4. Overwrite: slot 194에는 틀린 d18의 KV가 남아 있다. 하지만 `num_computed_tokens`가 18이므로 다음 step은 position 18부터 다시 계산하고, 새 token의 KV가 slot 194를 덮어쓴다. block을 반납하거나 KV를 지우는 작업은 없다.
@@ -996,7 +996,7 @@ block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 �
 
 #### 전체 구조에서 보면
 
-첫 번째 턴이 block 7, 12, 5에 KV를 남기고 끝났다고 하자. 두 번째 턴의 앞 48 token은 첫 번째 턴과 같으므로, 이 3 block(16 × 3 = 48 token)이 prefix cache에 맞는다.
+첫 번째 턴이 block 7, 12, 5에 KV를 남기고 끝났다고 하자. 두 번째 턴의 앞 48 token은 첫 번째 턴과 같으므로, 이 3 block(16 * 3 = 48 token)이 prefix cache에 맞는다.
 
 - [1.1](#11-request와-kv-block의-자료구조) 자료구조: `get_computed_blocks()`가 찾은 block 7, 12, 5가 새 request의 `req_to_blocks` 목록 앞에 그대로 들어가고, 각 block의 `ref_cnt`가 1 오른다. request의 `num_computed_tokens`는 0이 아니라 48에서 시작한다.
 - [1.2](#12-scheduler-출력-prefill과-decode를-한-step에-섞는다) scheduler 출력: 새 request는 [`NewRequestData`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L41)로 worker에 간다. 여기에는 cache에 맞은 block을 포함한 [전체 block ID와 `num_computed_tokens`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L47-L48)가 들어 있다.
@@ -1020,7 +1020,7 @@ decode instance에서 받아 오는 KV도 같은 자료구조를 거친다.
 
 - [1.1](#11-request와-kv-block의-자료구조) 자료구조: scheduler는 받아 올 token 수만큼 block을 할당해 `req_to_blocks`에 붙이고, request를 `WAITING_FOR_REMOTE_KVS` 상태로 둔다. 이때 KV가 아직 오지 않았는데도 [`num_computed_tokens`를 받아 올 token 수로 먼저 맞춘다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L1324-L1336). 전송이 실패하면 나중에 다시 고친다.
 - worker: connector의 worker 쪽이 받은 KV를 할당된 block ID 자리에 직접 쓴다. [`start_load_kv()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/distributed/kv_transfer/kv_connector/v1/base.py#L318-L320)는 KV를 vLLM의 paged KV buffer, 즉 [1.4](#14-block-table-token-위치에서-kv-cache-주소로)의 KV cache tensor로 불러온다.
-- [1.2](#12-scheduler-출력-prefill과-decode를-한-step에-섞는다)–[1.4](#14-block-table-token-위치에서-kv-cache-주소로): 전송이 끝나면 request는 다시 scheduling 대상이 된다. 남은 token만 배정되고, `positions`는 받아 온 token 다음부터 시작한다. 받아 온 KV는 prefix cache에 맞은 block처럼 block table을 통해 읽힌다.
+- [1.2](#12-scheduler-출력-prefill과-decode를-한-step에-섞는다)-[1.4](#14-block-table-token-위치에서-kv-cache-주소로): 전송이 끝나면 request는 다시 scheduling 대상이 된다. 남은 token만 배정되고, `positions`는 받아 온 token 다음부터 시작한다. 받아 온 KV는 prefix cache에 맞은 block처럼 block table을 통해 읽힌다.
 
 ### 7. CUDA graph: padding이 남는 유일한 곳
 
@@ -1049,10 +1049,10 @@ layer 종류마다 KV에 필요한 것이 다르다. full attention은 모든 to
   base="/assets/images/post/2026-10-12-Inside-vLLM/04-kv-cache-groups"
   caption="full attention layer 2개와 sliding window layer 4개를 가진 model에서 layer S2의 KV를 찾아가는 길."
   labels={[
-    '① layer는 종류별로 크기가 같은 group 3개로 나뉜다. S2는 group 1의 두 번째 layer(pos 1)다. request R의 token 8개(t0–t7)는 2개씩 block 하나에 담기고, block table 한 칸이 block 하나다. window가 4라서 sliding window group은 t4–t7만 남기고 t0–t3 칸은 null이다. S2가 읽을 t4 t5 칸은 block 5를 가리킨다.',
+    '① layer는 종류별로 크기가 같은 group 3개로 나뉜다. S2는 group 1의 두 번째 layer(pos 1)다. request R의 token 8개(t0-t7)는 2개씩 block 하나에 담기고, block table 한 칸이 block 하나다. window가 4라서 sliding window group은 t4-t7만 남기고 t0-t3 칸은 null이다. S2가 읽을 t4 t5 칸은 block 5를 가리킨다.',
     '② 모든 group은 BlockPool 하나에서 block ID를 받는다. block ID 하나는 한 번에 한 group만 쓴다. sliding window group은 window 밖의 block을 반납하고 그 자리를 null로 둔다.',
     '③ block ID 5는 모든 buffer의 5번 칸을 뜻한다. buffer k에는 group마다 pos k인 layer가 들어 있으므로, pos 1인 S2는 buffer 1의 5번 칸을 쓴다. buffer 0의 5번 칸은 같은 group 1의 S0이 쓴다.',
-    '④ block 5 안에서 token 4, 5는 slot 10, 11에 있다. slot 번호는 block ID × block_size + offset이다.',
+    '④ block 5 안에서 token 4, 5는 slot 10, 11에 있다. slot 번호는 block ID * block_size + offset이다.',
   ]}
 />
 
