@@ -1,0 +1,1301 @@
+---
+title: "LLM 2025-2026 돌아보기"
+author: jongsukim
+date: 2026-11-01 01:00:00 +0900
+categories: [LLM]
+tags:
+  - LLM Inference
+  - Deepseek
+  - Zhipu
+  - GLM
+  - Kimi
+  - Moonshot
+  - Linear Attention
+  - Sliding Attention
+math: true
+mermaid: false
+---
+
+import Figure from '../../components/Figure.astro';
+import FigureSteps from '../../components/FigureSteps.astro';
+
+## Introduction
+
+이 글의 계기는 2026년 하반기에 나온 세 model이다. 7월의 Kimi K3, 8월의 GLM-5.3-Flash, 9월의 DeepSeek-V4.1이다. 나는 이 셋을 변태 아키텍처 3대장이라고 부른다. 셋 다 1M context를 지원하는데, 거기에 가는 방법이 서로 전혀 다르다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/meme-ramen-trio.png"
+  maxWidth="460px"
+  caption="변태 아키텍처 3대장을 모아왔지. 'KV 압축과 layer간 공유 전문, DeepSeek-V4.1입니다.' 'linear attention과 NoPE 전문, Kimi K3입니다.' 'KDA와 DSA를 섞는 GLM-5.3-Flash입니다.'"
+  alt="라면 삼총사를 소개하는 만화 장면. 세 사람이 각자 고명, 수프, 면 전문가라고 인사한다."
+/>
+
+- **DeepSeek-V4.1**은 softmax attention을 그대로 두고 KV를 압축한 뒤, 그 KV를 layer끼리 나눠 쓴다. 40 layer 중 global KV를 만드는 layer는 4개뿐이다.
+- **Kimi K3**는 93 layer 중 69개를 linear attention(KDA)으로 바꿨다. 이 layer들은 context가 길어져도 크기가 같은 state만 들고 있다. residual은 depth 방향 attention으로 바꿨고, position encoding은 아예 쓰지 않는다(NoPE).
+- **GLM-5.3-Flash**는 Kimi식 KDA 3 : 1 골격에 DeepSeek의 sparse attention과 mHC를 얹었다.
+
+셋을 이해하려고 그동안 혼자 Claude와 대화하면서 정리했던 내용을 여기에 모아 보려고 한다. 세 model 모두 갑자기 나온 것이 아니라 2024년 말 DeepSeek-V3부터 이어진 흐름 위에 있다. 그래서 그 흐름을 거슬러 올라가서 시작한다.
+
+공통 배경은 단순하다. reasoning model과 agent 때문에 context가 128K에서 1M으로 늘었고, attention의 $O(T^2)$ 연산과 token마다 쌓이는 KV cache가 학습과 serving 모두의 병목이 됐다. 세 계보 모두 이 KV를 줄이는 데 매달렸고, 줄이는 방법이 달랐다.
+
+- **DeepSeek**은 softmax attention을 지키면서 KV를 줄였다. KV entry의 크기(MLA), attention이 읽는 양(DSA), sequence 길이(CSA/HCA), layer 간 중복(CSA2)을 차례로 줄였다.
+- **Qwen과 Kimi**는 attention의 대부분을 고정 크기 state를 쓰는 linear attention(GDN, KDA)으로 바꾸고, 몇 layer에만 full attention을 남겼다.
+- **GLM**은 Kimi의 linear attention 계보와 DeepSeek의 KV 압축 계보를 섞었다. Kimi의 KDA 3 : 1 구조에 DeepSeek의 MLA + DSA를 넣었다.
+
+순서는 이렇다.
+
+1. 출발점: Stanford CS336이 정리한 표준 Transformer와, decode에서 KV cache가 병목인 이유
+2. 큰 그림: KV를 줄이는 축과 세 계보
+3. 배경: MHA에서 MLA까지, 그리고 SWA와 attention sink
+4. Linear attention에서 KDA까지
+5. NoPE: RoPE 없는 global layer (Physics of Language Models Part 4.1, 4.2)
+6. DeepSeek: V3 → R1 → V3.2 → V4 → V4.1
+7. Kimi K3, GLM-5.3, GLM-5.3-Flash: 같은 1M context, 다른 선택
+8. Serving engine에 주는 변화
+
+[Inside vLLM](https://blog.liam.kim/posts/2026/10/Inside-vLLM/)과 [Inside SGLang](https://blog.liam.kim/posts/2026/10/Inside-sglang/)에서 serving engine이 KV cache를 어떻게 관리하는지 봤다. 이 글은 그 KV cache를 model 쪽에서 어떻게 줄여 왔는지를 본다. 마지막 장에서 그 변화가 다시 serving engine에 어떤 숙제를 주는지 짚는다.
+
+수치는 각 model의 Technical Report와 공개 model card 기준이다. 일부 KV 크기는 공개된 설정으로 직접 계산한 추정값이고, 그 경우 "추정"이라고 표시했다.
+
+## 출발점: 거의 그대로인 Transformer 골격
+
+Stanford [CS336 (Language Modeling from Scratch)](https://cs336.stanford.edu/)의 Lecture 3([강의 노트](https://github.com/stanford-cs336/lectures/blob/main/lecture_03.pdf), [영상](https://www.youtube.com/watch?v=lVynu4bo1rY))은 2024-2025년에 나온 LLM의 아키텍처를 비교한다. 여기서 골격은 block 하나의 구조를 말한다. token끼리 정보를 섞는 attention sublayer와 token마다 따로 계산하는 FFN sublayer를 residual과 normalization으로 감싸고, 이 block을 수십 개 쌓는다. 2017년 Transformer부터 이 글의 model까지 이 구조는 그대로다.
+
+바뀐 것은 각 sublayer의 내부다. normalization, activation, position encoding은 아래 표처럼 몇 가지 선택으로 수렴했다. attention 자리에는 MLA, DSA, KDA 같은 다른 구현이 들어가고, FFN 자리에는 MoE가 들어간다. 그래서 먼저 수렴한 부분을 짚고, attention 내부가 왜 계속 바뀌어야 했는지를 본다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-00-block-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-00-block-dark.svg"
+  caption="2017년 Transformer의 decoder block과 지금 LLM의 block. attention 다음 FFN, residual, block 쌓기는 그대로이고, 색칠한 칸만 바뀌었다. 2017년 원본의 encoder와 cross-attention은 생략했다."
+/>
+
+이 글의 기호는 [How to Scale Your Model](https://jax-ml.github.io/scaling-book/transformers/)의 Transformer 장을 따른다.
+
+| 기호 | 뜻 |
+| --- | --- |
+| $B$ | batch 크기 |
+| $T$ | query의 sequence 길이 |
+| $S$ | key, value의 sequence 길이. decode에서는 KV cache에 쌓인 token 수. self-attention에서는 $T = S$ |
+| $D$ | model dim ($d_{model}$) |
+| $F$ | FFN hidden dim ($d_{ff}$) |
+| $N$ | query head 수 |
+| $K$ | KV head 수. MHA는 $K = N$, MQA는 $K = 1$, GQA는 $N$의 약수 |
+| $H$ | head dim |
+| $L$ | layer 수 |
+| $V$ | vocab 크기 |
+
+### block 내부에서 표준이 된 선택
+
+| 항목 | 원래 Transformer (2017) | 지금의 표준 |
+| --- | --- | --- |
+| normalization 위치 | post-norm | pre-norm. residual 경로 밖에 둔다 |
+| normalization 종류 | LayerNorm | RMSNorm. 평균을 빼지 않고 bias가 없다 |
+| bias 항 | 있음 | 없음 |
+| FFN activation | ReLU | SwiGLU 같은 gated activation |
+| position 정보 | sine, cosine을 embedding에 더함 | RoPE |
+| FFN 크기 | $F = 4D$ | gated면 $F = \frac{8}{3} D$ |
+| head 크기 | $N H = D$ | 대부분 그대로 |
+| 학습 안정화 | 없음 | z-loss, QK-norm, logit soft-capping |
+
+Lecture 3에서 RMSNorm, QK-norm, attention head에 대한 설명은 이 글 뒤에서 다시 쓰인다.
+
+- **RMSNorm은 FLOPs보다 data movement 때문에 빠르다.** normalization은 전체 FLOPs의 아주 작은 부분이지만, memory를 읽고 쓰는 시간은 무시할 수 없다. 강의는 이것을 "FLOPS are not runtime!"이라고 요약한다. 이 관점은 아래 KV cache 이야기에서 다시 나온다.
+- **QK-norm은 attention softmax의 logit 폭주를 막는다.** DeepSeek-V4가 Q와 KV entry에 RMSNorm을 적용해 QK-Clip 없이 학습한 것도 같은 계열이다.
+- **attention head는 대부분 손대지 않는다.** 예외는 inference 비용을 줄이는 GQA/MQA와, attention 범위를 줄이는 sparse attention과 sliding window attention이다. 이어지는 Lecture 4([강의 노트](https://github.com/stanford-cs336/lectures/blob/main/lecture_04.pdf), [영상](https://www.youtube.com/watch?v=cKSwj_qZ8Jg))는 linear attention, Mamba-2, Gated DeltaNet, DSA, MLA를 다룬다. 이 글이 따라가는 목록과 같다.
+
+### decode의 병목, KV cache 읽기
+
+attention이 바뀐 이유는 decode에 있다. CS336의 Inference 강의(Spring 2025 Lecture 10, [강의 노트](https://github.com/stanford-cs336/spring2025-lectures/blob/main/lecture_10.py), Spring 2026 [영상](https://www.youtube.com/watch?v=EfM546A79aM))는 sequence 하나의 KV cache 크기를 아래처럼 센다. $S$는 cache에 쌓인 token 수, $K$는 KV head 수, $H$는 head dim, $L$은 layer 수다. 앞의 2는 K와 V, 뒤의 2는 bf16의 2 bytes다.
+
+$$
+\text{KV cache (bytes)} = 2 \times 2 \times S \times K \times H \times L
+$$
+
+강의의 예시인 Llama 2 13B($K = 40$, $H = 128$, $L = 40$)에 $S = 1024$를 넣으면 sequence 하나에 약 839 MB다. GQA로 $K = 8$이면 약 168 MB다. 같은 MHA 설정으로 1M token이면 약 859 GB가 된다. 1M context는 KV를 줄이지 않으면 GPU 한 장에 들어가지도 않는다.
+
+크기만 문제가 아니다. decode는 token을 하나씩 만들기 때문에, 매 step마다 weight와 KV cache 전체를 memory에서 읽는다. 강의는 이 성질을 arithmetic intensity(읽은 byte당 계산량)로 설명한다.
+
+- H100은 초당 989 TFLOP을 계산하고 3.35 TB를 읽는다. 그래서 byte당 약 295 FLOP보다 적게 계산하면 memory가 병목이다.
+- MLP는 batch의 request들이 같은 weight를 공유하므로, intensity가 batch 크기 $B$만큼 오른다.
+- attention은 request마다 자기 KV cache를 읽는다. 그래서 decode attention의 intensity는 batch와 무관하게 약 1이다. 강의는 이것을 "batching doesn't help!"라고 쓴다.
+
+정리하면 decode attention의 시간은 대략 "읽어야 하는 KV bytes / memory bandwidth"다. 이 글의 모든 방법이 KV를 줄이는 이유가 여기에 있다. 줄이는 방법은 KV entry를 작게 하기, 덜 읽기, 덜 저장하기, KV 대신 고정 크기 state를 쓰기의 네 가지다.
+
+## 큰 그림: KV를 줄이는 다섯 가지 축
+
+attention을 싸게 만드는 방법은 무엇을 줄이느냐에 따라 나뉜다. 2017년 MHA 이후의 방법을 계보로 묶으면 아래와 같다.
+
+| 계보 | 대표 | 줄이는 것 | 이 글의 장 |
+| --- | --- | --- | --- |
+| head끼리 KV 공유 | MQA, GQA | token당 KV 크기 | 배경 |
+| KV를 latent로 압축 | MLA | token당 KV 크기 | 배경 |
+| 고정 크기 state로 대체 | Mamba2 → GDN → KDA | 연산량과 KV cache 모두 | Linear attention |
+| KV 압축 + sparse selection | DSA → CSA/HCA → CSA2 | 읽는 양, KV 개수, layer 중복 | DeepSeek |
+| linear attention과 softmax attention을 섞은 hybrid | Qwen3-Next, Kimi Linear, Kimi K3, GLM-5.3-Flash | 위 계보의 조합 | Kimi와 GLM |
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-01-timeline-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-01-timeline-dark.svg"
+  caption="attention 계열의 세 갈래, 2023-2026. KV cache를 고정 크기 state로 바꾸는 갈래와 KV를 압축하고 골라 읽는 갈래가 따로 자라다가, 2025년 하반기부터 두 방식을 섞은 hybrid가 나온다."
+/>
+
+DeepSeek은 MLA → DSA → CSA/HCA → CSA2로 KV 압축과 sparse selection을 한 계보 안에서 쌓았다. Qwen, Kimi, GLM은 두 방식을 한 model 안에 섞었다. layer 대부분은 KV cache 대신 고정 크기 state를 쓰는 linear attention(GDN, KDA)으로 바꾸고, 몇 layer에만 KV cache를 쓰는 softmax attention(MLA, DSA)을 남겼다. 결국 모두 "먼 과거는 압축하거나 골라서 보고, 가까운 과거는 SWA나 recurrence로 정확히 본다"는 방향으로 모인다.
+
+## 배경: MHA에서 MLA까지
+
+기본 MHA(Multi-Head Attention)는 head마다 K, V를 따로 저장한다. 그래서 KV cache가 head 수에 비례한다. 이후의 방법은 대부분 이 cache나 $T^2$ 연산을 줄이는 방향이다.
+
+### MQA와 GQA: head 간 K, V 공유
+
+| 방법 | 시기 | 핵심 아이디어 | token, layer당 cache (값 개수) |
+| --- | --- | --- | --- |
+| MHA | 2017 | head마다 K, V를 따로 둠 | $2NH$ |
+| [MQA](https://arxiv.org/abs/1911.02150) | 2019 | 모든 head가 K, V 하나를 공유 | $2H$ |
+| [GQA](https://arxiv.org/abs/2305.13245) | 2023 | head를 $K$개 group으로 묶어 group마다 공유 | $2KH$ |
+| [MLA](https://arxiv.org/abs/2405.04434) | 2024 | K, V 대신 low-rank latent 하나를 저장 | $d_c + d_R$ |
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-01b-heads-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-01b-heads-dark.svg"
+  caption="query head 8개 기준의 MHA, MQA, GQA, MLA. MHA는 head마다 K, V를 저장하고, MQA는 한 벌, GQA는 group 수만큼 저장한다. MLA는 K, V 대신 latent 하나를 저장하고 K, V는 계산할 때 복원한다."
+/>
+
+비유하자면 MHA는 학생마다 교과서를 한 권씩 주고, MQA는 반 전체가 한 권을, GQA는 조마다 한 권을 나눠 본다. 나눠 볼수록 cache는 줄지만 표현력도 준다.
+
+뒤에서 계속 다시 쓰는 부품이 세 개 있다. SWA, attention sink, linear attention이다. linear attention은 다음 장에서 자세히 보고, 여기서는 앞의 두 개를 본다.
+
+### SWA: 최근 $w$개 token만 보는 attention
+
+Sliding Window Attention(SWA)은 각 query가 바로 앞 $w$개 token에만 attend하는 방식이다. 아래 그림의 칸 하나는 query token(행)이 key token(열)을 보는지를 뜻한다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-00a-swa-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-00a-swa-dark.svg"
+  caption="Full causal attention과 sliding window attention의 mask. SWA는 대각선 근처의 띠만 보므로, decode 중 들고 있을 KV도 최근 w개로 고정된다."
+/>
+
+- **cache가 일정하다.** window 밖 token은 다시 보지 않으므로 그 KV를 버려도 된다. 그래서 KV cache가 context 길이와 무관하게 $w$개로 고정된다.
+- **멀리 있는 정보도 간접적으로 닿는다.** layer 하나는 $w$개만 보지만, 정보는 layer를 거치며 window를 건너 전달된다. layer가 $L$개면 대략 $L \times w$ token 앞까지 닿는다.
+- **그래도 먼 token을 정확히 찾지는 못한다.** 그래서 SWA는 보통 full attention layer와 섞어 쓴다. CS336은 Cohere Command A를 예로 든다. 4 layer마다 1개가 full attention이다.
+
+이 글에서 SWA는 주로 local branch로 나온다. DeepSeek-V4와 V4.1은 모든 layer에 최근 $n_{win} = 128$ token을 압축 없이 보는 SWA branch를 두고, 먼 과거는 압축한 KV로 따로 본다.
+
+### Attention sink: 남는 weight를 버릴 자리
+
+softmax의 weight는 합이 항상 1이다. 그래서 query에 관련 있는 token이 하나도 없어도, head는 weight를 어딘가에 나눠 줘야 한다. 학습된 model은 이 남는 weight를 보통 첫 token에 몰아준다. 첫 token은 모든 query에서 보이고, 내용이 거의 없어서 출력을 크게 흔들지 않기 때문이다. 이렇게 weight가 몰리는 token을 attention sink라고 부른다([StreamingLLM](https://arxiv.org/abs/2309.17453)).
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-00b-sink-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-00b-sink-dark.svg"
+  caption="관련 있는 token이 없는 query의 attention weight(예시 값). 왼쪽은 남는 weight가 첫 token에 몰리고, 오른쪽은 learnable sink 항이 그 weight를 받아 간다."
+/>
+
+이 현상은 SWA와 충돌한다. 첫 token이 window 밖으로 밀려나면, weight를 버릴 자리가 사라지고 품질이 무너진다. StreamingLLM은 첫 몇 token의 KV를 window와 따로 남겨서 이 문제를 풀었다.
+
+더 직접적인 방법은 버릴 자리를 아예 식에 넣는 것이다. softmax 분모에 head마다 학습되는 항 $\exp(z'_h)$를 더한다. 이 항은 분모에만 있고 value가 없다. 그래서 head는 실제 token에 주는 weight의 합을 1보다 작게, 필요하면 0 가까이로 만들 수 있다. DeepSeek-V4는 아래 형태를 쓴다.
+
+$$
+s_{h,i,j} = \frac{\exp(z_{h,i,j})}{\sum_k \exp(z_{h,i,k}) + \exp(z'_h)}
+$$
+
+### MLA: K, V 대신 latent 하나를 저장하는 full attention
+
+MLA(Multi-head Latent Attention)는 DeepSeek-V2(2024.5)에서 도입됐고, V3 이후 DeepSeek 모든 세대의 바탕이 된다. DeepSeek-V2/V3 설정($N = 128$, $d_c = 512$, $d_R = 64$)에서는 token, layer당 cache가 MHA의 32,768개 값에서 576개로 준다. 576은 MLA의 고정값이 아니라 $d_c$와 $d_R$을 고른 결과다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-02-mla-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-02-mla-dark.svg"
+  caption="MLA가 저장하는 것과 저장하지 않는 것. hidden state를 압축한 latent와 작은 RoPE key만 cache에 남는다. head별 K, V는 latent에서 복원할 수 있지만, decode에서는 absorption 덕분에 만들지 않는다."
+/>
+
+**압축과 복원.** hidden state $h_t$에 압축 행렬 $W^{DKV}$를 곱해 작은 latent vector를 만들고, 이것만 cache에 저장한다. K와 V는 latent에 head별 복원 행렬 $W^{UK}$, $W^{UV}$를 곱해 만든다. 논문은 이 둘을 down-projection, up-projection이라고 부르지만, FFN의 up-projection과는 다른 행렬이다.
+
+$$
+c_t^{KV} = W^{DKV} h_t \quad (d_c = 512), \qquad k_t^C = W^{UK} c_t^{KV}, \qquad v_t^C = W^{UV} c_t^{KV}
+$$
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-02d-mla-qkv-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-02d-mla-qkv-dark.svg"
+  caption="MHA와 MLA에서 Q, K, V를 만드는 방법. MHA는 W^K, W^V로 만든 K, V를 모두 저장한다. MLA는 같은 자리를 압축 행렬 하나와 head별 복원 행렬 둘로 쪼개고, 그 사이의 latent와 작은 RoPE key만 저장한다."
+/>
+
+**Weight absorption: K와 V를 복원하지 않고 계산한다.** 위 식대로 하면 decode step마다 cache의 latent를 꺼내서 모든 past token, 모든 head의 key와 value를 다시 만들어야 한다. context가 1M token이면 매 step마다 key를 $10^6 \times 128$개 만드는 셈이다. 그러면 cache를 줄인 이득이 계산 비용으로 사라진다. MLA는 계산 순서를 바꿔서 이 복원을 없앤다.
+
+head 하나의 attention score만 보자. 크기는 $q_t, k_s \in \mathbb{R}^{128}$, $c_s^{KV} \in \mathbb{R}^{512}$, $W^{UK} \in \mathbb{R}^{128 \times 512}$이다. score는 현재 query $q_t$와 과거 token $s$의 key $k_s$의 내적이다.
+
+$$
+\text{score}_{t,s} = q_t \cdot k_s = q_t \cdot \left( W^{UK} c_s^{KV} \right)
+$$
+
+transpose는 내적에서 행렬을 반대편으로 옮기는 연산이다. 모든 행렬 $A$와 vector $x, y$에 대해 $\langle x, Ay \rangle = \langle A^{\top} x, y \rangle$가 성립한다. 그래서 $W^{UK}$를 key 쪽에서 query 쪽으로 옮길 수 있다.
+
+$$
+q_t \cdot \left( W^{UK} c_s^{KV} \right) = \left( (W^{UK})^{\top} q_t \right) \cdot c_s^{KV} = u_t \cdot c_s^{KV}, \qquad u_t = (W^{UK})^{\top} q_t \in \mathbb{R}^{512}
+$$
+
+<FigureSteps
+  base="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-02c-absorb"
+  caption="MLA absorption을 네 단계로 본다. 화살표로 단계를 넘긴다."
+  labels={[
+    '① 그대로 계산하면 decode step마다 past token의 latent에 W^UK를 곱해 key를 다시 만든 뒤 query와 내적한다.',
+    '② 내적 안에서 W^UK를 query 쪽으로 옮긴다. transpose가 되고, 현재 query에 한 번만 곱한다.',
+    '③ W^Q와 (W^UK)^T는 학습 후 고정이므로 미리 곱해 행렬 하나로 합친다. 이것이 흡수다.',
+    '④ value 쪽도 같다. W^UV를 output projection W^O에 합치면 value도 만들지 않는다.',
+  ]}
+/>
+
+두 순서는 곱셈 횟수가 다르다. ①은 past token마다 $W^{UK}$를 곱한다. ②는 현재 query로 $u_t$를 한 번만 만들고, cache의 latent와 바로 내적한다. 또 $W^{UK}$는 학습이 끝나면 고정이므로, query projection weight와 미리 곱해서 행렬 하나로 합칠 수 있다. 이것을 "흡수(absorption)"라고 부른다.
+
+value도 같다. attention weight $a_{t,s}$로 가중합을 먼저 latent에서 구하고, 그 다음에 $W^{UV}$를 한 번만 곱해도 결과가 같다.
+
+$$
+o_t = \sum_s a_{t,s}\, v_s = \sum_s a_{t,s}\, W^{UV} c_s^{KV} = W^{UV} \left( \sum_s a_{t,s}\, c_s^{KV} \right)
+$$
+
+그래서 $W^{UV}$는 output projection weight에 합친다. 압축 파일을 풀지 않고 압축된 채로 검색하는 셈이다.
+
+**Decoupled RoPE: 위치 정보는 따로 cache에 저장한다.** 문제는 absorption의 ③단계에서 생긴다. 미리 합치려면 $q_t$와 $c_s$ 사이에 끼인 행렬이 고정이어야 한다. RoPE는 key를 위치 $s$에 따라 회전 행렬 $R_s$로 돌린다. key 전체에 RoPE를 적용하면 사이에 끼인 행렬이 $R_s W^{UK}$가 된다.
+
+$$
+q_t \cdot \left( R_s W^{UK} c_s^{KV} \right) = \left( (R_s W^{UK})^{\top} q_t \right) \cdot c_s^{KV}
+$$
+
+$R_s$는 과거 token의 위치마다 다른 회전이다. 그래서 합친 행렬도 token마다 달라진다. 과거 token이 $S$개면 합친 행렬도 $S$개가 필요하고, 학습 후 한 번 계산해 둘 수 없다. 결국 token마다 key를 복원하는 처음 문제로 돌아간다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-02e-rope-split-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-02e-rope-split-dark.svg"
+  caption="왼쪽: key 전체에 RoPE를 적용하면 query와 latent 사이의 행렬이 위치마다 달라서 미리 합칠 수 없다. 오른쪽: key를 RoPE 없는 내용 부분과 작은 위치 부분으로 나누면, 내용 부분은 흡수하고 위치 부분은 cache에서 그대로 쓴다."
+/>
+
+MLA는 key를 두 부분으로 나눠 이 문제를 피한다.
+
+- **내용 부분** $k_s^C = W^{UK} c_s^{KV}$(128 dim): RoPE를 적용하지 않는다. 사이에 끼인 행렬이 고정이라 absorption이 그대로 된다.
+- **위치 부분** $k_s^R$(64 dim): $h_s$에 $W^{KR}$를 곱한 뒤 RoPE를 적용한다. token $s$를 처리할 때 한 번 만들어 cache에 저장하고, 모든 head가 공유한다. 처음부터 작은 vector로 저장하므로 복원할 것이 없고, absorption도 필요 없다.
+
+query도 같은 방식으로 $q_t^C$와 $q_t^R$로 나눈다. 두 부분을 이어 붙인 vector끼리 내적하면, 각 부분의 내적을 더한 것과 같다.
+
+$$
+\text{score}_{t,s} = q_t^C \cdot k_s^C + q_t^R \cdot k_s^R = u_t \cdot c_s^{KV} + q_t^R \cdot k_s^R
+$$
+
+첫 항은 위치와 무관하게 흡수되고, 둘째 항만 위치를 본다. 그래서 cache에는 latent와 RoPE key가 함께 남는다. DeepSeek-V2/V3 설정으로 계산하면 아래와 같다.
+
+$$
+\text{cache per token} = d_c + d_R = 512 + 64 = 576
+$$
+
+decode 단계의 MLA는 576 dim key와 512 dim value를 모든 head가 공유하는 MQA처럼 동작한다. 뒤에서 볼 DSA가 이 성질을 이용한다. 비유하자면 head 128개가 각자 사본을 들고 다니는 대신, 압축 원본 한 장만 보관하고 head마다 자기 렌즈(복원 행렬)로 펼쳐 본다.
+
+## Linear attention에서 KDA까지: 고정 크기 recurrent state의 갱신 규칙
+
+이 계보는 KV cache를 아예 없앤다. 과거 token 전체 대신 고정 크기 state $S$ 하나를 들고 다니며, token마다 이 state를 갱신한다. 네 방법은 같은 틀에서 $S$를 갱신하는 규칙만 다르다. 이 장에서는 갱신 연산을 세 가지로 구분한다.
+
+- **쓰기**: 새 key-value 쌍을 $S$에 더한다.
+- **잊기(decay)**: $S$ 전체를 일정 비율로 줄여 오래된 정보의 비중을 낮춘다.
+- **교정(delta rule)**: 특정 key에 저장된 value만 새 값으로 바꾼다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-03b-state-ops-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-03b-state-ops-dark.svg"
+  caption="다섯 방법이 한 step에서 state를 바꾸는 방식. linear attention은 더하기만 하고, Mamba2는 전체를 같은 비율로 잊은 뒤 더한다. DeltaNet은 key가 가리키는 열만 교체하고, GDN은 잊기와 교체를 함께 한다. KDA는 열마다 다른 비율로 잊는다."
+/>
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-03-state-lineage-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-03-state-lineage-dark.svg"
+  caption="state 갱신 규칙의 계보. SSM(Mamba)과 linear attention은 Mamba2에서 같은 식이 된다. 여기에 교정(delta rule)을 더한 것이 GDN이고, KDA는 decay를 다시 key 차원별로 나눈다. Mamba에서 KDA로 가는 점선은 필자의 해석이다."
+/>
+
+### Linear attention: 쓰기만 하는 additive update
+
+softmax를 빼면 attention을 recurrence로 다시 쓸 수 있다. state는 $H \times H$ 행렬이다.
+
+$$
+S_t = S_{t-1} + v_t k_t^\top, \qquad o_t = S_t\, q_t
+$$
+
+$S$는 key를 넣으면 value를 돌려주는 행렬, 곧 key-value 저장소(associative memory)다. outer product $v_t k_t^\top$를 더하면 $S k_t$에 $v_t \lVert k_t \rVert^2$가 더해진다. 즉 $k_t$로 조회하면 $v_t$가 나오도록 $S$를 갱신한다. 읽기는 같은 조회를 query로 하는 것이다. $o_t = S_t q_t$는 $q_t$와 비슷한 key에 저장된 value를 꺼낸다. 문제는 쓰기만 하고 잊지도, 교정하지도 않는다는 점이다. $H \times H$ state에는 서로 직교하는 key를 최대 $H$개까지만 구분해서 담을 수 있다. token이 그보다 많아지면 key끼리 겹치고, query로 읽으면 다른 token의 value가 섞여 나온다.
+
+$$
+S_t q = \sum_{i \le t} v_i \,(k_i^\top q)
+$$
+
+key는 저장한 value를 다시 찾을 때 쓰는 주소 역할을 한다. 그래서 query가 token $j$의 key와 같다면, 조회 결과는 그 token의 value $v_j$ 하나여야 한다. 하지만 실제 결과 $S_t q$에는 $k_i^\top q \neq 0$인 모든 token의 value가 함께 더해진다. 이것을 memory collision이라고 부른다.
+
+### Mamba와 Mamba2: decay로 잊는 SSM
+
+linear attention에 처음 더해진 연산은 잊기(decay)다. 입력과 무관한 상수 decay는 [RetNet](https://arxiv.org/abs/2307.08621)(2023.7)이 먼저 넣었고, 입력에 따라 바뀌는 decay는 Mamba 계열 SSM(state space model)에서 왔다. SSM은 고정 크기 state를 recurrence로 갱신하는 sequence model이다. decay는 step마다 state에 0과 1 사이의 값 $\alpha_j$를 곱하므로, token $i$의 정보는 시점 $t$까지 $\prod_{j=i+1}^{t} \alpha_j$배로 줄어든다. linear attention에서는 이 값이 항상 1이라 오래된 token도 방금 들어온 token과 같은 비중으로 남는다. decay에는 잊기 말고 역할이 두 가지 더 있다. 가까운 token을 더 중시하는 recency bias를 주고, state의 norm이 계속 커지지 않게 막아 학습을 안정시킨다.
+
+[Mamba](https://arxiv.org/abs/2312.00752)(2023.12)는 selective SSM이다. 여기서 channel은 layer 입력 vector의 차원 하나를 말한다. 입력이 $x_t \in \mathbb{R}^{D}$면 channel은 $D$개다. Mamba는 channel $c$마다 크기 $d_{\text{state}} = 16$의 작은 state $h^{(c)}$를 따로 두고 아래처럼 갱신한다.
+
+$$
+h_t^{(c)} = \exp\!\left(\Delta_t^{(c)} A^{(c)}\right) \odot h_{t-1}^{(c)} + \Delta_t^{(c)} B_t\, x_t^{(c)}, \qquad y_t^{(c)} = C_t \cdot h_t^{(c)}
+$$
+
+- $A^{(c)} \in \mathbb{R}^{d_{\text{state}}}$는 decay 속도다. channel마다, state 원소마다 다르다.
+- "selective"는 step 크기 $\Delta_t$와 $B_t$, $C_t$가 입력 $x_t$에 따라 바뀐다는 뜻이다. 그래서 model이 token마다 무엇을 기억하고 무엇을 잊을지 고른다.
+- chunk 단위 행렬 곱으로 계산하려면 decay가 outer product 꼴로 쓰여야 한다. Mamba의 decay는 이 꼴이 아니라서, Mamba는 GPU에서 parallel scan으로 계산한다. 그래서 Tensor Core를 쓰지 못하고, state를 크게 키우기 어렵다.
+
+[Mamba2](https://arxiv.org/abs/2405.21060)(2024.5)는 decay를 head마다 scalar 하나로 제한했다. 그러면 $B_t$는 key, $C_t$는 query, $x_t$는 value 역할이 되고, 식이 decay를 붙인 linear attention과 같아진다. 논문은 이 대응을 SSD(State Space Duality)라고 부른다.
+
+$$
+S_t = \alpha_t\, S_{t-1} + v_t k_t^\top, \qquad \alpha_t \in (0,1)
+$$
+
+| | Mamba | Mamba2 |
+| --- | --- | --- |
+| decay | channel마다, state 원소마다 다름 | head마다 scalar $\alpha_t$ 하나 |
+| state 크기 | channel당 $d_{\text{state}} = 16$ | head당 $H \times d_{\text{state}}$, $d_{\text{state}}$는 64에서 256 |
+| 계산 | parallel scan | chunk 단위 행렬 곱 (Tensor Core 사용) |
+| attention과의 관계 | 직접 대응 없음 | decay를 붙인 linear attention과 같음 |
+
+Mamba의 state를 channel마다 한 행으로 쌓으면 $D \times d_{\text{state}}$ 행렬이 되고, Mamba는 행마다 다른 decay를 쓴다. Mamba2의 head는 이 행을 $H$개씩 묶어 decay 하나를 같이 쓰는 단위다. 그래서 head 하나의 state는 $H \times d_{\text{state}}$ 행렬이고, 그 안의 모든 칸이 같은 $\alpha_t$로 줄어든다.
+
+Mamba2는 decay의 표현력을 조금 내주고, 대신 행렬 곱으로 계산하는 속도와 큰 state를 얻었다. 논문은 Mamba보다 2-8배 빠르다고 보고했다. 남은 한계도 있다. $\alpha_t$는 state 전체를 같은 비율로 줄인다. 오래된 정보를 잊을 수는 있지만, 특정 key의 value만 골라 교정할 수는 없다. 뒤에서 볼 KDA는 decay를 다시 key 차원별로 나누지만, Mamba와 달리 decay를 outer product 꼴로 유지해서 행렬 곱으로 계산할 수 있다.
+
+### DeltaNet: 특정 key의 value만 교정
+
+$$
+S_t = S_{t-1}\left(I - \beta_t k_t k_t^\top\right) + \beta_t\, v_t k_t^\top
+$$
+
+정리하면 아래 식이 되고, 이것은 $\frac{1}{2}\lVert S k_t - v_t \rVert^2$에 대한 online gradient descent 한 step이다.
+
+$$
+S_t = S_{t-1} - \beta_t \left(S_{t-1}k_t - v_t\right) k_t^\top
+$$
+
+$k_t$로 조회한 현재 값 $S_{t-1}k_t$와 새 $v_t$의 차이(delta)만큼만 교정한다. $\beta_t$는 learning rate 역할이다.
+
+이 gradient descent 해석은 delta rule이 먼저 나온 뒤에 붙은 설명이다. 그래도 이 관점에서 additive update보다 나은 점이 두 가지 보인다. 첫째, 수치적으로 안정적이다. linear attention의 갱신도 gradient step으로 볼 수 있는데, 이때 목표는 조회 결과 $S k_t$와 $v_t$의 내적을 크게 만드는 것이다. 이 목표는 $S$의 norm을 키우기만 해도 좋아지므로 state가 계속 커질 수 있다. 제곱 오차 $\frac{1}{2}\lVert S k_t - v_t \rVert^2$는 $S k_t$가 $v_t$에 가까워지면 더 줄지 않으므로 norm이 커지지 않는다. 둘째, transition 행렬 $I - \beta_t k_t k_t^\top$는 대각 행렬이 아닌 일반화된 Householder 행렬이다. 그래서 대각 decay만 쓰는 Mamba 계열보다 표현력이 크다.
+
+### Gated DeltaNet (GDN): decay와 delta rule의 결합
+
+$$
+S_t = \alpha_t\, S_{t-1}\left(I - \beta_t k_t k_t^\top\right) + \beta_t\, v_t k_t^\top
+$$
+
+[GDN](https://arxiv.org/abs/2412.06464)은 Mamba2의 decay gate(잊기)와 DeltaNet의 delta rule(교정)을 합친다.
+
+- $\alpha_t$(Mamba2식 gate)는 context가 바뀔 때 state를 빠르게 비운다.
+- $\beta_t$(delta rule)는 특정 key의 내용을 정밀하게 교정한다.
+- 학습은 chunkwise parallel 알고리즘(WY representation)으로 GPU에서 병렬 처리한다.
+- Qwen3-Next는 GDN layer와 gated attention layer를 대략 3:1로 섞는다.
+
+### KDA: key 차원별 decay gate
+
+KDA(Kimi Delta Attention)는 GDN의 decay gate를 scalar에서 key 차원별 vector로 바꾼 것이다. 논문은 이것을 channel-wise gate라고 부르지만, 앞의 Mamba 절에서 말한 channel(layer 입력의 차원)과는 다른 축이다. Moonshot AI의 [Kimi Linear](https://arxiv.org/abs/2510.26692)(2025.10)에서 나왔다.
+
+$$
+S_t = S_{t-1}\,\mathrm{Diag}(\alpha_t)\left(I - \beta_t k_t k_t^\top\right) + \beta_t\, v_t k_t^\top, \qquad \alpha_t \in (0,1)^{H}
+$$
+
+- GDN의 $\alpha_t$는 head마다 숫자 하나라서 state 전체가 같은 속도로 잊힌다.
+- KDA의 $\alpha_t$는 key vector의 차원마다 decay 속도가 다르다. head 하나의 key가 $H$차원이므로 $\alpha_t$도 head마다 값을 $H$개 가진다. GDN은 이 $H$개 차원이 $\alpha_t$ 하나를 같이 쓴다. 어떤 차원은 오래 기억하고, 어떤 차원은 빨리 잊는다. GLA의 fine-grained gate를 delta rule에 결합한 형태다.
+- 식에서 $S_{t-1}$에 오른쪽으로 곱해지는 행렬 $A_t = \mathrm{Diag}(\alpha_t)(I - \beta_t k_t k_t^\top)$를 transition 행렬이라고 부른다. 이전 state를 다음 state로 넘기는 행렬이다. 전개하면 $A_t = \mathrm{Diag}(\alpha_t) - \beta_t (\alpha_t \odot k_t)\, k_t^\top$로, 대각 행렬 하나와 rank-1 행렬 하나의 합이다. 이런 꼴을 DPLR(diagonal-plus-low-rank)이라고 부른다.
+- 일반 DPLR은 rank-1 부분의 두 vector를 서로 독립적으로 둔다. KDA는 두 vector를 모두 key에서 만든다($\beta_t k_t$와 $\alpha_t \odot k_t$). 그래서 decay $\mathrm{Diag}(\alpha_t)$를 따로 떼어 낼 수 있고, 갱신이 "key 차원별로 잊기"와 "Householder 행렬로 교정"의 두 단계로 나뉜다.
+- [Kimi Linear 논문](https://arxiv.org/abs/2510.26692) 6.2절에 따르면, 이 구조에서 계산 두 가지가 빠진다. 일반 DPLR의 chunk 계산은 누적 decay의 역수를 써서 수치가 불안정하다. 이를 막으려면 chunk를 한 번 더 잘게 나누는 secondary chunking을 두 번 해야 하는데, KDA는 이 단계가 필요 없다. 또 chunk 사이 계산과 출력 계산에서 행렬 곱이 약 3번 줄어든다. 그 결과 KDA kernel은 64K 길이까지 일반 DPLR보다 약 2배 빠르다.
+
+### Kimi Linear: KDA 3 : MLA 1 hybrid
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-05-kimi-linear-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-05-kimi-linear-dark.svg"
+  caption="Kimi Linear의 반복 단위 4 layer. KDA와 MLA는 각자 Q, K, V를 만들고 자기 저장소를 따로 가지며, residual stream으로만 이어진다. KV cache가 쌓이는 것은 MLA layer 하나뿐이다."
+/>
+
+- KDA layer 3개마다 MLA layer 1개를 섞는다. MoE로 48B total, 3B active다.
+- MLA layer는 RoPE를 쓰지 않는다(NoPE). 위치 정보는 KDA의 recurrence가 담당한다.
+- KDA도 MLA처럼 hidden state에서 $q_t, k_t, v_t$를 만든다. 다른 점은 과거를 두는 곳이다. MLA는 token마다 KV cache에 쌓고, KDA는 고정 크기 state $S$에 써 넣는다.
+- 두 layer는 직접 연결되지 않는다. 각 layer는 residual stream $h$에서 읽고 결과를 $h$에 더할 뿐이고, KDA의 state를 MLA가 읽는 일은 없다. 그래서 request 하나가 layer 종류별로 저장소를 두 가지 가진다. KDA layer에는 고정 크기 state가, MLA layer에는 길이에 비례하는 KV cache가 있다.
+- 1M context에서 KV cache를 최대 약 75% 줄이고, decoding throughput을 최대 약 6배 높였다고 보고했다.
+
+이 "state 3 : attention 1" 구조는 Qwen3-Next와 Kimi Linear를 거쳐 2025년의 표준처럼 됐다. 뒤에서 볼 Kimi K3와 GLM-5.3-Flash도 같은 비율을 쓴다.
+
+## NoPE: RoPE 없는 global layer
+
+Kimi Linear, Kimi K3, GLM-5.3-Flash는 모두 global attention layer에서 RoPE를 뺐다(NoPE, No Position Embedding). DeepSeek은 RoPE를 일부 dim에만 적용한다. MLA는 latent와 RoPE key를 합친 576 dim 중 64 dim에만(DeepSeek-V3 설정), V4의 CSA/HCA는 512 dim 중 마지막 64 dim에만 적용한다. CS336이 예로 든 Cohere Command A도 "Long-range info via NoPE, short-range info via RoPE + SWA"로 설계했다. 위치 정보를 줄이는 쪽이 하나의 흐름이 됐다.
+
+### RoPE와 NoPE의 서로 다른 약점
+
+causal attention은 미래 token을 가리는 mask만으로도 위치를 어느 정도 알 수 있다. 그래서 position embedding이 없어도 학습은 된다. 문제는 성능이다. [Physics of Language Models Part 4.1](https://arxiv.org/abs/2512.17351)(Zeyuan Allen-Zhu, NeurIPS 2025)은 두 방식의 약점을 이렇게 요약한다.
+
+> RoPE models often generalize poorly beyond training context lengths, whereas NoPE generalizes better but achieves lower overall performance.
+
+RoPE는 학습한 길이보다 긴 context에서 약하고, NoPE는 길이에는 강하지만 전체 성능이 낮다. 1M context를 노리는 model에게는 둘 다 불편하다.
+
+### Canon layer: RoPE를 따라잡는 NoPE의 부품
+
+Part 4.1은 synthetic task로 아키텍처를 비교한다. 예를 들어 Depo는 순열을 따라 $k$번 건너뛰는 문제를 CoT 없이 풀게 해서, 한 번의 forward로 몇 단계까지 추론하는지(reasoning depth)를 잰다. 이 비교에서 논문은 Canon layer라는 작은 부품을 제안한다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-00c-canon-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-00c-canon-dark.svg"
+  caption="Canon layer. 각 token의 hidden state에 바로 앞 token 3개를 channel별 weight로 섞어 더한다. Transformer block 안의 네 위치(A, B, C, D)에 넣을 수 있다."
+/>
+
+Canon layer는 kernel 크기 4의 causal conv1d다. 각 token의 hidden state에 바로 앞 token 3개를 channel마다 다른 weight로 섞어 residual로 더한다.
+
+$$
+h'_t = h_t + \mathrm{conv1d}\left([h_t,\ h_{t-1},\ h_{t-2},\ h_{t-3}]\right)
+$$
+
+비용은 거의 없다. 논문에 따르면 1.3B Llama에 네 위치를 모두 넣어도 parameter는 0.0063% 늘어난다. 이 작은 부품이 NoPE의 결과를 바꾼다.
+
+- **Canon이 없으면 NoPE는 거의 실패한다.** 논문은 "without Canon, NoPE achieves essentially zero performance on all measures"라고 쓴다.
+- **Canon이 있으면 NoPE가 RoPE와 같아진다.** "NoPE+Canon matches RoPE+Canon and even surpasses it on Depo." reasoning depth에서는 오히려 조금 앞선다.
+- **RoPE를 일부 dim에만 거는 쪽이 가장 좋다.** RoPE를 전체 dim의 $1/4$에만 건 설정이 RoPE+Canon과 NoPE+Canon을 모두 앞섰다. 논문은 RoPE를 너무 많이 쓰면 오히려 성능이 떨어질 수 있다고 쓴다.
+
+논문의 설명은 이렇다. RoPE가 하던 일의 대부분은 "바로 옆 token이 무엇인지 찾기"다. Canon layer가 그 일을 매 layer에서 직접 해 주므로 RoPE가 덜 필요해진다("Canon layers take over much of RoPE's job of locating nearby tokens"). 그리고 RoPE를 줄이면 길이 일반화에 유리하므로, 논문은 Canon layer가 길이 일반화에 "indispensable"하다고 본다.
+
+### linear attention에서도 핵심인 같은 부품
+
+Part 4.1은 같은 실험을 linear model(GLA, Mamba2, GDN)에도 했다. 결과는 위 이야기와 이어진다.
+
+- **Mamba2의 성능은 상당 부분 내부 conv1d에서 나온다.** Mamba2는 SSM 앞에 짧은 conv1d를 둔다. 논문은 이것이 "effectively acts as a partial Canon-B layer"라고 보고, "this built-in conv1d contributes more to Mamba2's performance than its SSM formulation itself"라고 쓴다. conv1d를 빼면 Mamba2는 GLA 수준으로 떨어진다.
+- **GDN도 내부 conv1d를 가진다.** GDN은 이것에 덜 의존하지만, 빼면 Mano(지식 조작)와 Lano(계층 구조) 성능이 무너진다.
+- **그래도 linear model은 Transformer보다 약하다.** Canon을 넣어도 reasoning depth는 Transformer가 2-4배 깊다. 논문은 원인을 memory 부족이 아니라 "accumulated errors in compression and retrieval"로 본다. 그리고 linear 부품과 attention을 섞는 hybrid를 가장 현실적인 길로 꼽는다. 다만 hybrid 자체는 실험하지 않았다.
+
+이것을 이 글의 hybrid model에 대입하면 한 가지 해석이 나온다. KDA는 GDN 구조를 이어받으므로, layer 4개 중 3개는 짧은 conv1d로 가까운 token의 위치 정보를 이미 다룬다. 그러면 나머지 global attention layer는 먼 과거를 찾는 일에 집중하고, RoPE 없이도 된다. 또 NoPE는 학습 길이 밖에서 덜 무너지므로 1M context에 유리하다. 이것은 Physics of LM의 결과를 이 model들에 적용한 해석이다. 논문은 Kimi, GLM, DeepSeek model을 직접 다루지 않는다.
+
+### Part 4.2: 실제 pretraining 규모의 검증
+
+[Part 4.2](https://physics.allen-zhu.com/part-4-architecture-design/part-4-2)는 Canon layer를 실제 규모에서 검증했다. 논문 대신 재현 가능한 [code](https://github.com/facebookresearch/PhysicsLM4)와 talk로 공개됐다. Llama와 LlamaCanon을 1B, 3B, 8B 크기로 Nemotron-CC의 1T 또는 2T token에 학습한 16개 model이 들어 있다. 결과 README는 "LlamaCanon consistently surpasses Llama in all eight controlled comparisons, achieving, for instance, a 2% gain in the MMLU benchmark"라고 쓴다. LlamaCanon은 partial RoPE도 지원한다.
+
+한계도 분명하다.
+
+- Part 4.1의 근거는 대부분 4096 token 이하에서 나왔다. 1M context에서 NoPE가 낫다는 직접 근거는 아니다.
+- 논문 스스로 결과가 "speed of skill acquisition, not absolute capability"를 잰다고 쓴다. 학습을 아주 오래 하면 vanilla RoPE도 비슷한 정확도에 닿을 수 있다.
+- Part 4.2에서 이 글에 쓴 수치는 결과 README의 문장 하나뿐이다. 자세한 수치는 talk와 표 image에 있다.
+
+## DeepSeek: V3 → R1 → V3.2 → V4 → V4.1
+
+DeepSeek의 네 세대는 KV를 줄이는 축을 하나씩 더했다. V3는 KV의 크기를, V3.2는 attention이 읽는 양을, V4는 sequence 길이를, V4.1은 layer 간 중복과 영구 저장을 줄였다. 그 사이 R1은 아키텍처를 그대로 두고 순수 RL로 reasoning을 끌어냈고, 이것이 긴 context 효율을 향한 이후 세대의 동기가 됐다. 같은 기준에서 token당 global KV는 V3.2 48,068 B → V4-Flash 3,514 B → V4.1-Flash 890 B로 줄었다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-01-generations-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-01-generations-dark.svg"
+  caption="DeepSeek 세대별 문제와 해결. 각 세대가 남긴 한계가 다음 세대의 문제가 됐다."
+/>
+
+아래에서는 각 세대를 문제 → 해결 → 남긴 문제 순서로 본다.
+
+### V3 (2024.12): token당 비용 절감
+
+[V3](https://arxiv.org/abs/2412.19437)는 token 하나를 처리하는 비용을 줄이는 데 집중했다. 671B total / 37B activated, 61 layer, hidden dim 7168, 14.8T token으로 학습했고, context는 YaRN으로 4K → 32K → 128K까지 늘렸다.
+
+| # | 문제 | 해결 | 효과 |
+| --- | --- | --- | --- |
+| 1 | head마다 K, V를 cache해서 긴 context에서 메모리 폭증 | MLA: K, V를 512 dim latent 하나로 압축 | cache에는 latent + RoPE key(64 dim)만 |
+| 2 | load balancing용 auxiliary loss가 성능을 깎음 | aux-loss-free: expert별 bias로 routing만 보정 | 균형과 성능을 함께 확보 |
+| 남김 | attention 연산은 여전히 $O(T^2)$ | → V3.2 DSA | |
+
+MLA는 앞 장에서 봤다. 여기서는 두 번째 문제를 본다.
+
+#### aux-loss-free load balancing: gradient 없는 bias 기반 균형
+
+MoE의 router는 token마다 몇 개 expert를 고른다. 그냥 두면 소수 expert에만 token이 몰린다(routing collapse). 그러면 나머지 expert는 학습되지 않고, expert parallelism에서는 그 expert가 놓인 GPU만 과부하가 된다. 그래서 기존 MoE(GShard, Switch Transformer)는 language modeling loss에 "expert별 load가 고르지 않을수록 커지는 보조 loss"를 더한다. 이것이 auxiliary loss다.
+
+$$
+\mathcal{L}_{\mathrm{Bal}} = \alpha \sum_{i=1}^{N_r} f_i \, P_i
+$$
+
+$f_i$는 expert $i$가 실제로 선택된 비율이고, $P_i$는 expert $i$에 준 routing score의 평균이다. 한 expert에 선택과 점수가 몰릴수록 loss가 커진다.
+
+- **문제**: 이 보조 loss의 gradient는 "다음 token을 잘 맞히기"와 무관한 방향으로 weight를 당긴다. $\alpha$를 크게 하면 load는 고르지만 성능이 떨어지고, 작게 하면 불균형이 남는다.
+- **해결**: gradient를 쓰지 않는다. expert마다 bias $b_i$를 routing score에 더해 top-K 선택에만 쓰고, gate 값은 원래 score로 계산한다. step마다 과부하 expert의 bias는 $\gamma$만큼 내리고, 저부하 expert의 bias는 올린다.
+
+$$
+g'_{i,t} = \begin{cases} s_{i,t}, & s_{i,t} + b_i \in \mathrm{Topk}(\{ s_{j,t} + b_j \}, K_r) \\ 0, & \text{otherwise} \end{cases}
+$$
+
+- **효과**: 같은 조건의 ablation에서 aux-loss 방식보다 대부분의 benchmark가 좋았다(228.7B MoE의 HumanEval 40.2 → 46.3). expert도 domain별로 더 뚜렷하게 특화됐다. 극단적 불균형만 막으려고 sequence-wise balance loss를 $\alpha = 0.0001$로 아주 약하게 남겼다.
+
+비유하자면 auxiliary loss는 요리사 평가에 "손님을 고르게 받았나" 점수를 섞어서 요리 실력 평가가 흐려지는 것이다. aux-loss-free는 평가는 요리로만 하고, 붐비는 테이블의 안내판(bias)만 조정한다.
+
+DeepSeekMoE 구성은 1 shared + 256 routed expert, token당 8개 활성, sigmoid routing score, token당 최대 4 node(node-limited routing)다.
+
+#### 그 밖의 장치
+
+- **MTP (depth 1)**: 학습 신호를 촘촘하게 만들고, 추론 때는 speculative decoding에 재사용한다. 두 번째 token의 acceptance가 85-90%이고, TPS가 1.8배다.
+- **FP8 mixed precision training**: activation은 $1 \times 128$ tile, weight는 $128 \times 128$ block 단위로 scaling하고, 128 element마다 CUDA core에서 FP32로 accumulation한다.
+- **DualPipe**: forward/backward chunk의 계산과 all-to-all 통신을 겹쳐서 통신을 숨긴다. 전체 학습에 2.788M H800 GPU hours가 들었다.
+
+**남긴 문제**: MLA는 token당 KV의 크기를 줄였을 뿐, attention은 여전히 모든 이전 token을 본다. 길이 $T$에서 연산은 $O(T^2)$이고, 긴 reasoning과 agent trajectory에서 이것이 병목이 된다.
+
+### R1 (2025.01): V3 아키텍처와 새 학습 방법
+
+[R1](https://arxiv.org/abs/2501.12948)은 V3-Base(671B / 37B)를 그대로 쓰고 post-training만 바꿨다. 아키텍처 변화는 없다. 하지만 긴 CoT, 긴 RL rollout, thinking mode라는 이후 세대의 설계 압력을 만든 출발점이다.
+
+| # | 문제 | 해결 | 효과 |
+| --- | --- | --- | --- |
+| 1 | reasoning이 사람이 쓴 CoT 시연에 의존: 비싸고, 사람 수준이 상한 | R1-Zero: SFT 없이 GRPO + rule reward(정답, format) | AIME 2024 15.6% → 77.9% |
+| 2 | R1-Zero는 가독성이 낮고 언어가 섞이며 일반 능력이 약함 | cold start SFT → RL → SFT 800K → 전 영역 RL | AlpacaEval 2.0 24.7 → 87.6 |
+| 남김 | 긴 CoT와 rollout 비용, tool 사용 불가, overthinking | → V3.2 DSA, tool-use thinking | |
+
+#### R1-Zero: SFT 없는 순수 RL
+
+사람이 쓴 reasoning trace는 모으기 비싸다. 그리고 사람의 사고 방식을 흉내 내는 한, 성능도 그 수준에서 멈춘다. R1-Zero는 V3-Base에 바로 GRPO를 적용하고, reward는 rule 기반 정답(accuracy)과 format(`<think>` tag)만 준다. neural reward model은 reward hacking 때문에 reasoning에 쓰지 않았다.
+
+GRPO는 PPO의 value model(보통 policy와 같은 크기)과 GAE를 버린다. 대신 같은 질문에 대한 $G$개 출력의 reward를 group 안에서 정규화해서 advantage로 쓴다.
+
+$$
+A_i = \frac{r_i - \mathrm{mean}(\{r_1, \dots, r_G\})}{\mathrm{std}(\{r_1, \dots, r_G\})}
+$$
+
+비유하자면 풀이법은 가르치지 않고 채점만 해 준다. 같은 문제를 16번 풀게 하고, 그중 평균보다 나은 풀이를 더 자주 하도록 민다.
+
+- **결과**: AIME 2024 pass@1이 15.6%에서 77.9%(cons@16 86.7%)로 올랐다. 응답 길이가 스스로 늘었고, reflection 단어가 5-7배 늘었다. 8,000 step 이후에는 "wait"가 급증하는 aha moment가 나타났다.
+- **설정**: 질문당 16개 출력, 최대 길이 32,768 token(8.2K step 이후 65,536), 총 10,400 step.
+- **base model의 크기가 조건이다**: 7B dense와 16B MoE에서는 길어진 응답이 반복에 빠져 실패했다. 32B dense, 230B MoE, 671B MoE에서야 효과가 나타났다.
+
+#### R1을 만드는 다단계 pipeline
+
+R1-Zero는 읽기 어렵고, 중국어와 영어가 섞이며, writing 같은 일반 능력이 약하다(AlpacaEval 2.0 24.7, IF-Eval 46.6). 그래서 R1-Zero 풀이를 다듬은 cold start SFT → reasoning RL → rejection sampling SFT → 전 영역 RL 순서로 RL과 SFT를 번갈아 거친다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-02-r1-pipeline-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-02-r1-pipeline-dark.svg"
+  caption="R1 학습 pipeline. 점선은 R1-Zero 출력을 sampling, filtering해서 cold start 데이터로 넘기는 경로다."
+/>
+
+language consistency reward는 CoT에서 목표 언어 단어의 비율이다. 성능은 약간 낮추지만 가독성을 위해 넣었다.
+
+$$
+\mathrm{Reward}_{\mathrm{language}} = \frac{\mathrm{Num}(\mathrm{Words}_{\mathrm{target}})}{\mathrm{Num}(\mathrm{Words})}
+$$
+
+| 단계 | AIME 2024 | AlpacaEval 2.0 | Codeforces rating |
+| --- | --- | --- | --- |
+| R1-Zero | 77.9 | 24.7 | 1444 |
+| Dev1 (cold start) | 59.0 | 50.1 | 1534 |
+| Dev2 (reasoning RL) | 74.0 | 55.8 | 1687 |
+| Dev3 (SFT 800K) | 78.1 | 62.1 | 1746 |
+| R1 (전 영역 RL) | 79.8 | 87.6 | 2029 |
+
+cold start에서 reasoning 점수가 잠시 떨어졌다가 RL로 회복되고, 마지막 RL에서 일반 선호도가 크게 오른다. 학습비는 R1-Zero 101K, R1 41K H800 GPU hours로 총 294K 달러다. distillation은 작은 model에 직접 RL하는 것보다 낫다(32B 기준 AIME 72.6 vs 47.0).
+
+R1에서 이후 세대로 이어진 것은 세 가지다.
+
+- **GRPO**: V3.2에서 unbiased KL estimate, off-policy sequence masking, Keep Routing 등으로 안정화되고, V4의 specialist RL과 V4.1까지 쓰인다.
+- **`<think>` thinking mode**: V3.2의 tool-use 속 thinking context management, V4의 interleaved thinking, V4.1의 reasoning effort 조절로 이어진다.
+- **긴 CoT와 긴 rollout**: reasoning이 길어질수록 attention의 $O(T^2)$과 post-training compute가 병목이 됐다. 이것이 V3.2 DSA의 직접적인 동기다.
+
+**남긴 문제**: tool을 쓰지 못한다. 쉬운 문제에서도 overthinking한다. 중국어, 영어 외의 언어에서는 언어가 섞인다. 평가가 긴 software engineering에는 RL을 충분히 하지 못했다. reward model을 만들기 어려운 writing 같은 과제로 순수 RL을 넓히는 것도 열린 문제다.
+
+### V3.2 (2025.12): DSA의 token 선택
+
+[V3.2](https://arxiv.org/abs/2512.02556)는 V3.1-Terminus에서 아키텍처를 딱 하나 바꿨다. DSA(DeepSeek Sparse Attention)를 continued training으로 넣은 것이다. DSA는 V3.2-Exp(2025.9)에서 먼저 공개됐다.
+
+| # | 문제 | 해결 | 효과 |
+| --- | --- | --- | --- |
+| 1 | dense attention이 모든 이전 token을 봐서 $O(T^2)$: 긴 context와 긴 RL rollout을 막음 | DSA: lightning indexer가 채점하고 top-2048 KV만 attention | core attention $O(T \cdot k)$, 성능은 V3.1-Terminus와 동등 |
+| 남김 | 모든 token의 KV 저장, 128K 한계, indexer $O(T^2)$ | → V4 CSA/HCA | |
+
+논문이 꼽은 open-source model의 첫 번째 결함이 vanilla attention의 긴 sequence 비효율이다. 이 비효율은 배포 비용과 post-training을 동시에 막는다. post-training에서는 긴 rollout을 돌려야 해서, RL 예산이 pre-training 비용의 10% 이상으로 커졌다.
+
+DSA의 해법은 두 단계다. lightning indexer가 모든 이전 token에 점수를 매기고, core attention은 그중 상위 $k = 2048$개 KV entry만 읽는다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-03-dsa-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-03-dsa-dark.svg"
+  caption="DSA가 query token 하나를 처리하는 과정. lightning indexer가 과거 token 전부에 점수를 매기고, 점수 상위 k개의 KV만 core attention이 읽는다. 저장은 여전히 모든 token의 KV를 한다."
+/>
+
+$$
+I_{t,s} = \sum_{j=1}^{H^{I}} w^{I}_{t,j} \cdot \mathrm{ReLU}\left( \mathbf{q}^{I}_{t,j} \cdot \mathbf{k}^{I}_{s} \right)
+$$
+
+$$
+\mathbf{u}_t = \mathrm{Attn}\left( \mathbf{h}_t,\ \{ \mathbf{c}_s \mid I_{t,s} \in \mathrm{Top\text{-}k}(I_{t,:}) \} \right)
+$$
+
+비유하자면 도서관 사서(indexer)가 색인 카드만 빠르게 훑어 2,048권을 골라 주면, 정독(core attention)은 사서가 고른 2,048권만 한다. 사서도 카드를 전부 보지만 카드가 얇다. indexer는 head 수가 적고, FP8로 계산하며, throughput을 위해 activation으로 ReLU를 쓴다.
+
+- **MLA 위에 구현한다**: kernel 효율을 위해서는 KV entry 하나를 여러 query가 공유해야 한다. 그래서 MLA의 MQA mode(latent 하나를 모든 query head가 공유)로 DSA를 올렸다. 한 번 고른 token 집합을 모든 head가 같이 쓴다.
+- **짧은 문맥에서는**: prefill에서 masked MHA mode로 DSA를 흉내 내서 더 빠르게 처리한다.
+
+학습은 V3.1-Terminus에서 continued pretraining으로 두 단계를 거친다.
+
+| 단계 | 학습 대상 | loss | 규모 |
+| --- | --- | --- | --- |
+| Dense warm-up | indexer만 (나머지 freeze, dense attention 유지) | main attention을 head 합산, L1 정규화한 분포와 softmax(I)의 KL | 1,000 step, 2.1B token |
+| Sparse training | model 전체, query당 2,048 KV 선택 | indexer: 선택 집합 위의 KL / main: LM loss만 (indexer 입력은 detach) | 15,000 step, 943.7B token |
+
+**결과**: core attention이 $O(T^2)$에서 $O(T \cdot k)$가 됐다. indexer는 여전히 $O(T^2)$이지만 MLA보다 훨씬 가볍다. 성능은 V3.1-Terminus와 동등했고(benchmark, ChatbotArena Elo), 장문 benchmark AA-LCR은 4점 올랐다.
+
+아키텍처 밖의 변화는 두 가지다. 하나는 RL 안정화(unbiased KL estimate, off-policy sequence masking, Keep Routing, Keep Sampling Mask)다. 다른 하나는 thinking context management다. tool 결과만 오면 reasoning을 유지하고, 새 user message가 오면 버린다.
+
+**남긴 문제**
+
+- **저장량은 그대로다**: DSA는 읽는 KV를 줄일 뿐, 모든 token의 KV는 여전히 저장한다. global KV는 token당 48,068 bytes다(V4.1 논문 Figure 1).
+- **context 한계가 128K다**: BrowseComp에서는 테스트의 20% 이상이 128K를 넘어서 context management로 메웠다.
+- **indexer의 $O(T^2)$** 자체는 남아 있다.
+
+### V4 (2026.04): CSA/HCA의 KV 압축과 1M context
+
+1M token에서 V4-Pro는 V3.2 대비 single-token FLOPs의 27%, KV cache의 10%만 쓴다. V4-Flash는 각각 10%, 7%다. [V4](https://arxiv.org/abs/2606.19348)-Pro는 1.6T / 49B activated, V4-Flash는 284B / 13B activated이고, 32-33T token으로 학습했다.
+
+| # | 문제 | 해결 | 효과 |
+| --- | --- | --- | --- |
+| 1 | KV를 sequence 길이만큼 저장, 128K 한계 | CSA($4 \to 1$, top-k)와 HCA($128 \to 1$, dense) 교대 + SWA | 1M에서 V3.2 대비 FLOPs 27%, KV cache 10% (Pro) |
+| 2 | Hyper-Connections를 깊게 쌓으면 수치 불안정 | mHC: residual mapping을 doubly stochastic으로 제한 | spectral norm 1 이하, 깊이 쌓아도 안정 |
+| 3 | 더 빠른 수렴과 학습 안정성 필요 | Muon + hybrid Newton-Schulz | Q, KV RMSNorm 덕에 QK-Clip 불필요 |
+| 4 | MoE outlier로 loss spike | Anticipatory Routing, SwiGLU clamping | spike 억제 |
+| 남김 | 구조 복잡, SWA KV가 무겁고 prefill은 전 layer | → V4.1 | |
+
+#### Hybrid attention: layer마다 번갈아 쓰는 CSA와 HCA
+
+V3.2의 DSA는 읽는 KV는 줄였지만, sequence 길이만큼의 KV를 그대로 저장한다. 1M context에서는 저장량도, indexer의 $O(T^2)$도 버겁다. 그래서 V4는 KV를 sequence 축으로 압축한다. CSA(Compressed Sparse Attention)는 4 token을 entry 하나로 줄인 뒤 indexer로 골라 읽는다. HCA(Heavily Compressed Attention)는 128 token을 하나로 줄이고, 고르지 않고 다 읽는다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-06-v4-csa-hca-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-06-v4-csa-hca-dark.svg"
+  caption="query 하나가 CSA layer와 HCA layer에서 과거 token을 보는 방식과, V4-Pro의 layer 순서. CSA는 4 token을 entry 하나로 묶어 indexer로 골라 읽고, HCA는 128 token을 하나로 묶어 전부 읽는다. 그림은 비율을 줄였다."
+/>
+
+비유하자면 회의록을 4줄(CSA) 또는 128줄(HCA)마다 요약 한 줄만 남기고, CSA는 그중 관련 있는 요약만 골라 읽는 셈이다.
+
+**Compressor.** CSA의 압축은 겹치는 두 block의 KV($C^a$, $C^b$)를 학습된 compression weight로 element-wise 가중합한다. $S$는 $2m$개 token에 걸친 channel별 softmax weight이고, $\odot$는 element-wise 곱이다. indexer key도 같은 방식으로 압축한 뒤 lightning indexer로 top-k entry를 고른다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-07-csa-compressor-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-07-csa-compressor-dark.svg"
+  caption="CSA compressor. 겹치는 2m token이 entry 1개가 된다."
+/>
+
+$$
+C^{\mathrm{Comp}}_i = \sum_{j=mi}^{m(i+1)-1} S^{a}_j \odot C^{a}_j \; + \sum_{j=m(i-1)}^{mi-1} S^{b}_j \odot C^{b}_j
+$$
+
+**CSA와 HCA는 해상도와 범위를 맞바꾼다.** CSA는 덜 압축하고 골라 읽고, HCA는 많이 압축하고 전부 읽는다.
+
+| | CSA (Compressed Sparse) | HCA (Heavily Compressed) |
+| --- | --- | --- |
+| 압축률 | 4 token → 1 entry | 128 token → 1 entry |
+| 압축 window | 겹침(overlapping) | 겹치지 않음 |
+| 읽는 방식 | Lightning Indexer로 top-k entry만 선택 (Pro 1024, Flash 512) | indexer 없이 전부 dense attention |
+| 분류 | 압축 + sparse | 압축 + dense |
+| 공통 | 최근 128 token sliding window branch, MQA(KV head 1개, 512 dim) | 같음 |
+
+context 길이를 $T$라 하자. V4-Pro(top-1024) 기준으로 저장 entry 수와 query당 읽는 entry 수는 아래와 같다.
+
+| | 저장 entry 수 | query당 읽는 entry 수 | $T = 10^6$일 때 저장 | $T = 10^6$일 때 읽기 |
+| --- | --- | --- | --- | --- |
+| CSA | $T/4$ | $\min(1024,\ T/4)$ | 250,000 | 1,024 |
+| HCA | $T/128$ | $T/128$ | 약 7,813 | 약 7,813 |
+
+- **저장은 CSA가 32배 많다.** 장기 memory 비용은 CSA가 지배한다.
+- **읽기는 약 131K token을 넘으면 HCA가 더 많다.** $T/128 = 1024$가 되는 지점이 $T \approx 131\text{K}$다. HCA는 길이에 비례해 늘고, CSA는 1024에서 멈춘다.
+- **CSA는 고해상도 검색이다.** 4 token 단위라 세부가 살아 있고, 그중 원문 약 4K token 분량만 골라 본다. 4쪽마다 한 줄인 상세 요약을 색인으로 찾아 읽는 셈이다.
+- **HCA는 저해상도 전체 조망이다.** 128 token이 entry 하나로 뭉개지지만, indexer가 놓친 부분까지 빠짐없이 훑는다. 128쪽마다 한 줄인 목차급 요약을 처음부터 끝까지 읽는 셈이다.
+
+결과적으로 model은 한 context를 세 해상도로 본다. 최근 128 token은 원본으로, 4배 압축본은 골라서, 128배 압축본은 전부 본다. V4-Pro의 첫 두 layer가 HCA인 이유는 공식 설명이 없다. indexer가 판단할 표현이 아직 덜 만들어진 단계라서 전체를 거칠게 보는 쪽이 자연스럽다는 것이 하나의 해석이다.
+
+CSA와 HCA는 보조 장치를 함께 쓴다.
+
+| 보조 장치 | 왜 필요한가 |
+| --- | --- |
+| SWA branch (최근 128 token, 비압축) | query는 causality 때문에 자기 압축 block 안의 token을 못 본다. local dependency를 보완 |
+| Shared-KV MQA | compressed entry 하나가 key이자 value → cache 최소화 |
+| Partial RoPE (마지막 64 dim) + 출력에 위치 $-i$ RoPE | value에 섞인 absolute position을 relative position으로 바꿈 |
+| Query, KV entry RMSNorm | attention logit 폭주를 막아 Muon의 QK-Clip이 필요 없음 |
+| Attention sink | head별 attention 총합을 1 미만(0 근처)까지 허용 |
+| Grouped output projection | $c \cdot N$이 커서 $D$로 바로 projection하는 비용을 $g$개 group으로 나눔 |
+| 저장 정밀도 | RoPE dim은 BF16, 나머지는 FP8, indexer 연산은 FP4 |
+
+BF16 GQA8(head dim 128) 대비 1M context에서 KV cache는 약 2% 수준이다. Flash와 Pro의 설정은 아래와 같다.
+
+| 항목 | V4-Flash | V4-Pro |
+| --- | --- | --- |
+| Parameters (total / active) | 284B / 13B | 1.6T / 49B |
+| Layers / hidden dim | 43 / 4096 | 61 / 7168 |
+| 첫 2개 layer → 이후 | SWA → CSA, HCA 교대 | HCA → CSA, HCA 교대 |
+| CSA $m$ / HCA $m'$ / top-k | 4 / 128 / 512 | 4 / 128 / 1024 |
+| Query heads / head dim | 64 / 512 | 128 / 512 |
+
+#### mHC: 여러 차선의 residual stream과 제한된 혼합 규칙
+
+**기존 residual: 통로 하나에 그대로 더한다.** 보통의 Transformer block은 sublayer 출력을 폭 $D$인 residual stream 하나에 더한다. $x_{\ell+1} = x_\ell + \mathcal{F}_\ell(x_\ell)$이다. 모든 layer의 정보가 이 통로 하나를 지난다.
+
+**Hyper-Connections: 통로를 여러 개로 넓힌다.** [Hyper-Connections](https://arxiv.org/abs/2409.19606)는 residual stream을 $n_{hc}$개로 넓히고, 학습되는 행렬로 stream끼리 섞는다. 통로 폭이 새 scaling 축이 된다. 하지만 섞는 행렬에 제약이 없어서, layer를 깊게 쌓으면 행렬 곱이 누적되며 신호가 폭주하거나 사라진다.
+
+**mHC: 섞는 규칙을 제한한다.** [mHC](https://arxiv.org/abs/2512.24880)(Manifold-Constrained Hyper-Connections, DeepSeek, 2025.12)는 같은 구조에서 stream끼리 섞는 행렬 $H^{\text{res}}$에 제약을 두어 이 문제를 푼다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-05-mhc-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-05-mhc-dark.svg"
+  caption="기존 residual과 mHC. 기존 residual은 통로 하나에 sublayer 출력을 그대로 더한다. mHC는 통로를 4개로 넓혀 H^res로 섞고, sublayer는 H^pre로 1개로 모아 계산한 뒤 H^post로 다시 4개에 나눠 더한다."
+/>
+
+$$
+x_{\ell+1} = H^{\text{res}}_{\ell}\, x_{\ell} + \left(H^{\text{post}}_{\ell}\right)^{\top} \mathcal{F}_{\ell}\!\left(H^{\text{pre}}_{\ell}\, x_{\ell}\right), \qquad x_{\ell} \in \mathbb{R}^{n \times D}
+$$
+
+$$
+H^{\text{res}}_{\ell} \ge 0, \qquad H^{\text{res}}_{\ell}\mathbf{1} = \mathbf{1}, \qquad \mathbf{1}^\top H^{\text{res}}_{\ell} = \mathbf{1}^\top
+$$
+
+- $n=1$, $H^{\text{res}}=1$이면 보통의 residual connection이다. mHC는 이것을 $n$개 차선으로 일반화한다. V4는 $n_{hc} = 4$다.
+- $H^{\text{pre}}$, $H^{\text{post}}$는 sigmoid로 원소를 0 이상으로 만든다. 계수가 음수면 stream끼리 서로 상쇄할 수 있는데, 이를 막는다.
+- $\mathcal{F}$는 stream 1개 폭($D$)에서 계산하므로 FLOPs는 거의 늘지 않는다. 늘어나는 것은 layer 사이를 흐르는 activation($n \times D$)이고, 이것이 serving의 pipeline 통신량에 반영된다.
+
+**doubly stochastic 행렬.** 위의 두 번째 식이 $H^{\text{res}}$에 거는 제약이다. 원소가 모두 0 이상이고, 모든 행의 합과 모든 열의 합이 1인 행렬을 doubly stochastic 행렬이라고 부른다. stream 4개면 예를 들어 아래와 같다.
+
+$$
+H^{\text{res}} = \begin{pmatrix} 0.7 & 0.1 & 0.1 & 0.1 \\ 0.1 & 0.6 & 0.2 & 0.1 \\ 0.1 & 0.2 & 0.6 & 0.1 \\ 0.1 & 0.1 & 0.1 & 0.7 \end{pmatrix}
+$$
+
+두 조건은 각각 뜻이 있다. 행의 합이 1이므로 출력 stream 하나는 입력 stream들의 가중 평균이다. 열의 합이 1이므로 입력 stream 하나가 출력 전체에 나눠 주는 양도 정확히 1이다. 즉 stream끼리 섞기만 하고, 어느 stream도 부풀리거나 버리지 않는다. 이런 행렬 전체의 집합을 Birkhoff polytope라고 부른다. Birkhoff-von Neumann 정리에 따르면 이 집합의 모든 행렬은 순열 행렬(stream 자리 바꾸기)들의 가중 평균으로 쓸 수 있다.
+
+**Sinkhorn-Knopp로 제약을 맞춘다.** 학습되는 값은 제약이 없는 행렬 $M$이다. 먼저 $\exp(M)$으로 모든 원소를 양수로 만든다. 그다음 각 행을 행의 합으로 나누고, 각 열을 열의 합으로 나누는 일을 번갈아 반복한다. 이 반복은 doubly stochastic 행렬로 수렴하고, 모든 단계가 미분 가능해서 학습 중에 그대로 쓸 수 있다. DeepSeek은 20회 반복한다(V4.1-Flash config의 `hc_sinkhorn_iters = 20`).
+
+**깊게 쌓아도 신호 크기가 유지되는 이유.** 이유는 세 가지다.
+
+- **커지지 않는다**: doubly stochastic 행렬은 spectral norm이 1 이하다. 그래서 $\lVert H^{\text{res}} x \rVert \le \lVert x \rVert$이고, 곱할 때마다 신호가 커지지 않는다.
+- **층을 지나도 성질이 유지된다**: doubly stochastic 행렬끼리 곱해도 doubly stochastic이다. 그래서 $L$개 layer의 $H^{\text{res}}$를 모두 곱한 행렬도 같은 제약을 지킨다. 제약이 없는 Hyper-Connections는 행렬 곱이 쌓이며 크기가 layer 수에 따라 지수적으로 커지거나 줄 수 있었다.
+- **사라지지도 않는다**: 열의 합이 1이므로 $\mathbf{1}^\top H^{\text{res}} x = \mathbf{1}^\top x$다. stream 전체의 합이 그대로 보존되어 신호가 0으로 줄지 않는다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-05b-doubly-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-05b-doubly-dark.svg"
+  caption="왼쪽: 예시 행렬 H^res가 stream을 섞는 모습. 각 입력은 정확히 1만큼을 나눠 주고, 각 출력은 가중 평균을 받는다. 오른쪽: layer를 쌓을 때 신호 크기의 개념도. 제약이 없는 Hyper-Connections는 커지거나 사라질 수 있고, mHC는 유지된다."
+/>
+
+비유하자면 4개 차선 사이에서 차를 섞되, 섞은 뒤에도 각 차선과 전체 차량 수가 보존되도록 하는 교통 규칙이다.
+
+#### Muon optimizer와 그 밖의 변화
+
+1T급 MoE를 32T token 넘게 학습하려면 더 빠른 수렴과 안정성이 필요하다. V4는 대부분의 matrix weight에 Muon을 쓰고, embedding, prediction head, RMSNorm, mHC의 static bias와 gating factor에는 AdamW를 유지한다. Newton-Schulz는 hybrid로 10회 돈다. 앞 8회는 계수 $(3.4445,\ -4.7750,\ 2.0315)$로 singular value를 1 근처로 빠르게 모으고, 뒤 2회는 $(2,\ -1.5,\ 0.5)$로 정확히 1에 고정한다. Q와 KV entry에 RMSNorm을 적용해 attention logit 폭주가 없으므로 QK-Clip 없이 학습한다.
+
+- **DeepSeekMoE**: routing score activation을 Sigmoid에서 Sqrt(Softplus)로 바꿨다. routing target node 제한을 없앴다. V3의 첫 몇 layer에 있던 dense FFN을 Hash routing MoE(첫 3 layer)로 바꿨다. Hash routing은 학습된 router 대신 token id → expert id 고정 table로 expert를 고르고, 고른 expert의 weight는 여전히 gate가 만든다.
+- **학습 안정화**: Anticipatory Routing은 routing index를 $\Delta t$ step 전 parameter로 계산하고, loss spike를 감지할 때만 켠다. SwiGLU clamping은 linear 부분을 $[-10, 10]$으로, gate 상한을 10으로 자른다.
+- **KV cache 관리**: 크기가 다른 KV가 섞여서 PagedAttention의 가정이 깨진다. SWA와 아직 압축되지 않은 tail은 고정 크기 state cache로, CSA/HCA는 $\mathrm{lcm}(m, m')$ token 단위 block으로 나눠 관리한다.
+- **post-training**: mixed RL 단계를 multi-teacher OPD(full-vocabulary reverse KL)로 바꿨고, expert weight와 indexer QK에 FP4 QAT를 했다.
+
+**남긴 문제**
+
+- **구조가 복잡하다**: 논문 스스로 검증된 부품을 많이 남겨서 아키텍처가 복잡해졌다고 인정한다.
+- **SWA KV가 무겁다**: 모든 layer에 비압축으로 있어서, on-disk 저장 시 CSA/HCA KV의 약 8배다. 저장하지 않으면 $L \times n_{win}$ token을 다시 돌려야 해서 production에서 너무 비싸다.
+- **prefill은 여전히 전 layer를 다 돈다**: tool 호출이 잦은 input-heavy agent에서 비용이 크다.
+- **global KV**: V4-Flash 기준 token당 3,514 bytes다.
+- **Anticipatory Routing과 SwiGLU clamping이 왜 학습을 안정화하는지** 원리는 밝혀지지 않았다.
+
+### V4.1-Flash (2026.09): 저장, 전송, prefill 절감
+
+[V4.1-Flash](https://arxiv.org/abs/2609.19969)의 global KV는 token당 890 bytes로, V4-Flash(3,514 B)의 약 $1/4$이다. persistent KV는 약 $1/8$이다. 552B backbone + 196B Engram이고, activated parameter는 prefill 8B, decode 16B다. multimodal, 1M context, 45T token으로 학습했다. context를 4K에서 1M으로 256배 늘려도 decode FLOPs는 $1/4$만 늘어난다.
+
+long-horizon agent는 input-heavy다. sparse attention으로 연산은 줄었지만, cache miss 때의 prefill 비용, HBM과 SSD 용량, KV 전송 bandwidth가 배포 비용의 주 병목이 됐다. 논문은 V4를 "SWA 기반 local backbone + 압축된 global context"로 보고, global 쪽을 단순화하고 줄이는 데 집중한다.
+
+| # | 문제 | 해결 | 효과 |
+| --- | --- | --- | --- |
+| 1 | cache miss마다 prefill이 전 layer를 다 돎 (input-heavy agent) | CED: decoder global KV를 encoder 출력에서 projection | prefill 연산 약 절반, prefill 8B activated |
+| 2 | layer마다 global KV를 따로 만들고 저장 | CSA2: main KV, indexer K, top-K를 layer 간 공유 | global KV를 만드는 layer가 40개 중 4개 |
+| 3 | FP8 main KV도 HBM, SSD를 많이 차지 | FP4 main KV cache (QAT) | main KV 저장 약 절반 |
+| 4 | SWA KV가 persistent cache의 절반, 복원엔 $L \times n_{win}$ replay | SWA Bounded Replay: $n_{win}$ token만 replay | persistent KV가 V4-Flash의 약 $1/8$ |
+| 남김 | CSA2 selection error, 근사 복원의 robustness 경계 | 논문: stress test 확대 | |
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-05-v41-layers-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-05-v41-layers-dark.svg"
+  caption={<>V4.1-Flash의 40 layer별 역할(공개 config 기준). global KV를 새로 만드는 layer는 2, 8, 14, 20의 4개뿐이고, 나머지 layer는 이 KV를 빌려 쓴다. top-512를 새로 고르는 layer는 8개이고, window KV(SWA)는 모든 layer가 따로 가진다. <a href="https://www.lmsys.org/blog/2026-09-10-deepseek-v41/">LMSYS 블로그(SGLang and Miles Add Day-0 Support for DeepSeek-V4.1)</a>의 layer role 그림을 참고해 다시 그렸다.</>}
+  alt="V4.1-Flash의 40 layer별 역할(공개 config 기준). global KV를 새로 만드는 layer는 2, 8, 14, 20의 4개뿐이고, 나머지 layer는 이 KV를 빌려 쓴다."
+/>
+
+각 layer는 자기 main Q와 SWA KV만 직접 계산한다.
+
+#### CED: encoder 20 layer만 도는 prefill
+
+tool 호출이 잦은 agent는 cache miss마다 긴 prompt를 prefill한다. 40 layer를 다 돌아야 해서 비싸다. CED(Causal Encoder-Decoder)는 하위 20 layer를 causal encoder로 둔다. decoder layer의 global KV는 자기 hidden state가 아니라 encoder 마지막 hidden state에서 layer별 weight로 projection한다(YoCo에서 착안).
+
+$$
+C_l = H_{L/2}\, W^{KV}_l, \qquad Z_l = H_{L/2}\, W^{Z}_l, \qquad l > L/2
+$$
+
+CSA2와 결합한 V4.1-Flash에서는 이 projection을 decoder 첫 layer인 layer 20 하나만 하고, layer 20-39가 그 KV를 공유한다([config](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash-1017/blob/main/config.json)의 `kv_source_layer_ids = [2, 8, 14, 20]`). global KV를 만드는 layer 4개가 모두 encoder 출력까지만 있으면 계산되므로, prefill은 encoder만 돌면 된다.
+
+prefill은 encoder만 돌면 decoder global KV까지 생긴다. 복잡도는 $O(TL)$에서 $O(TL/2 + n_{win} \cdot L/2)$로 거의 절반이 된다. 단, SWA는 layer별로 계속 계산하므로 decoder SWA KV를 위한 재계산이 필요하다. 이것은 prompt의 마지막 $n_{win}$(128) token만 decoder에 통과시키는 Decoder SWA Bounded Replay로 해결한다.
+
+비유하자면 긴 문서는 아래쪽 layer(encoder)에서 한 번만 읽어 정리해 두고, 위쪽 layer(decoder)는 그 정리본을 받아 쓰면서 최근 몇 줄만 직접 다시 읽는다.
+
+#### CSA2: layer 축의 KV와 선택 공유
+
+V4는 layer마다 global KV(main KV + indexer K)를 따로 만들고 저장해서, layer 수만큼 중복이 쌓인다. CSA2는 main KV, indexer K, top-K indices를 layer끼리 공유한다. layer마다 Full, Reindex, Reuse 중 하나의 mode를 고정으로 배정한다.
+
+KV 비용을 줄이는 축은 세 가지다. entry 크기(GQA, MLA), sequence(CSA/HCA 압축), layer(cross-layer 공유)다. 기존 연구(IndexCache, YOIO, HySparse)는 한두 축만 다뤘고, CSA2는 세 축을 함께 쓴다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-11-csa2-modes-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-11-csa2-modes-dark.svg"
+  caption="V4.1-Flash decoder layer 20-27에서 CSA2 mode가 하는 일. layer 20(Full)이 KV를 만들고 읽을 위치를 고른다. layer 21-23(Reuse)은 그 KV와 선택을 그대로 쓴다. layer 24(Reindex)는 같은 KV에서 자기 query로 위치를 다시 고르고, layer 25-27이 그 선택을 쓴다."
+/>
+
+| Mode | main KV, indexer K | Top-K indices |
+| --- | --- | --- |
+| Full | 직접 계산 | 직접 indexing |
+| Reindex | 가장 최근 Full layer 것을 재사용 | 자기 indexer Q로 다시 채점해서 새로 선택 |
+| Reuse | 재사용 | 가장 최근 index를 만든 layer 것을 재사용 |
+
+Full layer가 책에 색인을 만들고 페이지를 고르면, Reindex layer는 같은 색인으로 자기 질문에 맞게 다시 고르고, Reuse layer는 앞사람이 펼친 페이지를 그대로 읽는다.
+
+- **HCA를 없앴다**: V4의 CSA-HCA hybrid 대신 순수 CSA2를 쓴다. encoder는 $m=2$, decoder는 $m=1$(비압축), top-k는 512다.
+- **단순화했다**: compressor의 $2m$ overlap과 absolute positional embedding을 없앴다. indexer K는 별도 압축 경로 대신 main KV에서 projection한다.
+- **Hierarchical Sparse Indexer (decoder 전용)**: 첫 Full layer가 block별 최대 index score로 $2048 \times 8 = 16{,}384$개의 후보 pool을 만든다. Reindex layer는 이 pool만 채점한다. 그래서 뒤쪽 indexer의 query당 비용이 context 길이와 무관한 상수가 된다. post-training에서 학습과 추론을 같은 조건으로 맞춰 도입했다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-13-hsi-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-13-hsi-dark.svg"
+  caption="Hierarchical Sparse Indexer. layer 20이 모든 위치를 채점하고, block마다 최대 점수로 후보 block을 고른다. 뒤의 Reindex layer는 후보 block 안의 위치만 채점해서 자기 top-k를 고른다."
+/>
+
+#### FP4 main KV cache
+
+V4의 main KV는 FP8이라 1M context에서 HBM과 SSD를 여전히 많이 쓴다. V4.1은 main KV를 FP4로 저장하고, 정밀도 손실에 적응하도록 post-training에서 QAT한다. 형식은 E2M1 + 16 channel당 E4M3 scale이고, NVFP4에서 2단계 global scale만 뺀 형식이다. RoPE 뒤에 적용한다.
+
+global scale이 필요 없는 이유는 값의 범위에 있다. 세 단계로 따져 보면 이렇다.
+
+- **KV 값의 최댓값은 약 26이다.** KV entry는 512차원이고 RMSNorm을 거치므로, 원소 하나는 $\sqrt{512} \approx 22.6$을 넘지 못한다. RMSNorm의 scale weight 최댓값(공개 checkpoint에서 1.15)을 곱해도 약 26이다.
+- **표현할 수 있는 최댓값은 $448 \times 6 = 2688$이다.** FP4 E2M1이 나타낼 수 있는 값은 $0, 0.5, 1, 1.5, 2, 3, 4, 6$과 그 음수뿐이라 최댓값이 6이다. 원소 16개는 scale 하나를 같이 쓰고, 이 scale은 FP8 E4M3로 저장한다. E4M3의 최댓값은 448이다. 그래서 block 하나가 나타낼 수 있는 최댓값은 $448 \times 6 = 2688$이다.
+- **그래서 global scale이 필요 없다.** NVFP4가 tensor 전체에 global scale을 하나 더 두는 이유는, 일반 tensor의 값이 이 2688을 넘을 수 있어서다. V4.1의 KV는 약 26을 넘지 않아 2688보다 100배 넘게 작으므로, block scale만으로 충분하다. quantization에 민감한 SWA KV는 FP8로 유지한다. V4의 FP8 main KV 대비 저장량이 거의 절반이다.
+
+#### SWA Bounded Replay: 영구 저장하지 않는 SWA KV
+
+SWA Bounded Replay는 model 구조가 아니라 추론 시스템의 기법이다. 논문도 이것을 3.2절 Inference System에 두고 "deployment optimization"이라고 부른다. 목적은 SWA KV를 prefix cache에 저장하지 않는 것이다.
+
+**SWA KV는 저장 비용이 크고 재사용은 짧다.** V4 운영에서 SWA KV는 persistent cache의 거의 절반을 차지했다. 하지만 재사용은 session 안에서 분 단위로만 일어났다. 그렇다고 저장하지 않으면, 필요할 때 정확히 다시 만드는 비용이 크다.
+
+**정확히 다시 만들려면 $L \times n_{win}$ token을 replay해야 한다.** 논문은 이것을 "Since SWA dependencies accumulate across layers, exactly reconstructing the SWA KV of $L$ layers would require replaying $L \times n_{win}$ tokens."라고 쓴다. 여기서 replay하는 token은 새로 생성하는 token이 아니라, prompt에서 이미 처리한 token을 layer에 다시 통과시키는 것이다.
+
+의존 범위가 쌓이는 이유는 이동평균을 여러 번 겹치는 것과 비슷하다. 3일 이동평균을 구하려면 3일치 값이 필요하다. 그 3일치 값이 각각 또 3일 이동평균이면, 원래 데이터는 5일치가 필요하다. 한 번 더 겹치면 7일치다. SWA도 layer 하나가 최근 $n_{win}$ token을 보고 새 값을 만든다. 그래서 마지막 layer $L$의 SWA KV를 정확히 만들려면, 첫 layer에서는 약 $L \times n_{win}$ token을 replay해야 한다.
+
+**Bounded Replay는 마지막 $n_{win}$ token만 replay한다.** 논문의 표현으로는 "replays only the most recent $n_{win}$ tokens and truncates SWA to the replay segment, accepting approximate states"다. replay가 위치 $s$에서 시작하면, 위치 $i$의 query는 SWA key 중 $[\max(s,\ i - n_{win} + 1),\ i]$ 구간만 본다. 이동평균으로 말하면, 최근 $n_{win}$일치만 가지고 그보다 오래된 날은 없는 셈 치고 다시 계산하는 것이다. 그래서 복원한 SWA KV는 근사값이다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-14-swa-replay-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-14-swa-replay-dark.svg"
+  caption="SWA를 정확히 복원하려면 앞 layer로 갈수록 replay할 token 구간이 길어진다(왼쪽). Bounded Replay는 모든 layer에서 마지막 n_win token만 replay하고, 그보다 앞은 잘라 근사한다(오른쪽)."
+/>
+
+같은 방법을 두 곳에 쓴다.
+
+- **Encoder SWA Bounded Replay**: prefix cache가 global KV에만 의존하게 만들어, SWA KV를 persistent cache에서 뺀다. encoder SWA KV가 없으면 "replay the last $n_{win}$ tokens of the cached prefix"하고, 이를 cache되지 않은 suffix와 함께 처리한다. replay한 token은 SWA KV만 다시 만들고, cache에 있는 global KV는 다시 계산하거나 덮어쓰지 않는다. suffix token은 global KV와 SWA KV를 모두 새로 만든다. 다만 replay로 만든 prefix 상태가 근사이므로, suffix의 KV는 cache hit 위치에 따라 조금씩 달라지고 수학적으로 같지 않다.
+- **Decoder SWA Bounded Replay**: CED에서 decoder global KV는 encoder 마지막 hidden state에서 projection되므로, prefill을 encoder에서 끝낼 수 있다. 남는 장애물은 decoder SWA KV다. 이것은 decoder layer 각자의 hidden state에서 나오고, 첫 decode step부터 필요하다. 정확히 만들려면 "running the $\frac{L}{2}$ decoder layers over the last $\frac{L}{2} \times n_{win}$ prompt tokens"해야 한다. 짧은 suffix가 긴 cached prefix 뒤에 붙는 경우에는 이 비용이 크다. 그래서 prefill마다 prompt의 마지막 $n_{win}$ token만 replay하고, 그 encoder 출력을 같은 SWA truncation으로 decoder layer에 통과시킨다. 이렇게 만든 decoder SWA KV는 decode에만 쓰고 prefix cache에는 넣지 않는다. 논문은 이것으로 "nearly halving total prefill computation"이라고 쓴다.
+
+논문은 두 경우 모두 응답 품질 저하가 무시할 수준이라고 보고한다. 훈련과 관련된 부분은 decoder 쪽 하나다. 논문은 "for added safety" post-training에서 같은 replay를 흉내 내, 모델이 이 근사에 적응하게 했다고 쓴다. encoder 쪽은 훈련에서 따로 맞췄다는 언급이 없다.
+
+- SWA KV는 각 머신 host DRAM의 10%로 만든 분산 memory pool(TTL 수 분)로 옮기고, SSD에는 global KV만 72시간 이상 보관한다.
+- 결과: persistent KV는 SWA 제거로 약 $\frac{1}{2}$, global KV 압축으로 $\frac{1}{4}$이 된다. 합치면 약 $\frac{1}{2} \times \frac{1}{4} = \frac{1}{8}$이다.
+
+#### 그 밖의 확장
+
+- **Single-Pass mHC**: input mixing에 한 block 앞의 계수 $A_{l-1}$을 쓰면 dependency가 사라져서 kernel 하나(Mega-mHC)로 fuse된다. activation memory traffic이 $(4n+4)D$에서 $(2n+2)D$로 절반이 된다.
+- **Engram**: n-gram hash lookup 기반 conditional memory다(196B, layer 1과 14, FP8). memorization을 computation에서 분리하고 host memory에서 prefetch한다.
+- **DSpark**: MTP를 빼고 speculative decoding 전용 module로 바꿨다. 3-block drafter가 draft 위치 5개를 한 번에 만들고, confidence로 verification 길이를 정한다. pre-training 뒤 backbone을 freeze하고 따로 학습한다.
+- **Optimizer**: head-wise Muon(Q, K head별 preconditioner)을 쓴다. embedding, Engram, prediction head는 Sinkhorn-balanced momentum update로 Adam state 메모리를 아낀다.
+- **학습 방식**: sparse attention을 64K에서 처음부터 학습한다(dense warm-up 없음). DeepSeek-ViT와 modality별 aux-loss-free bias로 native multimodal이다.
+
+**남긴 문제**: CSA2의 selection error와 SWA Bounded Replay의 근사 복원이 테스트하지 못한 경계 조건에서 성능 저하를 낼 수 있다. 가장 어려운 과제에서는 frontier closed model과 격차가 남는다. V4가 남긴 학습 안정화의 원리 문제에 대해서도 V4.1은 45T token을 불안정 없이 학습했다고만 보고한다.
+
+### 네 세대가 하나씩 더한 축
+
+V3부터 V4.1까지, 각 세대는 앞 세대가 손대지 않은 축을 하나씩 더 줄였다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-06-axes-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-06-axes-dark.svg"
+  caption="DeepSeek 세대별로 줄인 KV 비용의 축. 진한 칸은 그 세대가 새로 줄인 축이고, 옅은 칸은 앞 세대에서 이어받은 축이다."
+/>
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-07-kv-cube-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/ds-07-kv-cube-dark.svg"
+  caption="KV cache를 token 수, entry 폭, layer 수를 세 변으로 하는 직육면체로 본 그림. MLA는 entry 폭을, DSA는 읽는 부분을, CSA/HCA는 token 수를, CSA2와 FP4는 layer 수와 bit 수를 줄였다. 점선은 직전 세대의 크기다."
+/>
+
+1. **V3, entry 크기 축**: MLA로 token당 KV를 latent 하나로 줄였다. 저장은 작아졌지만 연산은 dense다.
+2. **V3.2, 읽는 양 축**: DSA가 query마다 2,048개만 골라 읽는다. 저장은 그대로다.
+3. **V4, sequence 축**: CSA/HCA가 token을 4개, 128개씩 묶어 저장 자체를 줄인다. 압축으로 잃는 local 정보는 SWA로 보완한다.
+4. **V4.1, layer, 정밀도, 시스템 축**: global KV를 layer끼리 공유(CSA2)하고 FP4로 저장한다. SWA는 영구 저장에서 빼고 근사 재계산한다. CED로 prefill도 절반이 됐다.
+
+lightning indexer는 V3.2에서 등장해서 V4의 CSA 안으로, V4.1에서는 hierarchical candidate pool로 계속 진화한 공통 부품이다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-10-global-kv-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-10-global-kv-dark.svg"
+  caption="세대별 token당 global KV cache (bytes, log scale). MLA(entry 크기), CSA(entry 개수), CSA2(layer 중복)가 곱으로 쌓여 V1 대비 약 437배 작아졌다."
+/>
+
+global KV 수치는 V4.1 논문 Figure 1(b) 기준이다. 같은 그림에서 V1은 389,120 B이고, V4.1-Flash는 V1의 약 437분의 1이다.
+
+| 항목 | V3 | V3.2 | V4-Pro / V4-Flash | V4.1-Flash |
+| --- | --- | --- | --- | --- |
+| total / activated params | 671B / 37B | 671B / 37B | 1.6T / 49B, 284B / 13B | 552B backbone (+196B Engram) / prefill 8B, decode 16B |
+| layers, hidden dim | 61, 7168 | 61, 7168 | 61, 7168 / 43, 4096 | 40 (encoder 20 + decoder 20), 5120 |
+| attention | MLA (dense) | MLA + DSA (top-2048) | CSA ($m=4$, top-1024/512) + HCA ($m'=128$) + SWA 128 | CSA2 (encoder $m=2$, decoder $m=1$, top-512) + SWA 128 |
+| KV를 줄이는 축 | entry 크기 | + 읽는 양 | + sequence | + layer, 정밀도, persistent 저장 |
+| global KV / token | 자료에 없음 | 48,068 B | Flash 3,514 B | 890 B |
+| KV 저장 정밀도 | 자료에 없음 | 자료에 없음 | main FP8 (RoPE dim BF16) | main FP4, SWA FP8 |
+| residual | standard | standard | mHC ($n_{hc}=4$) | Single-Pass mHC |
+| optimizer | AdamW | AdamW | Muon + AdamW | head-wise Muon + Sinkhorn-balanced + AdamW |
+| MoE | 1 shared + 256 routed, top-8, sigmoid | 동일 | Pro 384 / Flash 256 routed, top-6, Sqrt(Softplus), 첫 3 layer Hash routing | 1 shared + 384 routed, top-6, modality별 balancing bias |
+| 추가 예측 module | MTP depth 1 | MTP | MTP depth 1 | DSpark (MTP 제거) |
+| context | 128K | 128K | 1M | 1M |
+| pre-training | 14.8T token | V3.1-Terminus + continued 946B token | 33T / 32T token | 45T multimodal token |
+
+앞 세대의 한계는 거의 그대로 다음 세대의 설계 목표가 됐다.
+
+| 세대 | 남긴 문제 | 다음 세대의 답 |
+| --- | --- | --- |
+| V3 | dense attention의 $O(T^2)$ 연산 | V3.2: DSA로 core attention $O(T \cdot k)$ |
+| R1 | 긴 CoT와 rollout의 비용, tool 사용 불가, overthinking, 언어 혼합 | V3.2: DSA, tool-use 속 thinking, agentic task synthesis / V4.1: reasoning effort control |
+| V3.2 | 모든 token의 KV를 저장, 128K 한계, indexer $O(T^2)$ | V4: CSA/HCA로 KV 자체를 압축, 1M context, indexer FP4 |
+| V4 | 구조 복잡, SWA KV가 무겁고 복원 비용 $L \times n_{win}$, prefill은 전 layer | V4.1: HCA 제거와 compressor 단순화, SWA Bounded Replay, CED |
+| V4.1 | CSA2 selection error와 SWA 근사 복원의 robustness 경계, 최고난도 과제에서 격차 | 논문의 계획: stress test 확대, data, model, RL 공동 scaling, model-harness co-design |
+
+## Kimi K3, GLM-5.3, GLM-5.3-Flash: 같은 1M context, 다른 선택
+
+2026년에 나온 다섯 model은 모두 MoE Transformer이고 1M context를 지원한다. 차이는 "context가 길어질 때 무엇이 커지는가"에 있다. 그리고 이 차이가 그대로 serving engine의 memory 관리, prefix cache, 병렬화 방식을 바꾼다.
+
+- **DeepSeek-V4**(4월): softmax attention을 지키고 KV를 압축한다. 모든 layer가 여전히 KV cache를 가진다.
+- **Kimi K3**(7월): 4 layer 중 3개를 KDA로 바꿔 고정 크기 state만 둔다. residual도 depth 방향 attention으로 바꾼다.
+- **GLM-5.3**(8월): 78 layer 전부가 MLA latent 위의 DSA다. indexer 선택을 4 layer마다 공유한다(IndexShare).
+- **GLM-5.3-Flash**(8월): Kimi의 linear attention(KDA)과 DeepSeek의 sparse attention(DSA)을 섞었다. KDA 3 + KPool-DSA 1 패턴에 DeepSeek의 mHC를 얹었다.
+- **DeepSeek-V4.1**(9월): KV를 없애지 않고 layer 간에 공유한다. global KV를 만드는 source layer가 4개뿐이다.
+
+| 항목 | DeepSeek-V4-Pro | DeepSeek-V4.1-Flash | Kimi K3 | GLM-5.3 | GLM-5.3-Flash |
+| --- | --- | --- | --- | --- | --- |
+| 출시 | 2026년 4월 | 2026년 9월 | 2026년 7월 | 2026년 8월 | 2026년 8월 |
+| 규모 (total / active) | 1.6T / 49B (Flash: 284B / 13B) | 552B + Engram 196B / prefill 8B, decode 16B | 2.8T / 104B | 744B / 40B | 320B / 18B |
+| Layer 수 | 61 + 1 MTP | 40 (encoder 20 + decoder 20) | 93 | 78 + MTP | 45 + MTP |
+| Hidden dim | 7168 | 5120 | 7168 | 6144 | 4096 |
+| Attention | CSA + HCA (압축 softmax) | CSA2 (top-k, 선택 재사용) + layer별 SWA | KDA 69 + gated MLA 24 | DSA 78 (MLA latent, IndexShare) | KDA 34 + KPool-DSA 11 |
+| KV가 커지는 layer | 61 / 61 | global KV source 4 / 40 | 24 / 93 | 78 / 78 | 11 / 45 |
+| Global KV 크기 | 미확인 | 약 890 B/token (FP4) | MLA 약 27 KB/token/GPU | 약 90 KB/token (bf16 추정) | 미확인 |
+| Residual | mHC | Single-Pass mHC | Attention Residuals (8 block) | 미확인 | mHC (4 stream) |
+| MoE | 384 expert, 6 routed + 1 shared | 384 routed + 1 shared, top-6 | 896 expert, 16 routed + 2 shared, LatentMoE | 256 expert, 8 routed + 1 shared, 처음 3 layer dense | 288 expert, 8 routed + 1 shared |
+| Position | YaRN RoPE | RoPE (indexer) | NoPE | RoPE (64 dim rope 성분) | NoPE (sparse MLA layer) |
+| Modality | text | image + text | native vision/video | text | native vision/video |
+
+"미확인"은 공개 자료에서 확인하지 못한 항목이다.
+
+### Attention: 압축해서 골라 읽기 vs 노트를 고쳐 쓰기
+
+1M context에서 KV cache를 줄이는 방법이 정반대다. DeepSeek은 모든 layer에서 token 위치별 접근을 유지하고, Kimi는 4 layer 중 3개에서 KV cache 자체를 없앤다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-01-layer-stack-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-01-layer-stack-dark.svg"
+  caption="model별 layer stack. 주황색 칸이 긴 context에서 memory를 먹는 layer다."
+/>
+
+DeepSeek-V4는 모든 칸을 압축해서 작게 만들었다. V4.1은 global KV를 만드는 칸을 4개로 줄이고 나머지 layer가 공유하게 했다. Kimi와 GLM-5.3-Flash는 linear attention으로 칸 수를 $1/4$로 줄였다. 같은 회사의 GLM-5.3(78칸 전부 주황)과 Flash(11칸)를 나란히 보면 그 효과가 가장 잘 보인다. V4.1의 source layer 4개는 따로 떼어 그렸다. layer 20이 마지막 source라는 것 외에는 위치가 공개 자료에 명시되지 않았기 때문이다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-02-attn-layers-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-02-attn-layers-dark.svg"
+  caption="attention layer 구성, DeepSeek-V4-Pro vs Kimi K3. 왼쪽은 모든 layer가 압축된 원본을 들여다보고, 오른쪽은 3 layer가 메모 한 장만 보고 4번째 layer에서만 원본 전체를 확인한다."
+/>
+
+#### Kimi K3: KDA + gated MLA
+
+K3는 Kimi Linear의 3:1 구조를 2.8T 규모로 키웠다. 93 layer 중 KDA가 69개, gated MLA가 24개다. KDA는 head마다 $128 \times 128$ 크기의 state matrix $S$ 하나를 token마다 고쳐 쓴다.
+
+$$
+S_t = \left(I - \beta_t k_t k_t^\top\right)\mathrm{Diag}(\alpha_t)\,S_{t-1} + \beta_t\, k_t v_t^\top
+$$
+
+앞 장의 식과 행렬 방향만 다르고 같은 갱신이다.
+
+- $\alpha_t$는 key 차원별 decay gate다. 이 식에서는 state의 행이 key 차원이므로, 각 행을 독립적으로 잊게 한다.
+- $\beta_t$는 delta rule의 쓰기 강도다. 1이면 같은 key 방향의 옛 값을 완전히 교체하고, 0이면 그대로 둔다.
+- 먼 token일수록 decay를 더 많이 거치므로 위치 정보가 recurrence 안에 담긴다. 그래서 K3는 RoPE를 쓰지 않는다(NoPE).
+- decay에 하한($g_{min} = -5$)을 둬서 chunkwise 계산 전체를 Tensor Core matmul로 돌린다.
+
+비유하자면 메모장 한 장을 계속 지우고 고쳐 쓰다가, 4 layer마다 한 번 MLA로 원본 전체를 다시 확인한다. 대가도 있다. KDA state는 덮어쓰기 때문에 request끼리 prefix를 그대로 공유할 수 없다. SGLang은 read-only checkpoint를 두고 copy-on-write로 복원하는 방식을 따로 만들었다([SGLang blog](https://www.sglang.io/blog/kimi-k3-day0-support)).
+
+#### GLM 계열: DeepSeek 방식과 KDA의 혼합
+
+Z.ai의 GLM-5는 DeepSeek의 MLA + DSA를 그대로 가져왔다. GLM-5.3-Flash는 여기에 Kimi의 KDA를 3:1로 섞었다. DeepSeek의 KV 압축 계보와 Kimi의 linear attention 계보가 한 model에서 만난 경우다.
+
+| model | 공개 | Attention | 규모 (total / active) |
+| --- | --- | --- | --- |
+| [GLM-5](https://arxiv.org/abs/2602.15763) | 2026.2 | MLA + DSA (top-k 2048), 78 layer (dense 3 + MoE 75) | 744B / 40B |
+| GLM-5.2 | 2026.6 | + IndexShare: 앞 layer의 top-k 재사용 | 744B / 40B |
+| GLM-5.3 | 2026.8 | 5.2와 같은 base, post-training만 개선 | 744B / 40B |
+| GLM-5.3-Flash | 2026.8 | KDA 34 + MLA/DSA 11, IndexPool, mHC | 320B / 18B |
+
+GLM-5.3의 아키텍처는 [GLM-5 Technical Report](https://arxiv.org/abs/2602.15763)(2026.2)를 따른다. 보고서 자체는 GLM-5만 다루고, IndexShare는 그 뒤 GLM-5.2에서 더해졌다. 아래 수치 가운데 hidden dim 6144, 64 head, KV LoRA dim 512, indexer 32 head와 head dim 128, expert 256개 중 8개 + shared 1개, top-k 2048은 보고서의 GLM-5 설정과 같다.
+
+**GLM-5.3은 모든 layer가 DSA다.** 78 layer 전부가 MLA latent 위에서 DSA를 하는 "전부 주황색" 구조이고, GLM-5.3-Flash의 기준점이다.
+
+- **Attention**: 64 head, MLA식 low-rank projection(`kv_lora_rank` 512, RoPE 성분 64 dim)이다. DSA indexer는 32 head, head dim 128이고 query마다 top-2048 token을 고른다.
+- **IndexShare**: full layer 1개 뒤에 shared layer 3개가 오는 패턴이다. shared layer는 직전 full layer의 top-k 선택을 재사용하므로 indexer 계산이 약 $1/4$로 준다. 인접 layer는 비슷한 곳을 본다는 가정이고, V4.1 CSA2의 Reuse mode와 같은 발상이다. 다만 V4.1은 KV 자체까지 공유하고, GLM-5.3은 선택만 공유한다.
+- **MoE**: 256 routed expert 중 8개 + shared 1개이고, 처음 3 layer는 dense다. expert FFN width는 2048이고, sigmoid scoring과 `noaux_tc` routing을 쓴다(DeepSeek-V3 계열).
+- **KV 크기**(bf16 가정, indexer key 제외):
+
+$$
+(512 + 64) \times 2\ \text{B} \times 78\ \text{layer} \approx 90\ \text{KB/token}, \qquad \times 10^6\ \text{token} \approx 90\ \text{GB}
+$$
+
+**GLM-5.3-Flash는 Kimi와 같은 3:1이지만, 4번째 layer가 sparse attention이다.**
+
+- 45 layer는 (KDA 3 + KPool-DSA 1) 묶음 11개와 마지막 KDA layer 1개로 이뤄진다.
+- KPool-DSA는 4-token pool 단위로 후보를 묶어 indexer로 최대 2048개 위치만 고르고, 512-wide 공유 latent K/V 위에서 sparse attention을 한다. DeepSeek-V3.2의 DSA 계보다. indexer key 4개를 weighted pooling으로 1개로 합치는 IndexPool로 1M context에서 indexer의 latency와 memory를 줄인다. V4 CSA가 indexer key를 압축하는 것과 비슷하다.
+- sparse MLA layer는 RoPE 없이(NoPE) 동작한다.
+- decode 계산량은 context와 거의 무관하다. KDA는 고정 state이고, DSA는 top-2048 고정이다. 다만 indexer가 고를 후보가 필요하므로 DSA layer의 KV cache는 context에 비례해 쌓인다.
+- 3rd-party 정리에 따르면 GLM-5.3 대비 attention 계산은 약 3배, KV cache는 약 4.4배 줄었다. 다만 Z.ai 자체 비교에서도 KV cache는 DeepSeek-V4-Flash와 Kimi K3보다 조금 크다.
+
+비유하자면 대부분은 메모장(KDA)으로 처리하고, 4 layer마다 원본 전체가 아니라 색인으로 고른 2048쪽만 다시 펼쳐 본다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-09-hybrid-compare-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/at-09-hybrid-compare-dark.svg"
+  caption="4-layer 묶음으로 본 hybrid 비교. Kimi Linear는 KDA 사이에 full attention(MLA)을, GLM-5.3-Flash는 그 자리에 sparse attention(MLA + DSA)을 둔다."
+/>
+
+GLM-5.3의 KV를 위 계산대로 두면 Flash의 global KV는 약 8배 작다. 3rd-party가 정리한 4.4배와 차이가 나는데, KV dtype, indexer key, KDA state 포함 여부 같은 가정 차이로 보인다.
+
+#### DeepSeek-V4.1: layer 간 KV 공유
+
+V4.1(9월 10일, Flash부터 공개)은 KV cache를 없앤 것이 아니라 "layer마다 자기 KV를 만든다"는 전제를 깼다. DeepSeek도 Kimi와 GLM처럼 "KV를 만드는 layer 수"를 줄이는 방향으로 온 것이다. 다만 수단이 linear attention이 아니라 cross-layer 공유다.
+
+$$
+890\ \text{B/token} \times 10^6\ \text{token} \approx 0.89\ \text{GB}
+$$
+
+1M context에서 요청당 global KV가 1 GB 아래다. 같은 조건에서 GLM-5.3의 약 90 GB(추정)와 비교하면 차이가 두 자릿수다.
+
+### Attention 분류: dense, sparse, SWA, linear
+
+여기까지 나온 attention을 정리할 기준이 필요하다. sparse인지는 layer가 아니라 attention 연산의 mask 패턴, 즉 각 query가 보는 key 집합 $\mathcal{S}_t$로 정해진다. softmax 식은 그대로이고 합산 범위만 줄면 sparse다.
+
+$$
+o_t = \sum_{i \in \mathcal{S}_t} \mathrm{softmax}_i\!\left(\frac{q_t^\top k_i}{\sqrt{d}}\right) v_i, \qquad |\mathcal{S}_t| \ll t
+$$
+
+$$
+\mathcal{S}_t^{\text{SWA}} = \{\, t-w+1, \dots, t \,\}, \qquad \mathcal{S}_t^{\text{top-}k} = \operatorname{top-}k_{\,i \le t}\; \mathrm{indexer}(q_t, k_i)
+$$
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-03-attn-taxonomy-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-03-attn-taxonomy-dark.svg"
+  caption="attention 네 가지가 query 하나에 대해 읽는 것과 저장하는 것. dense와 sparse는 과거 KV를 모두 저장해서 저장량이 context 길이에 비례한다. SWA와 linear는 저장량이 고정이다. serving memory 관점에서는 읽는 양보다 이 저장량 구분이 더 중요하다."
+/>
+
+- **SWA는 정의상 fixed-pattern sparse다.** 다만 window 밖 token을 다시 보지 않으므로 버릴 수 있어서, 저장량까지 고정된다. 성질은 linear 쪽에 가깝다.
+- **용어는 넓게도, 좁게도 쓰인다.** 논문 분류에서는 local, strided, top-k를 모두 sparse로 묶는다. 최근 LLM 업계에서 "sparse attention"은 보통 DSA, NSA 같은 동적 top-k를 가리키고, SWA는 local attention으로 따로 부른다. "Kimi는 sparse를 안 쓴다"는 말은 좁은 의미다.
+- **한 layer에 여러 패턴이 공존할 수 있다.** DeepSeek-V4의 CSA layer에는 SWA branch와 top-k 압축 branch가 함께 들어 있다.
+- **압축은 sparse가 아니다.** HCA와 MLA는 항목 크기를 줄일 뿐 전부를 읽는다. CSA는 압축과 top-k를 둘 다 한다.
+
+비유하자면 dense는 책 전체를 읽는다. top-k sparse는 책을 다 꽂아 두고 몇 쪽만 골라 읽는다. SWA는 마지막 몇 쪽만 남기고 나머지를 버린다. linear는 책을 버리고 요약 노트 한 장만 남긴다.
+
+### MLA로 42배 줄인 KV가 여전히 큰 이유
+
+MLA의 latent KV를 Kimi K3 숫자로 계산하면 SGLang 보고값(layer당 1.125 KB, 24 layer 합 27 KB)과 정확히 맞는다.
+
+$$
+(512 + 64) \times 2\ \text{B} = 1{,}152\ \text{B/token/layer}, \qquad \text{MHA (96 head)}:\ 96 \times 128 \times 2 \times 2\ \text{B} = 48\ \text{KB/token/layer}
+$$
+
+MLA로 약 42배 줄였는데도 KV가 큰 이유는 세 가지다.
+
+1. **기울기는 그대로다.** 압축은 token당 크기를 상수배로 줄일 뿐, token 수와 layer 수에 비례해 쌓이는 구조는 같다.
+2. **TP로 나눌 수 없다.** latent를 모든 head가 공유하므로 head 축으로 쪼갤 수 없다. TP8이면 GPU 8개가 같은 latent를 통째로 복제한다. Kimi가 token 축으로 나누는 DCP를 만든 이유다.
+3. **Sparse는 저장을 줄이지 못한다.** DSA는 1M 중 2048개만 읽지만, 무엇을 고를지 미리 모르므로 1M개를 전부 들고 있어야 한다.
+
+| model | 구성 | token당 global KV |
+| --- | --- | --- |
+| GLM-5.3 | $576 \times 2\,\text{B} \times 78$ layer | 약 90 KB (추정) |
+| Kimi K3 | $576 \times 2\,\text{B} \times 24$ layer | 약 27 KB (TP rank마다 복제) |
+| GLM-5.3-Flash | $512 \times 2\,\text{B} \times 11$ layer + indexer key | 약 11 KB 이상 (추정) |
+| DeepSeek-V4-Flash | 압축 entry (CSA $T/4$, HCA $T/128$), FP8 | 3,514 B |
+| DeepSeek-V4.1-Flash | 공유 global KV, FP4 | 약 890 B |
+
+추정값은 bf16 KV를 가정하고 indexer key를 뺀 값이다. GLM-5.3-Flash는 sparse MLA layer가 NoPE라서 RoPE 조각이 없다고 봤다. 방향은 둘로 갈린다. GLM-5.3 → Flash와 Kimi는 MLA layer 수를 줄였다. DeepSeek은 MLA entry를 sequence 축으로 더 압축하고(CSA/HCA), layer 간에 공유했다(V4.1).
+
+### Residual: 차선 늘리기 vs depth 방향 attention
+
+DeepSeek과 Kimi 모두 "layer마다 residual stream 하나에 계속 더하기"를 버렸다. DeepSeek은 stream을 여러 갈래로 넓히고(mHC), Kimi는 누적 자체를 attention으로 바꾼다.
+
+두 방법은 같은 문제에서 출발한다. pre-norm residual은 모든 layer의 출력을 weight 1로 계속 더한다. 그래서 깊어질수록 hidden state의 크기가 커지고, layer 하나가 더하는 기여는 상대적으로 묻힌다. AttnRes 논문은 이것을 PreNorm dilution이라고 부른다. mHC는 더하는 통로를 넓히고 통로끼리 섞는 규칙을 제한해서 신호 크기를 지킨다. AttnRes는 더하기를 버리고, 앞 layer들의 출력 중 무엇을 얼마나 가져올지를 입력에 따라 softmax로 고른다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-04-residual-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-04-residual-dark.svg"
+  caption="residual 구조, mHC vs Attention Residuals. 왼쪽은 여전히 더하기 구조이고 통로만 넓다. 오른쪽은 저장된 버전 중 무엇을 읽을지 layer가 직접 고른다."
+/>
+
+[Attention Residuals](https://arxiv.org/abs/2603.15031)(AttnRes, Kimi Team, 2026.3)는 먼저 Kimi Linear 구조(48B total, 3B active)에 넣어 1.4T token으로 검증됐고, Kimi K3에 들어갔다. 모든 앞 layer에 attention하면 memory와 통신이 커서, 실제로는 layer를 block으로 묶어 block 단위 요약에 attention하는 Block AttnRes를 쓴다. 식은 아래와 같다.
+
+$$
+h_\ell = \sum_i \alpha_{\ell,i}\, b_i, \qquad \alpha_{\ell} = \mathrm{softmax}\big(s(q_\ell, b_i)\big)
+$$
+
+- 후보는 $b_0$(embedding), $b_n$(block $n$의 layer 출력 합), 그리고 현재 block의 partial sum이다.
+- $q_\ell$은 layer마다 학습되는 pseudo-query다. token 방향이 아니라 depth 방향으로 attention을 계산한다.
+- residual에 더하는 항이 아니라, layer 간 누적 자체를 바꾼다.
+- 비용: block 요약 9개($9 \times 7168$개 값)를 token마다 들고 다니며, pipeline 통신량에도 들어간다.
+
+비유하자면 원고 한 부를 모두가 덧칠하는 대신, 12 layer마다 버전을 저장해 두고 필요한 버전을 꺼내 쓴다.
+
+GLM-5.3-Flash는 DeepSeek과 같은 4-stream mHC를 쓴다. 4개의 residual stream이 모든 layer의 attention과 FFN sublayer를 감싸며 끝까지 유지된다. 즉 residual 축에서 GLM은 DeepSeek 진영이고, Kimi만 다른 길을 갔다.
+
+### MoE: routing 방식 vs expert 계산 공간
+
+DeepSeek은 MoE 골격을 거의 그대로 두고 router만 손봤다. Kimi는 expert 수를 2.3배로 늘리면서, expert가 계산하는 차원을 절반으로 줄였다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-06-moe-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-06-moe-dark.svg"
+  caption="MoE 구조, DeepSeekMoE vs Stable LatentMoE. routed pool 선택률은 비슷하지만(1.6% vs 1.8%), Kimi는 latent projection 덕분에 expert를 더 많이 골라도 통신량이 늘지 않는다."
+/>
+
+- **DeepSeek-V4**: 처음 3개 MoE layer는 hash routing을, 나머지는 sqrtsoftplus routing score를 쓴다. V3의 aux-loss-free load balancing을 유지하고, dense prefix layer 없이 61 layer 전부가 MoE다.
+- **Kimi K3 (Stable LatentMoE)**: routing은 7168 dim hidden state 전체로 하고, 선택된 expert는 3584 dim latent에서 계산한 뒤 다시 full width로 projection한다. MLA가 KV를 latent로 압축하듯 FFN을 latent로 압축한 셈이다. expert weight는 MXFP4, 입력 activation은 MXFP8로 quantization-aware training을 하고, router와 shared expert는 더 높은 정밀도로 둔다.
+- **GLM-5.3-Flash**: 처음 3 layer는 dense FFN이고, 나머지 42 layer는 288 routed expert 중 8개 + shared 1개를 쓴다. routed 선택률은 $8/288 \approx 2.8\%$, active 비율은 $18\text{B}/320\text{B} \approx 5.6\%$로 세 model 중 가장 덜 sparse하다. 대신 규모가 작아서 GPU 4-8개짜리 node 하나에 들어간다. LatentMoE나 hash routing 같은 변형은 공개 자료에 보고되지 않았고, 혁신은 attention 쪽에 몰려 있다.
+
+비유하자면 Kimi는 전문가를 두 배로 늘리되, 각자에게 요약본만 넘겨 일하게 해서 연락 비용을 아낀다.
+
+### 설계 철학: 보수적 노선, 공격적 노선, 절충안
+
+DeepSeek-V4는 softmax attention의 정확한 retrieval을 지키면서 비용만 깎는 보수적 노선이다. Kimi K3는 retrieval 정밀도 일부를 recurrent state로 바꾸는 공격적 노선이다. GLM-5.3-Flash는 Kimi의 linear attention 골격에 DeepSeek의 sparse attention과 mHC를 꽂은 절충안이다.
+
+| 관점 | DeepSeek-V4 | DeepSeek-V4.1 | Kimi K3 | GLM-5.3-Flash |
+| --- | --- | --- | --- | --- |
+| 핵심 베팅 | softmax를 유지하고 KV를 압축 | softmax 유지 + KV를 layer 간에 공유 | linear attention + 소수의 dense global layer | linear attention + 소수의 sparse global layer |
+| 얻는 것 | 모든 layer에서 위치별 접근 | 약 890 B/token global KV, prefill 거의 절반 | context와 무관한 고정 state, 가벼운 1M decode | global layer 읽기량까지 top-2048로 고정 |
+| 내는 비용 | 압축 손실, indexer module | encoder-decoder 분리, cache hit 시 window 재계산 | prefix cache 재설계, 두 종류 state 관리 | Kimi의 serving 복잡도 + DSA indexer까지 |
+| 범위 | text 전용, 1.6T | image + text, 552B + Engram | native vision/video, 2.8T | native vision/video, 320B (한 node) |
+
+세 회사는 서로의 부품을 가져다 쓴다. DeepSeek는 V4에서 Muon optimizer를 채택했는데, Muon은 Kimi가 K2에서 먼저 대규모로 검증한 optimizer다. 반대로 Kimi K3의 global attention layer는 DeepSeek이 만든 MLA다. GLM-5.3-Flash는 이 교류의 결과물에 가깝다. KDA는 Moonshot에서, DSA와 mHC와 MLA 계열 latent K/V는 DeepSeek에서 왔다.
+
+## Serving engine에 주는 변화: 깨진 단일 KV cache 전제
+
+모든 model이 "KV cache 하나만 관리하면 된다"는 기존 serving engine의 전제를 깬다. DeepSeek은 cache의 형태를, Kimi와 GLM은 cache의 종류 자체를 바꿨다. [Inside SGLang](https://blog.liam.kim/posts/2026/10/Inside-sglang/)의 마지막 절에서 본 종류별 pool과 hybrid tree가 바로 이 변화에 대한 대응이다.
+
+<Figure
+  src="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-07-serving-state-light.svg"
+  darkSrc="/assets/images/post/2026-11-01-LLM-in-2025-2026/km-07-serving-state-dark.svg"
+  caption="model별 serving state의 종류. 기존 엔진은 주황색 칸 하나만 가정했다. 이제 한 request가 성격이 다른 state 두세 가지를 동시에 들고 다닌다."
+/>
+
+| serving 이슈 | DeepSeek-V4 | DeepSeek-V4.1 | Kimi K3 | GLM-5.3 | GLM-5.3-Flash |
+| --- | --- | --- | --- | --- | --- |
+| Memory pool | 압축 KV 전용 cache layer 2종 (sliding + compressor) | 공유 global KV + indexer key(FP4), layer별 window KV(FP8). Engram host offload로 KV 용량 36% 증가 | KV page와 KDA state를 SGLang unified pool에서 양쪽으로 할당 | MLA latent KV 단일 pool. 78 layer 전부라 1M에서 request당 약 90 GB(bf16 추정) | paged KV pool + 별도 KDA state pool. KDA pool이 먼저 차서 동시 request 수의 상한이 될 수 있음 |
+| Prefix cache | append-only KV라 기존 radix 방식에 가까움 | 압축 KV와 indexer key만 보관, hit 시 마지막 128 token 재계산으로 window KV 복원 | KDA state는 덮어쓰기 → read-only checkpoint + copy-on-write | append-only KV라 기존 radix 방식 그대로 | KDA layer가 있어 Kimi와 같은 문제를 가짐 |
+| PD 분리 전송 | 압축 KV | 미확인 | MLA KV + KDA state | MLA KV (+ indexer key) | DSA KV + KDA state, 양쪽 pool layout을 같게 고정해야 함 |
+| Attention kernel | compressed/sparse attention + Lightning Indexer | indexer가 FP4 cache를 직접 읽음, RoPE, FP4 양자화, cache write를 fused kernel로 처리 | KDA chunkwise kernel(Tensor Core) + MLA | SGLang 기본: `flashmla_sparse` prefill, `fa3` decode, `sgl-kernel` indexer top-k | KDA(FLA kernel) + DSA backend(TileLang/TRT-LLM). KV dtype과 DSA backend를 짝지어야 함 |
+| Decode 병렬화 | KV head 1개(MQA)라 head 단위 TP 분할이 안 됨 | 미확인 | DCP로 token 축 분할, TP8+DCP8에서 logical context 약 1.5M → 12.2M | MLA latent라 head 단위 TP 분할이 안 됨 (Kimi와 같은 구조) | 공개 보고 없음 |
+| Prefill | 미확인 | CED로 prompt 대부분이 decoder를 건너뜀, prefill 계산 거의 절반 | chunked PP8, TP8 대비 prefill 용량 1.45-1.72배 | 미확인 | encode, prefill, decode 3단 분리(EPD) 운영 |
+| Residual 영향 | mHC stream activation | 미확인 | AttnRes block 요약이 PP 통신량에 포함 | 미확인 | mHC 4-stream activation |
+| 양자화 | expert FP4, 나머지 FP8 | main KV FP4, SWA KV FP8 | expert MXFP4 QAT | 공식 FP8. routed expert만 NVFP4로 줄이면 GB300 4장(TP4)에 올라감 | 공식 FP8. vLLM에서 KDA path는 양자화 미지원 |
+| Speculative decoding | MTP 1 layer | DSpark | DSpark draft (BS=1 decode 112.5 → 약 423 tok/s) | MTP 1 layer (EAGLE식) | MTP(SGLang NEXTN), DFlash2 draft |
+
+serving engine 관점에서 정리하면 다섯 가지다.
+
+- **Hybrid memory pool이 기본이 된다.** context에 비례하는 KV page와 request당 고정인 recurrent state를 한 공간에서 나눠 써야 한다. workload에 따라 어느 쪽이 먼저 차는지가 달라진다.
+- **Prefix cache가 더 이상 공짜가 아니다.** KDA가 들어간 Kimi와 GLM은 공유 prefix마다 state snapshot을 저장하고 복사해야 한다.
+- **DeepSeek-V4.1은 세 번째 prefix cache 해법을 보여 준다.** 압축 KV와 indexer key만 cache에 남기고, hit가 나면 prefix 마지막 128 token을 다시 계산해서 window KV를 복원한다. Engram table을 host로 offload해 KV 용량을 36% 늘린 결과도 보고됐다(GB300 4장).
+- **Attention backend가 model 전용이 된다.** indexer, KDA chunk kernel, sparse MLA kernel을 model별로 따로 돌려야 하고, KV dtype 같은 설정도 kernel과 묶인다. GLM-5.3-Flash는 두 계보의 부품을 모두 쓰므로, 두 model의 지원을 모두 갖춰야 돌아간다.
+- **Residual 변형이 병렬화 비용을 바꾼다.** mHC와 AttnRes 모두 layer 사이로 넘기는 activation을 키워서 pipeline parallel 통신량에 반영된다. mHC 4-stream이면 stage 간 전송량이 hidden dim의 4배 단위로 잡힌다.
+
+### vLLM과 SGLang의 대응: 하나의 block pool과 종류별 pool
+
+두 엔진 모두 layer를 세 종류로 나눠 다룬다. full attention, sliding window attention(SWA), 그리고 고정 크기 state를 쓰는 layer다. 세 번째 종류에는 Mamba2뿐 아니라 Gated DeltaNet과 KDA도 들어간다. 두 엔진 모두 이것을 Mamba 계열로 묶어 같은 경로로 처리한다. 차이는 메모리와 prefix cache를 어디서 나누느냐에 있다. 아래 내용은 vLLM v0.32.0과 SGLang v0.5.22 기준이고, 자세한 코드 흐름은 [Inside vLLM](https://blog.liam.kim/posts/2026/10/Inside-vLLM/#8-여러-종류의-attention-kv-cache-group과-타입별-manager)과 [Inside SGLang](https://blog.liam.kim/posts/2026/10/Inside-sglang/#8-여러-종류의-attention-full-swa-mamba-pool과-하나의-tree)의 해당 절에 있다.
+
+**vLLM은 메모리를 하나로 두고 규칙을 group마다 나눈다.** layer를 종류별 KV cache group으로 나누고, group마다 manager를 둔다. full attention manager는 모든 block을 들고 있고, sliding window manager는 window 밖 block을 바로 반납하고, Mamba manager는 마지막 state만 남긴다. 메모리는 block pool 하나를 모든 group이 같이 쓴다. 그래서 종류별 메모리 비율을 미리 정할 필요가 없다. 대신 모든 group의 page 크기를 맞춰야 해서, block 크기를 키우거나 page를 padding한다.
+
+**SGLang은 메모리를 종류별 pool로 나누고, prefix cache를 tree 하나로 모은다.** full, SWA, Mamba pool을 따로 두고, radix tree의 node마다 종류별 데이터(component)를 붙인다. pool 크기의 비율은 미리 정한다. SWA pool은 full pool의 0.8배(`--swa-full-tokens-ratio`), Mamba pool과 KV pool의 비율은 0.9(`--mamba-full-memory-ratio`)가 기본값이다. 비율이 workload와 맞지 않으면 한쪽 pool이 먼저 찬다.
+
+**prefix cache hit는 두 엔진 모두 "모든 종류가 동의하는 길이"로 정한다.** full attention은 앞에서부터 모든 KV가 있어야 하고, SWA는 hit 끝 앞의 window만큼만 있으면 되고, Mamba 계열은 hit 끝 위치의 state가 저장되어 있어야 한다.
+
+- vLLM은 group마다 hit 길이를 따로 찾는다. 그다음 `HybridKVCacheCoordinator`가 누군가 길이를 줄이면 모든 group이 다시 확인하는 반복으로 공통 길이를 맞춘다.
+- SGLang은 tree를 한 번 내려가면서 node마다 모든 component의 validator에 묻고, 모두 통과하는 가장 깊은 node에서 멈춘다. SWA KV만 지운 node는 tombstone으로 남겨, full attention KV는 계속 재사용한다.
+- Mamba 계열 state는 token마다 저장할 수 없으므로, SGLang은 정해진 간격(Mamba chunk 크기 또는 64와 page 크기 중 큰 값)의 위치에서만 state를 저장한다. hit가 나면 그 state를 request의 새 slot으로 복사해(copy-on-write) 이어서 계산한다. 앞에서 말한 "prefix cache가 더 이상 공짜가 아니다"가 이 비용이다.
+
+**DeepSeek-V4.1은 두 엔진 모두 KV 종류를 나눠 받는다.** vLLM은 V4.1의 KV를 세 spec으로 선언한다. 압축한 MLA KV(`MLAAttentionSpec`), 압축하지 않은 최근 token의 sliding window KV(`SlidingWindowMLASpec`), compressor가 쓰는 작은 ring buffer(`CircularBufferSpec`)다. SGLang은 V4.1을 DeepSeek-V4와 같은 architecture로 읽어 hybrid SWA 경로에 태우고, full pool과 SWA pool을 나눠 쓴다.
+
+**SWA Bounded Replay는 vLLM이 기본으로 켜고, SGLang은 옵션으로 둔다.** 두 엔진 모두 논문의 encoder 쪽과 decoder 쪽을 다 구현했다.
+
+- **vLLM**: [`swa_bounded_replay`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/cache.py#L250-L255)의 기본값이 `True`이고, model runner V2가 필요하다.
+  - encoder 쪽: V4.1의 sliding window KV spec([`SlidingWindowMLASpec`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/kv_cache_interface.py#L956-L974))이 replay를 켜면 `prefix_cacheable`이 `False`가 되어 prefix cache에서 빠진다. prefix hit가 나면 scheduler가 hit의 마지막 window(128 token)를 다시 계산하도록 `replay_start`를 정하고, 이 token을 같은 batch에 넣는다. 이미 cache에 있는 global KV는 그대로 두고 SWA KV만 다시 쓴다.
+  - decoder 쪽: 마지막 global KV source layer(layer 20) 뒤의 layer는 eager prefill step에서 request마다 마지막 128 token만 계산한다.
+- **SGLang**: [`--enable-encoder-swa-bounded-replay`와 `--enable-decoder-swa-bounded-replay`](https://github.com/sgl-project/sglang/blob/v0.5.22/python/sglang/srt/arg_groups/fields/exec_.py#L131-L139)가 둘 다 기본으로 꺼져 있고, encoder 쪽은 experimental로 표시되어 있다.
+  - encoder 쪽: prefix hit가 난 request마다 worker가 cache된 prefix의 마지막 128 token으로 따로 replay forward를 돌려, request 전용 window를 채운다. 이 window는 radix cache에 넣지 않는다. prefill CUDA graph, DP attention, PD disaggregation 등과는 함께 쓸 수 없다.
+  - decoder 쪽: layer 0-20은 모든 token을, layer 21-39는 request마다 마지막 128 token만 계산한다.
+- [LMSYS 글](https://www.lmsys.org/blog/2026-09-10-deepseek-v41/)은 SGLang에서 두 replay를 켰을 때 prefill throughput이 H200 8장에서 1.56배, GB300 4장에서 1.37배였다고 보고한다(8K prompt 8개 batch). AIME 2026 pass@1은 replay를 끄고 켜도 453/480으로 같았다.
+
+| 문제 | vLLM v0.32.0 | SGLang v0.5.22 |
+| --- | --- | --- |
+| KV page와 state가 섞인 memory | block pool 하나를 KV cache group들이 나눠 씀. 비율을 정하지 않음 | full, SWA, Mamba pool을 따로 둠. 비율을 미리 정함 |
+| 종류별 규칙 | group별 manager(full, sliding window, Mamba) | tree node의 component와 hook |
+| 덮어쓰는 state의 prefix cache | hit 끝 위치의 state가 있어야 hit | 정해진 간격으로 state를 저장, hit 시 copy-on-write |
+| hybrid model의 prefix hit | group별로 찾고 반복으로 공통 길이를 맞춤 | tree를 한 번 내려가며 모든 validator가 동의하는 곳 |
+| 일부 종류만 지우기 | group마다 block hash가 따로 지워짐 | tombstone(full KV는 남기고 SWA KV만 지움) |
+| DeepSeek-V4.1의 KV | MLA KV, sliding window KV, compressor ring buffer의 세 spec | DeepSeek-V4 경로, full pool과 SWA pool |
+| SWA Bounded Replay | 기본으로 켬. SWA KV를 prefix cache에서 빼고, hit 때 같은 batch에서 마지막 128 token을 다시 계산 | 기본으로 끔(플래그 두 개). hit 때 request 전용 window를 따로 replay forward로 채움 |
+
+두 설계의 판단 기준은 workload의 변동이다. 요청마다 context 길이와 prefix 공유 비율이 크게 바뀌면, 비율을 정하지 않는 vLLM 쪽이 메모리를 덜 남긴다. 반대로 종류별 메모리 모양을 따로 최적화하고 같은 prefix의 세 상태를 한 node에서 보려면 SGLang 쪽이 단순하다. SGLang에는 세 pool이 메모리 하나를 동적으로 나눠 쓰는 `--enable-unified-memory`도 있지만, v0.5.22에서는 기본으로 꺼져 있다.
+
+## 마치며
+
+2024년 말부터 2026년 가을까지의 흐름을 한 줄로 줄이면, KV를 줄이는 축을 하나씩 찾아 곱으로 쌓아 온 역사다.
+
+- 2017-2024년에는 축이 하나씩 나왔다. GQA와 MLA는 entry 크기를 줄였고, Mamba2와 GDN은 attention 자체를 고정 크기 state로 바꿨다.
+- 2025년에는 R1이 긴 reasoning을 열었고, 그 비용을 줄이려고 DSA가 sparse selection을 더했다. Qwen3-Next와 Kimi Linear는 state 3 : attention 1 hybrid를 표준처럼 만들었다.
+- 2026년에 DeepSeek은 자기 계보 안에서 축을 곱으로 쌓았다. V4는 sequence 압축을, V4.1은 layer 간 공유와 FP4를 더해 token당 890 bytes까지 내렸다.
+- 같은 해 Kimi K3는 linear attention 노선을 2.8T까지 키웠고, GLM-5.3-Flash는 Kimi의 3:1 구조에 DeepSeek의 MLA + DSA를 넣어 linear attention 계보와 KV 압축 계보를 한 model에 합쳤다.
+
+어느 노선이 나은지는 아직 정해지지 않았다. softmax를 지키는 DeepSeek 노선은 정확한 retrieval을 유지하지만 구조가 복잡하다. linear attention 노선은 state가 고정이라 decode가 가볍지만, prefix cache와 retrieval 정밀도에서 대가를 낸다. 두 노선 모두 "먼 과거는 압축하거나 골라서 보고, 가까운 과거는 SWA나 recurrence로 정확히 본다"는 같은 방향으로 모이고 있다.
+
+serving engine 입장에서 확실한 것은 하나다. "KV cache 하나"라는 전제는 끝났다. 앞으로의 serving engine은 크기와 수명이 다른 state 여러 종류를 한 request 안에서 함께 관리해야 한다.
+
+## References
+
+- Stanford CS336, [Language Modeling from Scratch](https://cs336.stanford.edu/) (Spring 2026), [YouTube 재생목록](https://www.youtube.com/playlist?list=PLoROMvodv4rMqXOcazWaTUHhq-yembLCV)
+  - Lecture 3: Architectures, hyperparameters. [강의 노트](https://github.com/stanford-cs336/lectures/blob/main/lecture_03.pdf), [영상](https://www.youtube.com/watch?v=lVynu4bo1rY)
+  - Lecture 4: Attention alternatives and mixture of experts. [강의 노트](https://github.com/stanford-cs336/lectures/blob/main/lecture_04.pdf), [영상](https://www.youtube.com/watch?v=cKSwj_qZ8Jg)
+  - Lecture 10: Inference. [강의 노트](https://cs336.stanford.edu/lectures/?trace=lecture_10), [영상](https://www.youtube.com/watch?v=EfM546A79aM). 본문의 수치는 Spring 2025 판 [lecture_10.py](https://github.com/stanford-cs336/spring2025-lectures/blob/main/lecture_10.py)를 인용했다.
+- Zeyuan Allen-Zhu, [Physics of Language Models: Part 4.1, Architecture Design and the Magic of Canon Layers](https://arxiv.org/abs/2512.17351) (arXiv 2512.17351, NeurIPS 2025)
+- Zeyuan Allen-Zhu, [Physics of Language Models: Part 4.2, Canon Layers at Scale where Synthetic Pretraining Resonates in Reality](https://physics.allen-zhu.com/part-4-architecture-design/part-4-2), [code](https://github.com/facebookresearch/PhysicsLM4)
+- Xiao et al., [Efficient Streaming Language Models with Attention Sinks](https://arxiv.org/abs/2309.17453) (StreamingLLM)
+- DeepSeek-AI, [DeepSeek-V3 Technical Report](https://arxiv.org/abs/2412.19437) (arXiv 2412.19437)
+- DeepSeek-AI, [DeepSeek-R1](https://arxiv.org/abs/2501.12948) (arXiv 2501.12948)
+- DeepSeek-AI, [DeepSeek-V3.2](https://arxiv.org/abs/2512.02556) (arXiv 2512.02556)
+- DeepSeek-AI, [DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence](https://arxiv.org/abs/2606.19348) (arXiv 2606.19348)
+- DeepSeek-AI, [DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression](https://arxiv.org/abs/2609.19969) (arXiv 2609.19969), [Hugging Face](https://huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash)
+- [DeepSeek-V4, Hugging Face Transformers 문서](https://huggingface.co/docs/transformers/main/model_doc/deepseek_v4)
+- [DeepSeek-V4-Pro spec notes (Glenn Lockwood)](https://glennklockwood.com/garden/deepseek-v4-pro)
+- [DeepSeek V4 primer (aman.ai)](https://aman.ai/primers/ai/deepseek-v4/)
+- [SGLang and Miles Add Day-0 Support for DeepSeek-V4.1 (LMSYS)](https://www.lmsys.org/blog/2026-09-10-deepseek-v41)
+- [DeepSeek V4.1 Flash explained (The Neuron)](https://www.theneuron.ai/explainer-articles/deepseek-v41-flash-explained-how-it-cuts-ai-memory-8x/)
+- [Kimi K3 공식 블로그](https://www.kimi.com/blog/kimi-k3)
+- [Kimi K3: Architecture and SGLang Day-0 Support](https://www.sglang.io/blog/kimi-k3-day0-support)
+- [Kimi-K2.6, NVIDIA NGC](https://catalog.ngc.nvidia.com/orgs/nim/moonshotai/models/kimi-k2.6/hf-bc8e70-nim)
+- GLM-5-Team (Zhipu AI, Tsinghua University), [GLM-5: from Vibe Coding to Agentic Engineering](https://arxiv.org/abs/2602.15763) (arXiv 2602.15763). GLM-5.3의 아키텍처 기준
+- [GLM-5에서 GLM-5.3까지, NVIDIA NeMo AutoModel](https://docs.nvidia.com/nemo/automodel/model-coverage/large-language-models/thudm/GLM-5)
+- [GLM-5.2 / GLM-5.3 architecture (SemiAnalysis InferenceX)](https://inferencex.semianalysis.com/model/glm-5-3)
+- [GLM-5.3 model card (NVIDIA)](https://build.nvidia.com/z-ai/glm-5-3/modelcard)
+- [GLM-5.3, SGLang cookbook](https://docs.sglang.io/cookbook/autoregressive/GLM/GLM-5.3)
+- [GLM-5.3-Flash 개요 (Z.ai)](https://docs.z.ai/guides/vlm/glm-5.3-flash)
+- [GLM-5.3-Flash, NVIDIA model card](https://docs.api.nvidia.com/nim/reference/z-ai-glm-5-3-flash)
+- [GLM-5.3-Flash, NVIDIA NeMo AutoModel](https://docs.nvidia.com/nemo/automodel/nightly/model-coverage/vision-language-models/thudm/glm-5-3-flash)
+- [GLM-5.3-Flash, NVIDIA NGC](https://catalog.ngc.nvidia.com/orgs/nim/zai-org/models/glm-5.3-flash)
+- [GLM-5.3-Flash, SGLang cookbook](https://docs.sglang.io/cookbook/autoregressive/GLM/GLM-5.3-Flash)
+- [GLM-5.3-Flash, vLLM recipe](https://recipes.vllm.ai/zai-org/GLM-5.3-Flash)
+- [GLM-5.3-Flash MXFP8 checkpoint notes (Intel)](https://huggingface.co/intel-ai/GLM-5.3-Flash-MXFP8-CT-AutoRound)
+- [GLM-5.3-Flash 개요 (CometAPI)](https://www.cometapi.com/models/zhipuai/glm-5-3-flash/)
+- [GLM-5.3-Flash 출시 정리 (NYU Shanghai RITS)](https://rits.shanghai.nyu.edu/ai/glm-5-3-flash-320b-multimodal-moe/)
+- Shazeer, [Fast Transformer Decoding: One Write-Head is All You Need](https://arxiv.org/abs/1911.02150) (MQA)
+- Ainslie et al., [GQA](https://arxiv.org/abs/2305.13245)
+- DeepSeek-AI, [DeepSeek-V2](https://arxiv.org/abs/2405.04434) (MLA)
+- Katharopoulos et al., [Transformers are RNNs](https://arxiv.org/abs/2006.16236) (Linear attention)
+- Dao and Gu, [Transformers are SSMs](https://arxiv.org/abs/2405.21060) (Mamba2)
+- Yang et al., [Gated Delta Networks](https://arxiv.org/abs/2412.06464) (GDN)
+- Moonshot AI, [Kimi Linear](https://arxiv.org/abs/2510.26692) (KDA)
+- Zhu et al., [Hyper-Connections](https://arxiv.org/abs/2409.19606)
+- Xie et al. (DeepSeek), [mHC: Manifold-Constrained Hyper-Connections](https://arxiv.org/abs/2512.24880) (arXiv 2512.24880)
+- Kimi Team, [Attention Residuals](https://arxiv.org/abs/2603.15031) (arXiv 2603.15031)

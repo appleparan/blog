@@ -11,13 +11,20 @@ interface Props {
   alt?: string;
   /** Dark-theme variant of `src`; when set, the two swap with the site theme toggle. */
   darkSrc?: string;
+  /** Upper bound on the rendered width, e.g. `460px`. The image still shrinks on narrow screens. */
+  maxWidth?: string;
 }
 
-const { src, caption, align = 'center', background, alt, darkSrc } = Astro.props;
+const { src, caption, align = 'center', background, alt, darkSrc, maxWidth } = Astro.props;
 const altText = alt ?? (typeof caption === 'string' ? caption : '');
 // Astro templates print a JSX value as `[object Object]`. Wrapped in a function component,
 // it is rendered by the `astro:jsx` renderer that the MDX integration registers.
 const Caption = () => caption;
+const imgStyle = {
+  ...(background ? { background } : {}),
+  ...(maxWidth ? { width: `min(100%, ${maxWidth})` } : {}),
+};
+const style = Object.keys(imgStyle).length ? imgStyle : undefined;
 ---
 
 <figure class:list={['figure', `figure-${align}`]}>
@@ -26,7 +33,7 @@ const Caption = () => caption;
     alt={altText}
     loading="lazy"
     class:list={[darkSrc && 'theme-img-light']}
-    style={background ? { background } : undefined}
+    style={style}
   />
   {
     darkSrc && (
@@ -35,7 +42,7 @@ const Caption = () => caption;
         alt={altText}
         loading="lazy"
         class="theme-img-dark"
-        style={background ? { background } : undefined}
+        style={style}
       />
     )
   }
