@@ -118,7 +118,7 @@ uvloop.run(run_server(args))
 
 Rust frontend는 Python API server를 대신할 수 있는 실험 기능이다(`VLLM_USE_RUST_FRONTEND=1`). 처음 제안한 RFC는 당분간 Python frontend를 대체하지 않는다고 밝혔다([RFC #40846](https://github.com/vllm-project/vllm/issues/40846), [Roadmap #44280](https://github.com/vllm-project/vllm/issues/44280)). 이 글은 기본 경로인 [`run_server()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/api_server/entry.py#L165-L177)만 따라간다.
 
-#### 설계 결정: API server와 EngineCore를 따로 늘린다
+#### 설계 결정: API server와 EngineCore의 독립 확장
 
 API server 수와 EngineCore 수는 따로 정한다. API server를 늘리면(예: `--api-server-count 2`) tokenize와 응답 직렬화 같은 frontend의 CPU 작업을 여러 process가 나눠 지고, engine은 하나를 공유한다. data parallelism은 반대로 engine과 model replica를 늘린다. 이 글은 둘 다 하나인 구성만 다룬다. 이 구조는 [#17546](https://github.com/vllm-project/vllm/pull/17546)에서 들어왔다. 이 PR은 `--api-server-count` 옵션을 추가했고, DP와 함께 쓰면 API server와 EngineCore가 ZMQ로 all-to-all 연결되게 했다. PR의 benchmark는 DP 크기를 키울 때 성능, 특히 TTFT가 이전보다 잘 확장되는 것을 보여 준다.
 
@@ -252,7 +252,7 @@ scheduler는 step마다 어떤 request의 token을 몇 개 계산할지 정한�
 
 step마다 실제로 어떻게 고르는지는 [request 처리의 4번](#4-schedule-step마다-계산할-token-배정)에서 다룬다.
 
-#### 설계 결정: KV cache 크기를 profiling으로 정한다
+#### 설계 결정: profiling으로 정하는 KV cache 크기
 
 vLLM은 KV cache를 시작할 때 한 번에 할당하고, 이후에는 고정 크기 block 단위로 request에 나눠 준다. 이 block 방식은 PagedAttention 논문에서 왔다. 논문은 request마다 KV cache를 연속 공간으로 미리 잡으면 단편화와 과잉 예약으로 메모리가 낭비된다고 보고, OS의 paging처럼 KV cache를 block으로 나눠 이 낭비를 줄였다([Kwon et al., SOSP 2023](https://arxiv.org/abs/2309.06180)).
 
@@ -276,7 +276,7 @@ CUDA graph 메모리는 이 방식에서 따로 다뤄야 했다. CUDA graph는 
   caption="build_and_serve()부터 Uvicorn task까지의 흐름. startup()에서 bind된 소켓에 listen을 시작하고, main_loop()에서 종료 신호를 기다린다. (Uvicorn 0.52.4 기준)"
 />
 
-#### 설계 결정: Uvicorn의 signal handler를 끈다
+#### 설계 결정: Uvicorn signal handler 비활성화
 
 [`NoSignalServer`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/entrypoints/launchers/launcher.py#L45)는 SIGINT와 SIGTERM handler를 설치하지 않는다. vLLM은 종료할 때 HTTP 서버뿐 아니라 엔진도 정리해야 해서, 종료 handler를 event loop에 직접 등록한다. Uvicorn이 자기 handler를 설치하면 이 handler와 경쟁하다가 덮어쓴다. [#49668](https://github.com/vllm-project/vllm/pull/49668)이 이 문제를 고치면서 지금 구조가 되었다.
 
@@ -484,7 +484,7 @@ running을 먼저 보는 이유는 이미 시작한 request를 끝까지 진행�
 
 배정 결과가 [`SchedulerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L232)이다. 여기에는 request별 계산할 token 수, 새로 받은 KV block, encoder 작업, structured output 정보가 들어 있다. 결국 한 step의 batch는 `{request_id: num_tokens}` 하나로 표현되고, 여기에 prefill 조각과 decode token이 섞여 들어간다.
 
-여러 request의 token을 padding 없이 한 forward로 묶는 방법은 뒤의 [prefill과 decode를 한 step에 섞는 continuous batching](#12-scheduler-출력-prefill과-decode를-한-step에-섞는다)에서 다룬다.
+여러 request의 token을 padding 없이 한 forward로 묶는 방법은 뒤의 [prefill과 decode를 한 step에 섞는 continuous batching](#12-scheduler-출력-한-step에-섞인-prefill과-decode)에서 다룬다.
 
 #### KVCacheManager: block을 나눠 주고 돌려받는 방식
 
@@ -522,16 +522,16 @@ prefix caching은 이 구조 위에서 동작한다. scheduler는 prompt를 16 t
   caption="prefix caching이 앞 request의 KV block을 재사용하는 과정."
 />
 
-#### 설계 결정: prefill과 decode를 나누지 않는다
+#### 설계 결정: prefill과 decode의 구분 없는 scheduling
 
 V1 scheduler에는 prefill phase와 decode phase가 따로 없다. [코드 주석](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L594)도 "There's no 'decoding phase' nor 'prefill phase' in the scheduler"라고 적어 둔다. prompt token과 생성된 token을 똑같이 "아직 계산하지 않은 token"으로 보고, 결정은 `{request_id: num_tokens}` 같은 dictionary 하나로 표현한다. V1 소개 글은 이 표현이 chunked prefill, prefix caching, speculative decoding까지 담을 만큼 일반적이라고 설명한다([vLLM V1 소개 글](https://blog.vllm.ai/2025/01/27/v1-alpha-release.html)). 앞의 step timeline 그림에서 prefill과 decode가 한 step에 섞이는 것도 이 덕분이다. V1을 다시 설계하며 정리한 [#8779](https://github.com/vllm-project/vllm/issues/8779)는 그 배경으로 "scheduling is not cheap"을 든다. 이전 scheduler는 step마다 `running` 전체를 Python으로 훑었고, 그 CPU 시간이 GPU를 놀게 했다. 표현을 하나로 줄인 것은 이 비용을 줄이는 방향과 맞닿아 있다.
 
 
-#### 설계 결정: free block queue는 직접 만든 이중 연결 리스트다
+#### 설계 결정: 직접 만든 이중 연결 리스트인 free block queue
 
 `free_block_queue`는 Python `deque` 대신 vLLM이 직접 만든 이중 연결 리스트다. 이 구조는 V1에 prefix caching을 넣은 [#9972](https://github.com/vllm-project/vllm/pull/9972)에서 들어왔다. PR은 `deque`보다 나은 점을 두 가지로 든다. 중간의 block을 O(1)에 뺄 수 있고, 새 Python 객체를 만들지 않고 block 객체의 포인터만 바꾼다. 앞의 prefix caching에서 반납된 block을 queue 중간에서 다시 꺼내는 일이 바로 첫째 이유다. 같은 PR의 benchmark는 prefix cache 적중률 49%인 offline batch에서 입력 처리량이 약 1.8배(17,916에서 32,258 tok/s)로 늘었다고 보고한다.
 
-#### 설계 결정: prefix caching은 기본으로 켠다
+#### 설계 결정: 기본으로 켜는 prefix caching
 
 V1은 prefix caching을 처음부터 기본 기능으로 설계했다. [#8779](https://github.com/vllm-project/vllm/issues/8779)는 V1의 방향 중 하나로 "Prefix-caching as a first-class feature"를 들고, 그 overhead를 줄이는 것을 목표로 삼았다. v0.32.0에서도 model이 지원하면 prefix caching이 [기본으로 켜진다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/engine/arg_utils.py#L3021-L3027). 같은 system prompt나 대화 기록을 공유하는 request가 많을수록 prefill에서 아끼는 계산이 커진다.
 
@@ -594,7 +594,7 @@ structured output은 sampling 직전에 형식에 맞지 않는 token을 지우�
 
 forward와 sampling을 두 번의 호출로 나눈 이유가 이 bitmask다. bitmask는 CPU에서 계산한다. 위의 `step()`을 보면 `execute_model(non_block=True)`로 forward를 시작한 뒤, GPU가 도는 동안 CPU가 `get_grammar_bitmask()`를 계산하고, 그 결과를 `sample_tokens()`에 넘긴다. 호출을 나눠야 bitmask 계산이 forward와 겹친다.
 
-#### 설계 결정: async scheduling으로 scheduling과 실행을 겹친다
+#### 설계 결정: async scheduling을 통한 scheduling과 실행의 overlap
 
 async scheduling은 step N의 결과를 기다리지 않고 step N+1을 미리 짠다. 아직 모르는 다음 token 자리는 placeholder로 잡아 둔다. 왜 이것이 필요한지부터 보자.
 
@@ -604,7 +604,7 @@ v0.32.0은 조건이 맞으면 [async scheduling을 자동으로 켠다](https:/
 
 이 구조는 [#19970](https://github.com/vllm-project/vllm/pull/19970)에서 들어왔다. 목표는 scheduler를 실행보다 한 step 앞서 돌게 해서, scheduling에 드는 CPU 시간을 GPU 실행 뒤에 숨기는 것이다. PR은 이 방식이 [NanoFlow](https://arxiv.org/abs/2408.12757) 논문의 접근과 비슷하다고 밝힌다. 처음에는 `--async-scheduling`으로 켜는 실험 기능이었다. [`AsyncScheduler`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/async_scheduler.py)는 이 의존성을 placeholder로 푼다. step N의 결과를 기다리지 않고 request마다 다음 token이 하나 나온다고 가정해 [`num_output_placeholders`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/request.py#L162)를 올려 두고 step N+1을 짠다. 실제 token ID는 GPU에 남아 있는 step N의 sampling 결과를 worker가 바로 이어 붙이고, 결과가 CPU에 도착하면 placeholder를 실제 token으로 바꾼다. EOS로 끝난 request처럼 가정이 틀린 경우에는 미리 계산한 결과를 버린다. 이 기능은 v0.14.0부터 기본으로 켜졌다.
 
-#### 설계 결정: Model Runner V2를 처음부터 다시 만들었다
+#### 설계 결정: 처음부터 다시 만든 Model Runner V2
 
 위에서 본 `execute_model()`과 `sample_tokens()`는 Model Runner V2(MRV2)의 코드다. MRV2는 v0.12.0에서 실험 기능으로 들어와 v0.29.0부터 모든 model의 기본 실행 경로가 되었다([PR #25266](https://github.com/vllm-project/vllm/pull/25266)). [설계 문서](https://github.com/vllm-project/vllm/blob/v0.32.0/docs/design/model_runner_v2.md)는 V1 model runner를 다시 만든 이유로 "fundamental design mistakes"와 쌓인 기술 부채를 든다. 이 글의 흐름과 닿는 변경은 세 가지다.
 
@@ -630,7 +630,7 @@ handler는 응답 형식에 맞게 마무리한다. 그 전에 reasoning parser�
   caption="request의 출력 경로(위)와 정리(아래). 아래쪽은 7번에서 다룬다."
 />
 
-#### 설계 결정: detokenize와 stop string은 API server에서 한다
+#### 설계 결정: API server에서 하는 detokenize와 stop string 검사
 
 EOS token과 `max_tokens`는 token ID만 보면 되므로 EngineCore가 판단한다. 반면 detokenize와 stop string 검사는 API server process에서 한다. 이 분담은 [서버 초기화 4번의 process 분리](#설계-결정-enginecore-process-분리와-zmq)와 같은 RFC에서 나왔다. [RFC #6797](https://github.com/vllm-project/vllm/issues/6797)은 후속 과제로 "Decouple incremental detokenization logic so that it can also be used in the API server process"와 "The API server process can also intercept/process any stop strings, and just abort the request as needed"를 적었다. V1 `AsyncLLM`을 만든 [#9826](https://github.com/vllm-project/vllm/pull/9826)도 "stop strings are detected in the detokenizer and we send an abort message"라고 적는다. V1 설계를 정리한 [#8779](https://github.com/vllm-project/vllm/issues/8779)도 "De-tokenization is expensive"라며 batch가 클수록 이 비용이 커진다고 적는다. detokenize를 EngineCore loop 밖으로 빼면 이 CPU 작업이 GPU 실행과 겹친다.
 
@@ -646,7 +646,7 @@ stop string을 만나면 API server는 [`abort_requests()`](https://github.com/v
 - worker: scheduler는 끝난 request ID를 다음 step의 [`SchedulerOutput.finished_req_ids`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L260)에 실어 보낸다. worker는 [5번](#5-forward-gpu-forward와-sampling) ①의 [`finish_requests()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/model_runner.py#L1152-L1160)에서 이 request가 쓰던 persistent batch의 행을 비운다. preempt된 request도 같은 방식으로 빠진다.
 - API server: `OutputProcessor`가 [request 상태와 detokenizer를 지운다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/output_processor.py#L855-L857). `generate()`는 마지막 출력을 handler에 넘기고 끝난다.
 
-여기서 free는 GPU 메모리를 CUDA allocator에 돌려주는 것이 아니다. block pool에서 참조를 풀어, 다음 request가 이 block을 다시 쓸 수 있게 하는 것이다. 반납이 늦춰지는 경우도 두 가지 있다. async scheduling에서는 GPU가 아직 그 block을 쓰는 step이 진행 중일 수 있어서, scheduler가 안전한 step까지 반납을 미룬다. disaggregated prefill이나 KV offloading처럼 KV connector가 block을 다른 곳으로 보내는 중이면, `_free_request()`가 [전송이 끝날 때까지](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2723-L2742) 반납을 미룬다.
+여기서 free는 GPU 메모리를 CUDA allocator에 돌려주는 것이 아니다. block pool에서 참조를 풀어, 다음 request가 이 block을 다시 쓸 수 있게 하는 것이다. KV 값도 지우지 않는다. 꽉 찬 block은 hash를 단 채 free queue에 들어가므로, 다른 request가 그 block을 받아 덮어쓰기 전에 같은 prefix가 오면 prefix cache hit로 다시 쓴다. 멀티턴 대화가 이전 턴의 KV를 다시 쓰는 것도 이 덕분이다([실행 batch와 KV cache 5번](#5-멀티턴-대화-prefix-caching을-통한-이전-턴-kv-재사용)). 반납이 늦춰지는 경우도 두 가지 있다. async scheduling에서는 GPU가 아직 그 block을 쓰는 step이 진행 중일 수 있어서, scheduler가 안전한 step까지 반납을 미룬다. disaggregated prefill이나 KV offloading처럼 KV connector가 block을 다른 곳으로 보내는 중이면, `_free_request()`가 [전송이 끝날 때까지](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L2723-L2742) 반납을 미룬다.
 
 client가 연결을 끊으면 [1번](#1-http-post-fastapi-router의-request-수신)의 cancellation이 [`AsyncLLM.generate()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L698-L809)까지 전달된다. `generate()`는 [`asyncio.CancelledError`를 받아](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L779) [`abort()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/engine/async_llm.py#L911)를 호출하고, 이 함수가 API server의 출력 상태와 EngineCore 양쪽에서 request를 지운다. 그래서 끊긴 request가 GPU에서 계속 token을 만들지 않는다.
 
@@ -707,7 +707,7 @@ layer마다 같은 번호를 써도 충돌하지 않는다. layer마다 tensor�
 
 worker도 같은 정보를 따로 들고 있다. scheduler는 step마다 새로 할당한 block ID를 [`SchedulerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L232)에 실어 보내고, worker는 이를 [`BlockTables`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/block_table.py#L17)에 request별로 이어 붙인다. 그래서 `BlockTables`에는 request마다 block ID 목록이 하나씩 있고, 목록의 n번째 값은 그 request의 n번째 block이 KV cache의 몇 번 block인지 나타낸다. 위 그림에서 request A의 목록은 `[7, 12]`다. A의 position 0-15 token의 KV는 block 7에, position 16-31 token의 KV는 block 12에 있다는 뜻이다. B와 C의 목록은 [전체 구조 그림](#1-전체-구조-한-step의-실행-batch)의 4번 상자에 있고, 각각 `[3]`과 `[9, 4]`다.
 
-#### 1.2 scheduler 출력: prefill과 decode를 한 step에 섞는다
+#### 1.2 scheduler 출력: 한 step에 섞인 prefill과 decode
 
 scheduler는 1.1의 두 자료구조로 [`SchedulerOutput`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L232)을 만들어 worker에 보낸다. 담기는 값은 둘이다.
 
@@ -876,7 +876,7 @@ prompt가 한 step의 token budget보다 길면 scheduler는 prompt를 여러 st
 예시의 C로 [전체 구조](#1-전체-구조-한-step의-실행-batch)의 각 단계가 어떻게 바뀌는지 보면 아래와 같다.
 
 - [1.1](#11-request와-kv-block의-자료구조) 자료구조: 이번 step 전 C의 `num_computed_tokens`는 14다. position 16은 첫 block(0-15)을 넘으므로, `allocate_slots()`가 block 4를 새로 꺼내 `req_to_blocks`의 C 목록에 붙인다.
-- [1.2](#12-scheduler-출력-prefill과-decode를-한-step에-섞는다) scheduler 출력: `num_scheduled_tokens`에서 C는 budget으로 잘린 3이다. 새 block ID는 [`CachedRequestData.new_block_ids`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L150)로 가고, worker는 이를 [C의 기존 block ID 목록 뒤에 붙인다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L140-L150). 그래서 C의 목록은 `[9]`에서 `[9, 4]`가 된다.
+- [1.2](#12-scheduler-출력-한-step에-섞인-prefill과-decode) scheduler 출력: `num_scheduled_tokens`에서 C는 budget으로 잘린 3이다. 새 block ID는 [`CachedRequestData.new_block_ids`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L150)로 가고, worker는 이를 [C의 기존 block ID 목록 뒤에 붙인다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L140-L150). 그래서 C의 목록은 `[9]`에서 `[9, 4]`가 된다.
 - [1.3](#13-step-안의-token-packing) 배열: `positions`는 14-16이고, `seq_lens`는 14 + 3 = 17이다. 나머지 prompt는 배열에 없다.
 - [1.4](#14-block-table-token-위치에서-kv-cache-주소로) slot: 158, 159, 64다. step이 끝나면 `num_computed_tokens`는 17이 되고, 다음 step의 C는 position 17(slot 65)부터 같은 목록으로 이어 간다.
 
@@ -930,25 +930,25 @@ drafter마다 다른 점은 자기 KV가 있는지, 틀린 draft의 KV를 어떻
 
 정리하면, drafter KV도 본 model KV와 같은 규칙을 따른다. block은 scheduler가 `req_to_blocks`로 나눠 주고, worker는 같은 block table로 slot을 찾으며, 틀린 자리는 지우지 않고 다시 쓴다. 다른 점은 drafter가 본 model보다 앞선 position에 KV를 쓴다는 것뿐이고, 그 자리를 lookahead slot이 미리 확보한다.
 
-#### 설계 결정: drafter의 KV를 본 model과 같은 pool에 둔다
+#### 설계 결정: 본 model과 같은 pool에 두는 drafter의 KV
 
 v0.32.0은 drafter의 KV를 본 model과 같은 KV cache pool에 둔다. 이렇게 하면 drafter가 본 model의 block table과 `slot_mapping`을 그대로 쓸 수 있다. 코드 주석도 batch 모양과 KV cache 배치가 같아서 draft prefill에 본 model의 attention metadata와 slot mapping을 [바로 쓸 수 있다고 적는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/target_dependent_ar/speculator.py#L282-L284).
 
 이 결정은 hybrid model에서 비용이 드러난다. hybrid model은 linear attention과 full attention처럼 서로 다른 layer를 섞은 model이다. [RFC #59117](https://github.com/vllm-project/vllm/issues/59117)은 GDN과 full attention을 섞은 27B model에 DFlash drafter를 붙인 사례를 vLLM 0.30 기준으로 보고한다. drafter의 sliding window layer가 새 KV cache spec을 더하면서 KV cache group이 4개에서 16개로 늘었다. 그 결과 쓸 수 있는 KV cache가 369,121 token에서 33,530 token으로 줄었다. 이 RFC는 drafter에 전용 pool을 주자고 제안한다. [RFC #58638](https://github.com/vllm-project/vllm/issues/58638)은 같은 문제를 group을 나누는 방식을 고쳐서 풀자고 제안한다. 두 RFC 모두 아직 open 상태이고, v0.32.0은 공유 pool을 유지한다.
 
-#### 설계 결정: drafter가 쓸 자리를 미리 잡는다
+#### 설계 결정: drafter용 자리 예약
 
 scheduler는 본 model이 계산할 token 외에 lookahead slot까지 [block을 잡는다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_manager.py#L542-L544). drafter는 본 model의 query 범위 뒤쪽 position에 KV를 쓰는데, block table이 그 position을 덮지 않으면 엉뚱한 block에 쓰게 된다. [PR #42971](https://github.com/vllm-project/vllm/pull/42971)은 이 문제를 실제로 겪은 사례다. 새 request의 첫 step에 lookahead block을 잡지 않아서, DFlash drafter가 마지막 prefill block에 KV를 덮어썼다. prefix caching을 켜고 동시 request가 많으면 그 block은 여러 request가 공유하는 block이라, 정상이던 request의 KV까지 망가졌다. scheduler 쪽 수정은 [PR #43733](https://github.com/vllm-project/vllm/pull/43733)에서 들어갔다. 지금은 lookahead 값을 [`num_lookahead_tokens` 한 곳에서만 계산하고](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/vllm.py#L616-L623), scheduler와 worker warmup이 같은 값을 읽는다.
 
-#### 설계 결정: 틀린 draft의 KV는 지우지 않고 덮어쓴다
+#### 설계 결정: 틀린 draft KV의 삭제 없는 덮어쓰기
 
 틀린 draft의 KV는 지우지 않는다. scheduler는 `num_computed_tokens`만 되돌리고, 다음 step이 같은 slot에 올바른 KV를 쓴다. EAGLE 계열 drafter는 한발 더 나아가 틀린 위치까지 포함해 본 model과 같은 query 길이로 계산한다. 코드 주석에 따르면 이유는 두 가지다. 틀린 token 수를 CPU가 알려면 CPU와 GPU를 동기화해야 하는데, 이를 피할 수 있다. 그리고 본 model의 `query_start_loc`, `seq_lens` 같은 attention metadata를 [그대로 다시 쓸 수 있다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu/spec_decode/target_dependent_ar/speculator.py#L204-L209). 이는 Model Runner V2의 설계 원칙과도 맞는다. MRV2 설계 문서는 speculative decoding처럼 CPU가 아직 모르는 값을 [GPU가 직접 계산하게 한다](https://github.com/vllm-project/vllm/blob/v0.32.0/docs/design/model_runner_v2.md#L136-L138)고 적는다. MRV2를 도입한 [PR #25266](https://github.com/vllm-project/vllm/pull/25266)도 같은 방향이다.
 
-#### 설계 결정: draft를 위한 자리도 token budget에서 뺀다
+#### 설계 결정: token budget에서 빼는 draft 자리
 
 drafter가 본 model의 batch 안에서 draft query를 계산하면, 그 query도 한 step의 token budget을 쓴다. 그래서 scheduler는 drafter 방식에 따라 request마다 [추가 slot 수를 budget에서 미리 뺀다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/config/speculative.py#L1887-L1925). EAGLE3와 MTP는 0, draft model은 1, DFlash는 K다. 이 표는 v0.32.0 기준이다. 그 직후 [PR #59468](https://github.com/vllm-project/vllm/pull/59468)은 DFlash와 DSpark가 draft를 본 model batch 밖에서 계산한다는 점을 들어 이 값을 0으로 바꿨다. 이 PR은 v0.32.0 tag에는 들어 있지 않다.
 
-### 4. block 소유: scheduler가 할당하고 worker는 쓰기만 한다
+### 4. block 소유: scheduler의 할당과 worker의 쓰기
 
 block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 뿐, block을 할당하거나 반납하지 않는다. 할당, 반납, prefix cache 재사용 규칙은 [request 처리 4번](#4-schedule-step마다-계산할-token-배정)의 [KVCacheManager 소제목](#kvcachemanager-block을-나눠-주고-돌려받는-방식)에서 다뤘다. 여기서는 그 규칙이 위 자료구조에서 어떻게 보이는지만 정리한다.
 
@@ -956,7 +956,7 @@ block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 �
 - 공유: prefix cache가 맞으면 같은 `KVCacheBlock`이 두 request의 `req_to_blocks`에 함께 들어가고, `ref_cnt`가 2가 된다. 두 request의 block ID 목록에 같은 block ID가 들어가므로, GPU의 같은 KV를 함께 읽는다.
 - 반납: request가 끝나면 그 request의 block마다 `ref_cnt`를 1씩 내린다. 0이 된 block만 `free_block_queue`로 돌아간다. GPU 메모리는 그대로이고, 다음에 이 block을 받는 request가 그 자리를 덮어쓴다.
 
-### 5. 멀티턴 대화: prefix caching으로 이전 턴의 KV를 다시 쓴다
+### 5. 멀티턴 대화: prefix caching을 통한 이전 턴 KV 재사용
 
 멀티턴 대화는 이전 턴의 KV를 대부분 다시 쓴다. vLLM에는 대화 세션이라는 개념이 없지만, prefix caching이 같은 효과를 낸다.
 
@@ -999,7 +999,7 @@ block의 주인은 scheduler다. worker는 받은 block table대로 읽고 쓸 �
 첫 번째 턴이 block 7, 12, 5에 KV를 남기고 끝났다고 하자. 두 번째 턴의 앞 48 token은 첫 번째 턴과 같으므로, 이 3 block(16 * 3 = 48 token)이 prefix cache에 맞는다.
 
 - [1.1](#11-request와-kv-block의-자료구조) 자료구조: `get_computed_blocks()`가 찾은 block 7, 12, 5가 새 request의 `req_to_blocks` 목록 앞에 그대로 들어가고, 각 block의 `ref_cnt`가 1 오른다. request의 `num_computed_tokens`는 0이 아니라 48에서 시작한다.
-- [1.2](#12-scheduler-출력-prefill과-decode를-한-step에-섞는다) scheduler 출력: 새 request는 [`NewRequestData`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L41)로 worker에 간다. 여기에는 cache에 맞은 block을 포함한 [전체 block ID와 `num_computed_tokens`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L47-L48)가 들어 있다.
+- [1.2](#12-scheduler-출력-한-step에-섞인-prefill과-decode) scheduler 출력: 새 request는 [`NewRequestData`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L41)로 worker에 간다. 여기에는 cache에 맞은 block을 포함한 [전체 block ID와 `num_computed_tokens`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/output.py#L47-L48)가 들어 있다.
 - [1.3](#13-step-안의-token-packing) 배열: `input_ids`와 `positions`는 position 48부터 시작한다. `seq_lens`는 48에 이번에 계산할 token 수를 더한 값이다.
 - [1.4](#14-block-table-token-위치에서-kv-cache-주소로) slot: `slot_mapping`은 새 token의 slot만 담는다. attention은 block ID 목록의 앞쪽 block 7, 12, 5에서 앞 48 token의 KV를 읽는다. 계산은 건너뛰고, 읽기만 하는 것이다.
 
@@ -1020,7 +1020,7 @@ decode instance에서 받아 오는 KV도 같은 자료구조를 거친다.
 
 - [1.1](#11-request와-kv-block의-자료구조) 자료구조: scheduler는 받아 올 token 수만큼 block을 할당해 `req_to_blocks`에 붙이고, request를 `WAITING_FOR_REMOTE_KVS` 상태로 둔다. 이때 KV가 아직 오지 않았는데도 [`num_computed_tokens`를 받아 올 token 수로 먼저 맞춘다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/sched/scheduler.py#L1324-L1336). 전송이 실패하면 나중에 다시 고친다.
 - worker: connector의 worker 쪽이 받은 KV를 할당된 block ID 자리에 직접 쓴다. [`start_load_kv()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/distributed/kv_transfer/kv_connector/v1/base.py#L318-L320)는 KV를 vLLM의 paged KV buffer, 즉 [1.4](#14-block-table-token-위치에서-kv-cache-주소로)의 KV cache tensor로 불러온다.
-- [1.2](#12-scheduler-출력-prefill과-decode를-한-step에-섞는다)-[1.4](#14-block-table-token-위치에서-kv-cache-주소로): 전송이 끝나면 request는 다시 scheduling 대상이 된다. 남은 token만 배정되고, `positions`는 받아 온 token 다음부터 시작한다. 받아 온 KV는 prefix cache에 맞은 block처럼 block table을 통해 읽힌다.
+- [1.2](#12-scheduler-출력-한-step에-섞인-prefill과-decode)-[1.4](#14-block-table-token-위치에서-kv-cache-주소로): 전송이 끝나면 request는 다시 scheduling 대상이 된다. 남은 token만 배정되고, `positions`는 받아 온 token 다음부터 시작한다. 받아 온 KV는 prefix cache에 맞은 block처럼 block table을 통해 읽힌다.
 
 ### 7. CUDA graph: padding이 남는 유일한 곳
 
@@ -1056,7 +1056,7 @@ layer 종류마다 KV에 필요한 것이 다르다. full attention은 모든 to
   ]}
 />
 
-#### KVCacheSpec: layer가 자기 KV 형식을 밝힌다
+#### KVCacheSpec: layer별 KV 형식 선언
 
 layer마다 [`get_kv_cache_spec()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/model_executor/layers/attention/attention.py#L606-L690)으로 자기 KV 형식을 [`KVCacheSpec`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/kv_cache_interface.py#L164)으로 밝힌다. model runner가 이것을 [모은다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/gpu_model_runner.py#L7146-L7175). spec은 block 크기, block 하나의 byte 크기(page size), request 하나가 최대로 쓸 메모리를 정한다.
 
@@ -1068,7 +1068,7 @@ layer마다 [`get_kv_cache_spec()`](https://github.com/vllm-project/vllm/blob/v0
 | [`MambaSpec`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/kv_cache_interface.py#L1034) | Mamba, Gated DeltaNet, KDA 같은 state 기반 layer | state 하나(block 1개)와 약간의 여유 |
 | [`CrossAttentionSpec`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/kv_cache_interface.py#L1156) | encoder-decoder의 cross attention | encoder 출력 길이까지 |
 
-#### KV cache group: 같은 종류의 layer를 묶는다
+#### KV cache group: 같은 종류 layer의 묶음
 
 [`get_kv_cache_groups()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_utils.py#L2159)가 layer들을 group으로 나눈다. 모든 layer의 spec이 같으면 group은 하나다. 대부분의 model이 이 경우이고, 앞 절까지 본 구조가 그대로 쓰인다. 종류가 섞여 있으면 아래 두 단계를 거친다.
 
@@ -1077,7 +1077,7 @@ layer마다 [`get_kv_cache_spec()`](https://github.com/vllm-project/vllm/blob/v0
 
 group 크기를 맞추는 이유는 메모리를 함께 쓰기 위해서다. [`get_kv_cache_config_from_groups()`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_utils.py#L1620-L1640)는 group마다 메모리를 따로 잡지 않는다. buffer k를 만들고, 각 group의 k번째 layer가 그 buffer를 함께 쓰게 한다. 코드 주석은 이것을 "Groups alias from byte 0"이라고 적는다. 그림에서 buffer 0은 F0, S0, S1이 함께 쓴다. 같은 bytes를 여러 group이 쓰는데도 충돌하지 않는 것은 block ID 하나가 한 번에 한 group에만 할당되기 때문이다. [`KVCacheTensor`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/kv_cache_interface.py#L1408-L1430) docstring도 "a block ID is owned by one group at a time"이라고 밝힌다. 그래서 block 3이 group 0에 가 있으면, buffer 0과 buffer 1의 block 3 자리는 F0과 F1의 KV가 쓴다.
 
-#### 타입별 manager: 할당과 반납 규칙은 group마다 다르다
+#### 타입별 manager: group마다 다른 할당과 반납 규칙
 
 KV cache coordinator는 하나의 [`BlockPool`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_coordinator.py#L119)을 만들고, group마다 spec에 맞는 manager를 [하나씩 만든다](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_coordinator.py#L154-L170). manager는 모두 [`SingleTypeKVCacheManager`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/single_type_kv_cache_manager.py#L48)의 하위 클래스이고, 같은 block pool에서 block을 받는다. 차이는 "이미 필요 없어진 token이 몇 개인가"를 답하는 `get_num_skipped_tokens()`에서 난다. 그만큼의 앞쪽 block은 null block으로 바꾸고 pool에 돌려준다.
 
@@ -1089,7 +1089,7 @@ KV cache coordinator는 하나의 [`BlockPool`](https://github.com/vllm-project/
 
 worker 쪽도 group 단위로 나뉜다. request는 group마다 block table을 하나씩 가지고([`MultiGroupBlockTable`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/worker/block_table.py#L208)), attention metadata도 group별로 만든다. [1.4](#14-block-table-token-위치에서-kv-cache-주소로)에서 본 block table과 `slot_mapping`이 group 수만큼 있는 셈이다.
 
-#### prefix caching: 모든 group이 동의하는 길이를 찾는다
+#### prefix caching: 모든 group이 동의하는 길이
 
 group이 여럿이면 prefix cache hit도 group마다 다르다. full attention은 앞에서부터 모든 block이 있어야 맞는다. sliding window는 hit 끝 앞의 window 안 block만 있으면 된다. Mamba는 hit 끝 위치의 state가 있어야 한다. 그래서 같은 token 열이라도 group마다 hit 길이가 다르고, 실제로 쓸 수 있는 것은 모든 group이 동의하는 길이다. block hash에도 group ID가 [섞여서](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_utils.py#L74), 같은 token의 block도 group마다 따로 cache되고 따로 지워진다.
 
@@ -1103,7 +1103,7 @@ hybrid manager는 `--disable-hybrid-kv-cache-manager`로 끌 수 있다. 꺼지�
 
 대가는 제약이다. 모든 group의 page size가 같아야 하므로 block 크기를 키우거나 page를 padding해야 하고, group 크기를 맞추려고 빈 layer를 넣기도 한다. MLA처럼 padding할 수 없는 spec은 page size가 맞지 않으면 [`NotImplementedError`](https://github.com/vllm-project/vllm/blob/v0.32.0/vllm/v1/core/kv_cache_utils.py#L1341-L1354)를 낸다.
 
-SGLang은 같은 문제를 반대 방향으로 푼다. 종류마다 물리적인 pool을 따로 두고, 하나의 radix tree의 node에 종류별 데이터를 붙인다. 이 차이는 [Inside SGLang](https://blog.liam.kim/posts/2026/10/Inside-sglang/#8-여러-종류의-attention-종류별-pool-위에-tree-하나를-둔다)에서 비교한다.
+SGLang은 같은 문제를 반대 방향으로 푼다. 종류마다 물리적인 pool을 따로 두고, 하나의 radix tree의 node에 종류별 데이터를 붙인다. 이 차이는 [Inside SGLang](https://blog.liam.kim/posts/2026/10/Inside-sglang/#8-여러-종류의-attention-full-swa-mamba-pool과-하나의-tree)에서 비교한다.
 
 ## 마치며
 
