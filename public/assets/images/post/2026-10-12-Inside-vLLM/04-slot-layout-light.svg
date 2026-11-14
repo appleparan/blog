@@ -15,43 +15,43 @@
     <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
     <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
   </defs>
-  <rect width="100%" height="100%" fill="#f5f5f5"/>
+  <rect width="100%" height="100%" fill="#efede7"/>
   <text x="40" y="36" fill="#2d3142" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">A slot is one token cell of the KV cache</text>
   <text x="40" y="50" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">block_size 16 · slot = block ID × 16 + offset in block</text>
   <text x="40" y="82" fill="#2d3142" font-size="9" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">1 · Request C uses block 9 then block 4</text>
-  <rect x="64" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="78" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="92" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="106" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="120" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="134" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="148" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="162" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="176" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="190" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="204" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="218" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="232" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="246" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="64" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="78" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="92" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="106" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="120" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="134" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="148" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="162" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="176" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="190" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="204" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="218" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="232" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="246" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <rect x="260" y="104" width="13" height="18" rx="1" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
   <rect x="274" y="104" width="13" height="18" rx="1" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
   <text x="64" y="98" fill="#4f5d75" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">block 9 · slots 144–159</text>
   <rect x="360" y="104" width="13" height="18" rx="1" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
-  <rect x="374" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="388" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="402" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="416" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="430" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="444" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="458" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="472" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="486" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="500" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="514" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="528" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="542" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="556" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="570" y="104" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="374" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="388" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="402" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="416" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="430" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="444" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="458" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="472" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="486" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="500" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="514" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="528" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="542" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="556" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="570" y="104" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="360" y="98" fill="#4f5d75" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">block 4 · slots 64–79</text>
   <text x="287" y="136" fill="#eb6c36" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="end" xml:space="preserve">C14, C15 → slots 158, 159</text>
   <text x="360" y="136" fill="#eb6c36" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">C16 → slot 64</text>
@@ -63,15 +63,15 @@
   <rect x="64" y="230" width="60" height="22" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
   <text x="94" y="245" fill="#eb6c36" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">slot 158</text>
   <path d="M124 241 H152" fill="none" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
-  <rect x="156" y="230" width="66" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="156" y="230" width="66" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="189" y="245" fill="#2d3142" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">K · head 0</text>
-  <rect x="226" y="230" width="66" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="226" y="230" width="66" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="259" y="245" fill="#2d3142" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">V · head 0</text>
   <rect x="296" y="230" width="66" height="22" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="1" stroke-dasharray="3,2"/>
   <text x="329" y="245" fill="#7a8399" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">…</text>
-  <rect x="366" y="230" width="66" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="366" y="230" width="66" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="399" y="245" fill="#2d3142" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">K · head h</text>
-  <rect x="436" y="230" width="66" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="436" y="230" width="66" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="469" y="245" fill="#2d3142" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">V · head h</text>
   <text x="40" y="276" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">K and V are head_size values each · slot 158 → block 158 // 16 = 9, offset 158 % 16 = 14</text>
   <text x="40" y="289" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">logical view: one slot = kv_cache[9, :, 14], where ":" takes every head</text>
@@ -80,58 +80,58 @@
   <line x1="40" y1="328" x2="600" y2="328" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
   <text x="40" y="348" fill="#2d3142" font-size="9" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">3 · Every layer has its own tensor, and all use the same slot number</text>
   <text x="40" y="375" fill="#4f5d75" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">layer 0</text>
-  <rect x="110" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="124" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="138" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="152" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="166" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="180" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="194" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="208" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="222" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="236" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="250" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="264" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="278" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="292" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="110" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="124" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="138" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="152" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="166" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="180" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="194" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="208" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="222" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="236" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="250" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="264" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="278" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="292" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <rect x="306" y="362" width="13" height="18" rx="1" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
-  <rect x="320" y="362" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="320" y="362" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="344" y="375" fill="#eb6c36" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">block 9 · slot 158 → C14</text>
   <text x="40" y="405" fill="#4f5d75" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">layer 1</text>
-  <rect x="110" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="124" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="138" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="152" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="166" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="180" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="194" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="208" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="222" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="236" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="250" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="264" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="278" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="292" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="110" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="124" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="138" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="152" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="166" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="180" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="194" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="208" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="222" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="236" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="250" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="264" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="278" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="292" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <rect x="306" y="392" width="13" height="18" rx="1" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
-  <rect x="320" y="392" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="320" y="392" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="344" y="405" fill="#eb6c36" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">block 9 · slot 158 → C14</text>
   <text x="40" y="445" fill="#4f5d75" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">layer N−1</text>
-  <rect x="110" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="124" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="138" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="152" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="166" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="180" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="194" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="208" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="222" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="236" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="250" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="264" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="278" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
-  <rect x="292" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="110" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="124" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="138" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="152" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="166" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="180" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="194" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="208" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="222" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="236" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="250" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="264" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="278" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
+  <rect x="292" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <rect x="306" y="432" width="13" height="18" rx="1" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
-  <rect x="320" y="432" width="13" height="18" rx="1" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="320" y="432" width="13" height="18" rx="1" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="344" y="445" fill="#eb6c36" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">block 9 · slot 158 → C14</text>
   <text x="64" y="420" fill="#7a8399" font-size="10" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">⋮</text>
 </svg>

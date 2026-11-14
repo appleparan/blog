@@ -15,7 +15,7 @@
     <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
     <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
   </defs>
-  <rect width="100%" height="100%" fill="#f5f5f5"/>
+  <rect width="100%" height="100%" fill="#efede7"/>
   <g transform="translate(0,-8)">
   <g>
     <text x="40" y="40" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em">STEP N · THE TARGET MODEL VERIFIES TWO DRAFTS</text>
@@ -25,7 +25,7 @@
     <text x="40" y="126" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace">verify</text>
     <text x="40" y="153" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace">block 12 KV</text>
     <text x="40" y="176" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace">slot</text>
-    <rect x="136" y="70" width="50" height="26" rx="3" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="136" y="70" width="50" height="26" rx="3" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <text x="161.0" y="87" fill="#2d3142" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">A16</text>
     <text x="161.0" y="110" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">16</text>
     <rect x="192" y="70" width="50" height="26" rx="3" fill="rgba(79,93,117,0.1)" stroke="#7a8399" stroke-width="1" stroke-dasharray="4,3"/>
@@ -37,10 +37,10 @@
     <text x="161.0" y="126" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">-</text>
     <text x="217.0" y="126" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">ACCEPT</text>
     <text x="273.0" y="126" fill="#eb6c36" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">REJECT</text>
-    <rect x="136" y="136" width="50" height="26" rx="3" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="136" y="136" width="50" height="26" rx="3" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <text x="161.0" y="153" fill="#2d3142" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">KV</text>
     <text x="161.0" y="176" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">192</text>
-    <rect x="192" y="136" width="50" height="26" rx="3" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="192" y="136" width="50" height="26" rx="3" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <text x="217.0" y="153" fill="#2d3142" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">KV</text>
     <text x="217.0" y="176" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">193</text>
     <rect x="248" y="136" width="50" height="26" rx="3" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1" stroke-dasharray="4,3"/>
@@ -67,7 +67,7 @@
   <g>
     <line x1="40" y1="424" x2="600" y2="424" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
     <text x="40" y="440" fill="#4f5d75" font-size="8" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" letter-spacing="0.12em">LEGEND</text>
-    <rect x="40" y="454" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="40" y="454" width="14" height="10" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <text x="60" y="462" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Target token or its KV</text>
     <rect x="196" y="454" width="14" height="10" rx="2" fill="rgba(79,93,117,0.1)" stroke="#7a8399" stroke-width="1" stroke-dasharray="4,3"/>
     <text x="216" y="462" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Draft token or its KV</text>

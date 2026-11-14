@@ -38,7 +38,7 @@ describe('manifest', () => {
     const m = JSON.parse(readFileSync(path, 'utf8'));
     expect(m.name).toBe(siteConfig.title);
     expect(m.display).toBe('standalone');
-    expect(m.theme_color).toBe('#fafaf8');
+    expect(m.theme_color).toBe('#efede7');
     for (const icon of m.icons) {
       expect(existsSync(`dist${icon.src}`)).toBe(true);
     }

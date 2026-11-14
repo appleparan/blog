@@ -166,7 +166,7 @@ Rules confirmed from `_site/`:
   Example: `2018-07-14-Tox-Workflow.md` has `date: 2017-07-...` and is
   served at `/posts/2017/07/Tox-Workflow/`.
 - Every level of a category list gets its own page. `[Deep Learning,
-Diffusion, Vision]` produces `/categories/deep-learning/`,
+  Diffusion, Vision]` produces `/categories/deep-learning/`,
   `/categories/diffusion/`, and `/categories/vision/`. The slug is the name
   in lowercase with spaces replaced by `-` (`Server Engineering` becomes
   `server-engineering`). Tags follow the same rule. Chirpy's categories

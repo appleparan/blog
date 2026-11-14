@@ -15,25 +15,25 @@
     <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
     <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
   </defs>
-  <rect width="100%" height="100%" fill="#f5f5f5"/>
+  <rect width="100%" height="100%" fill="#efede7"/>
   <text x="40" y="32" fill="#2d3142" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">4 · Last chunk: D joins running_batch and starts decode</text>
   <text x="40" y="46" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">request D has a 10-token prompt · chunked_prefill_size 4 in this example</text>
   <text x="40" y="82" fill="#4f5d75" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">prompt</text>
-  <rect x="100" y="68" width="40" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="100" y="68" width="40" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="120" y="83" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">t0</text>
-  <rect x="144" y="68" width="40" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="144" y="68" width="40" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="164" y="83" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">t1</text>
-  <rect x="188" y="68" width="40" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="188" y="68" width="40" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="208" y="83" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">t2</text>
-  <rect x="232" y="68" width="40" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="232" y="68" width="40" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="252" y="83" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">t3</text>
-  <rect x="276" y="68" width="40" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="276" y="68" width="40" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="296" y="83" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">t4</text>
-  <rect x="320" y="68" width="40" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="320" y="68" width="40" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="340" y="83" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">t5</text>
-  <rect x="364" y="68" width="40" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="364" y="68" width="40" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="384" y="83" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">t6</text>
-  <rect x="408" y="68" width="40" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="408" y="68" width="40" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="428" y="83" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">t7</text>
   <rect x="452" y="68" width="40" height="22" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
   <text x="472" y="83" fill="#eb6c36" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">t8</text>
@@ -63,10 +63,10 @@
   <text x="100" y="146" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" letter-spacing="0.14em" xml:space="preserve">REQ_TO_TOKEN: KV SLOT OF EACH POSITION · THE ROW STAYS WITH D BETWEEN CHUNKS</text>
   <line x1="40" y1="160" x2="600" y2="160" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
   <text x="40" y="182" fill="#4f5d75" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">radix tree</text>
-  <circle cx="120" cy="206" r="10" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <circle cx="120" cy="206" r="10" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="120" y="209" fill="#4f5d75" font-size="6" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">root</text>
   <path d="M130 206 H148" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
-  <rect x="150" y="192" width="150" height="28" rx="4" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="150" y="192" width="150" height="28" rx="4" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="160" y="210" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">t0–t3 · slots 21–24</text>
   <text x="225" y="234" fill="#7a8399" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">lock_ref 1 · path</text>
   <path d="M310 206 H320" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
