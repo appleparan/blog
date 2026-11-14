@@ -1,0 +1,723 @@
+---
+title: "Index 없이 Matrix Gradient 이해하기"
+author: jongsukim
+date: 2026-11-14 01:00:00 +0900
+categories: [Machine Learning]
+tags:
+  - Gradient
+  - Matrix
+  - Backpropagation
+math: true
+mermaid: false
+---
+
+import Figure from '../../components/Figure.astro';
+
+## Introduction
+
+딥러닝을 공부하다 보면 backward 식을 직접 유도해야 하는 순간이 온다.
+논문이나 코드에는 결과 한 줄만 적혀 있고, 그 한 줄을 확인하려면 index를 붙여서 한참을 풀어야 한다.
+어려운 이유는 미분하는 대상이 scalar가 아니라 행렬이기 때문이다.
+
+파라미터가 scalar이면 어렵지 않다.
+$y = wx$에서 $w$를 조금 움직이면 $y$가 $x$배로 움직이고, 이 scalar 하나가 미분의 전부다.
+
+그런데 실제 파라미터는 행렬이고, 그 출력도 행렬이다.
+$Y = XW$에서 "$Y$를 $W$로 미분한 것"을 그대로 적으려면 $Y$의 원소 하나마다 $W$의 모든 원소에 대한 미분이 있어야 한다.
+원소 번호(index)가 4개 붙는 4차원 tensor가 된다.
+layer를 여러 개 이으면 chain rule은 이런 tensor끼리의 곱이 된다.
+이것을 index 없이 머릿속에 통째로 그리기는 어렵다.
+
+그래서 차원을 통째로 생각하기를 포기하고 원소 하나로 내려가게 된다.
+$\partial L / \partial W_{ab}$를 쓰고, chain rule로 합을 펼치고, 0이 되는 항을 지우고, 남은 합을 다시 행렬곱으로 알아본다.
+맞는 방법이지만 길다.
+끝나고 나서도 결과가 왜 그런 모양인지는 남지 않아서, 다음에 다시 유도하게 된다.
+
+이 글이 답하려는 질문은 이것이다.
+여러 차원을 원소로 쪼개지 않고, 4차원 tensor도 만들지 않고, gradient를 식에서 바로 읽는 방법은 없는가.
+
+답은 "있다"이고, 생각을 두 가지만 바꾸면 된다.
+
+첫째, 미분 전체를 tensor로 적지 않고 변화량만 적는다.
+$W$를 $dW$만큼 움직이면 $Y = XW$는 $dY = X\,dW$만큼 움직인다.
+$Y = XW$에서 $X$는 그대로 두고 $W$ 자리에 $dW$를 넣은 식이다.
+행렬이 행렬 그대로 남고 index는 나오지 않는다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Matrix-Gradient/mg-00a-delta-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Matrix-Gradient/mg-00a-delta-dark.svg"
+  caption="첫째. W를 움직이기 전과 후를 나란히 놓고 빼면, 새로 생긴 부분은 X와 dW의 곱이다. dW는 W와, dY는 Y와 shape가 같다."
+/>
+
+$Y$가 움직이면 loss도 $dL$만큼 움직인다.
+이 $dL$에서 둘째가 시작한다.
+
+둘째, gradient를 "$dW$의 원소에 곱해서 $dL$을 만드는 수들"로 본다.
+
+$dW$가 작으면 loss의 변화 $dL$은 $dW$에 대해 linear하다.
+그래서 $dL$은 $dW$의 원소마다 어떤 수를 곱해서 모두 더한 꼴이 된다.
+수가 원소마다 다른 것은 원소마다 loss에 주는 영향이 다르기 때문이다.
+그 수들을 $W$와 같은 shape로 모은 것이 gradient다.
+
+이렇게 모은 수는 원소별 미분 $\partial L / \partial W_{ab}$와 같다.
+달라지는 것은 구하는 방법이다.
+원소마다 따로 미분하지 않고, $dL$의 식에서 한꺼번에 읽어 낸다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Matrix-Gradient/mg-00b-pair-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Matrix-Gradient/mg-00b-pair-dark.svg"
+  caption="둘째. 첫째 그림의 dW에 원소마다 수를 곱해서 모두 더하면 loss의 변화량 dL이 된다. 그 수들을 W와 같은 shape로 모은 행렬이 gradient다."
+/>
+
+여기서 계산법이 나온다.
+$dL$의 식을 "어떤 행렬과 $dW$를 원소끼리 곱해서 더한 것"으로 정리할 수만 있으면, 그 행렬이 gradient다.
+
+원소끼리 곱해서 더하는 연산을 inner product라고 하고, 이 글에서는 $\langle A, B \rangle$로 쓴다.
+
+덤으로 backprop 식에 transpose가 왜 붙는지도 보인다.
+transpose는 식을 정리하면서 행렬을 inner product의 한쪽 칸에서 다른 쪽 칸으로 넘길 때 생긴다.
+
+글의 순서는 다음과 같다.
+먼저 linear layer 하나로 원하는 것을 구체적으로 정한다.
+다음으로 거기에 필요한 세 가지 재료인 derivative, inner product, gradient를 하나씩 본다.
+마지막으로 셋을 조합해 계산법을 만들고, 예제와 backprop에 적용한다.
+
+이 글은 Alex Wang의 [Matrix gradients, without the pain](https://alexwang.ai/posts/derivatives-and-gradients/)을 따라가며 한국어로 풀어 쓴 글이다.
+순서와 예제는 원문을 따르고, 읽으면서 막혔던 부분에는 설명과 그림을 덧붙였다.
+
+## 원하는 것: index 없는 gradient 유도
+
+가장 단순한 layer인 linear layer에서 시작한다.
+
+$$
+Y = XW, \qquad X \in \mathbb{R}^{B \times D}, \quad W \in \mathbb{R}^{D \times F}, \quad Y \in \mathbb{R}^{B \times F}
+$$
+
+$X$는 입력 $B$개를 쌓은 batch이고, $W$는 weight다.
+$Y$ 뒤에는 scalar loss $L(Y)$가 붙어 있다.
+loss를 $Y$로 미분한 값은 이미 안다고 하자.
+backprop에서 loss 쪽 layer가 거꾸로 전해 주는 값이다.
+
+$$
+\bar Y = \nabla L(Y), \qquad \bar Y_{ij} = \frac{\partial L}{\partial Y_{ij}}
+$$
+
+$X$를 고정하고 loss를 $W$의 함수로 본 것을 $\mathcal{L}$이라고 쓴다.
+
+$$
+\mathcal{L}(W) = L(XW) = L(Y)
+$$
+
+이 글 전체에서 $L$은 layer의 출력을 받는 loss이고, $\mathcal{L}$은 지금 미분하려는 변수를 받는 loss다.
+값은 같고 입력만 다르다.
+여기서는 $W$로 미분하므로 $\mathcal{L}$이 $W$를 받는다.
+뒤의 예제에서 $x$로 미분할 때는 $\mathcal{L}(x) = L(Wx)$처럼 $\mathcal{L}$이 $x$를 받는다.
+구하려는 것은 $\nabla \mathcal{L}(W)$다.
+
+### index로 푸는 방법
+
+익숙한 방법은 $W$의 원소 하나 $W_{ab}$에 대한 미분을 따로 구하는 것이다.
+$W_{ab}$를 조금 움직였을 때 loss가 어떻게 변하는지를 세 단계로 따라간다.
+
+**1단계: $W_{ab}$가 $Y$를 움직인다.**
+$W_{ab}$는 $W$의 $b$번째 열에 있다.
+$Y = XW$에서 $Y$의 $b$번째 열은 $X$ 전체에 $W$의 $b$번째 열 하나를 곱해서 만든다.
+$W$의 다른 열은 쓰지 않는다.
+그래서 $W_{ab}$를 움직이면 $Y$의 $b$번째 열만 움직이고, 다른 열은 그대로다.
+
+$X$와 $W$가 $2 \times 2$인 경우로 직접 확인해 보자.
+행렬곱은 다음과 같다.
+
+$$
+\underbrace{\begin{pmatrix} Y_{11} & Y_{12} \\ Y_{21} & Y_{22} \end{pmatrix}}_{Y}
+=
+\underbrace{\begin{pmatrix} X_{11} & X_{12} \\ X_{21} & X_{22} \end{pmatrix}}_{X}
+\underbrace{\begin{pmatrix} W_{11} & W_{12} \\ W_{21} & W_{22} \end{pmatrix}}_{W}
+$$
+
+$Y$의 각 원소는 $X$의 행 하나와 $W$의 열 하나를 곱해서 더한 값이다.
+네 원소를 모두 풀어 쓰면 다음과 같다.
+
+$$
+\begin{aligned}
+Y_{11} &= X_{11} W_{11} + X_{12} W_{21}, & Y_{12} &= X_{11} W_{12} + X_{12} W_{22} \\
+Y_{21} &= X_{21} W_{11} + X_{22} W_{21}, & Y_{22} &= X_{21} W_{12} + X_{22} W_{22}
+\end{aligned}
+$$
+
+$W_{11}$은 왼쪽 열의 $Y_{11}$과 $Y_{21}$에만 나온다.
+오른쪽 열의 $Y_{12}$, $Y_{22}$에는 나오지 않는다.
+$W_{11}$과 곱해지는 것은 $Y_{11}$에서는 $X_{11}$, $Y_{21}$에서는 $X_{21}$이다.
+그래서 $W_{11}$을 $dW_{11}$만큼 움직이면 $Y_{11}$은 $X_{11}\,dW_{11}$만큼, $Y_{21}$은 $X_{21}\,dW_{11}$만큼 움직인다.
+
+일반적인 경우도 같다.
+$b$번째 열의 $i$번째 원소를 풀어 쓰면, $W_{ab}$와 곱해지는 것은 $X_{ia}$ 하나다.
+
+$$
+Y_{ib} = X_{i1} W_{1b} + \cdots + X_{ia} W_{ab} + \cdots + X_{iD} W_{Db}
+$$
+
+따라서 $W_{ab}$가 $dW_{ab}$만큼 움직이면 $Y_{ib}$는 $X_{ia}\,dW_{ab}$만큼 움직인다.
+이것을 $i = 1, \dots, B$ 모든 행에 대해 모으면 $X$의 $a$번째 열 전체가 된다.
+
+**2단계: 움직인 $Y$가 loss를 움직인다.**
+$Y_{ij}$가 조금 움직이면 loss는 그 양에 $\bar Y_{ij}$를 곱한 만큼 움직인다.
+1단계에서 움직인 것은 $Y$의 $b$번째 열에 있는 원소 $B$개다.
+각각이 loss를 움직인 양을 모두 더한다.
+$2 \times 2$ 예에서는 $Y_{11}$과 $Y_{21}$ 두 개가 움직였으므로 다음과 같다.
+
+$$
+\text{loss의 변화} = \bar Y_{11} \cdot X_{11}\,dW_{11} + \bar Y_{21} \cdot X_{21}\,dW_{11}
+\quad\Rightarrow\quad
+\frac{\partial \mathcal{L}}{\partial W_{11}} = X_{11} \bar Y_{11} + X_{21} \bar Y_{21}
+$$
+
+일반적인 경우에는 $Y$의 $b$번째 열 전체에 대해 더한다.
+
+$$
+\text{loss의 변화} = \sum_i \bar Y_{ib}\, X_{ia}\, dW_{ab}
+\quad\Rightarrow\quad
+\frac{\partial \mathcal{L}}{\partial W_{ab}} = \sum_i X_{ia}\, \bar Y_{ib}
+$$
+
+이것이 chain rule을 원소 단위로 쓴 것이다.
+교과서에서는 $Y$의 모든 원소에 대한 합으로 쓴다.
+
+$$
+\frac{\partial \mathcal{L}}{\partial W_{ab}} = \sum_{i,j} \frac{\partial L}{\partial Y_{ij}} \frac{\partial Y_{ij}}{\partial W_{ab}}
+$$
+
+1단계에서 본 대로 $j \neq b$인 항은 $\partial Y_{ij} / \partial W_{ab} = 0$이라 사라지고, 위의 합만 남는다.
+
+**3단계: 합을 행렬곱으로 알아본다.**
+$\sum_i X_{ia} \bar Y_{ib}$는 $X$의 $a$번째 열과 $\bar Y$의 $b$번째 열을 원소끼리 곱해서 더한 값이다.
+그런데 행렬곱 $AB$의 $(a, b)$ 원소는 $A$의 $a$번째 행과 $B$의 $b$번째 열을 곱해서 더한 값이다.
+$X$의 $a$번째 열을 행으로 세워야 이 모양이 되고, 그것이 $X^\top$의 $a$번째 행이다.
+
+$$
+\frac{\partial \mathcal{L}}{\partial W_{ab}} = (X^\top \bar Y)_{ab}
+\quad\Rightarrow\quad
+\nabla \mathcal{L}(W) = X^\top \bar Y
+$$
+
+답은 짧지만 과정은 길다.
+transpose는 마지막에 합을 행렬곱으로 알아보는 순간에야 나타난다.
+가장 단순한 layer가 이 정도이고, layer가 복잡해지면 이 작업은 빠르게 어려워진다.
+
+### index 없이 푸는 방법
+
+같은 답을 두 줄로 얻는 방법이 있다.
+표기는 뒤에서 설명하므로 지금은 모양만 보면 된다.
+
+$$
+dY = X\,dW
+$$
+
+$$
+\langle \nabla \mathcal{L}(W),\ dW \rangle
+= \langle \nabla L(Y),\ dY \rangle
+= \langle \nabla L(Y),\ X\,dW \rangle
+= \langle X^\top \nabla L(Y),\ dW \rangle
+$$
+
+양 끝을 비교하면 $\nabla \mathcal{L}(W) = X^\top \nabla L(Y)$다.
+index는 한 번도 나오지 않았다.
+transpose는 $X$를 $\langle \cdot, \cdot \rangle$의 오른쪽 칸에서 왼쪽 칸으로 옮기는 순간에 생겼다.
+
+이 두 줄을 읽으려면 세 가지가 필요하다.
+
+1. derivative: $dY = X\,dW$가 무슨 뜻인가.
+2. inner product: $\langle \cdot, \cdot \rangle$는 무엇이고, 그 안에서 행렬을 어떻게 옮기는가.
+3. gradient: 왜 왼쪽 칸에 남은 것을 gradient라고 읽어도 되는가.
+
+아래 세 절이 이 순서대로 하나씩 답한다.
+
+## 재료 1: 한 점에서의 linear function, derivative
+
+derivative는 숫자가 아니라 **함수**다.
+vector를 받아 vector를 내는 함수 $f: \mathbb{R}^{D} \to \mathbb{R}^{D'}$가 있다고 하자.
+점 $x$에서의 derivative $df_x$는 작은 변화 $dx$를 받아서, 그때 $f$가 얼마나 변하는지를 내는 **linear function**이다.
+
+$$
+f(x + dx) - f(x) = df_x(dx) + r(dx)
+$$
+
+$r(dx)$는 $dx$보다 빠르게 0으로 가는 나머지 항이다.
+그래서 $dx$가 작으면 $f(x + dx) - f(x) \approx df_x(dx)$이고, $df_x$는 $x$ 근처에서 $f$의 변화를 가장 잘 근사하는 linear function이다.
+여기서 $dx$는 특별한 기호가 아니라 그냥 작은 vector다.
+$\Delta x$ 대신 $dx$라고 쓰는 이유는 뒤의 계산이 편해지기 때문이다.
+
+예를 들어 $f(x_1, x_2) = x_1^2 + 3x_2$이면 다음과 같다.
+
+$$
+df_x(dx) = 2x_1\,dx_1 + 3\,dx_2
+$$
+
+$dx$를 2배로 하면 출력도 2배가 된다.
+입력은 "어느 방향으로 얼마나 움직였는가"이고 출력은 "그래서 $f$가 얼마나 변했는가"다.
+
+linear layer로 돌아가면, $W$를 $dW$만큼 움직였을 때 $Y = XW$의 변화는 $X(W + dW) - XW = X\,dW$다.
+이것이 앞에서 본 $dY = X\,dW$다.
+$W$에 대해 linear한 layer라서 나머지 항도 없다.
+
+### Jacobian: derivative를 행렬로 적은 것
+
+$\mathbb{R}^{D}$에서 $\mathbb{R}^{D'}$로 가는 linear function은 모두 행렬로 쓸 수 있다.
+$df_x$를 행렬로 쓴 것이 Jacobian $J_f(x)$다.
+
+$$
+df_x(dx) = J_f(x)\,dx, \qquad J_f(x)_{ij} = \frac{\partial f_i}{\partial x_j}(x)
+$$
+
+Jacobian에 vector를 곱하는 연산을 JVP(Jacobian-vector product)라고 한다.
+forward-mode 미분이 하는 일이 이것이다.
+
+### derivative의 chain rule
+
+$f = g \circ h$이고 $y = h(x)$라고 하자.
+
+$$
+df_x(dx) = dg_y\big(dh_x(dx)\big)
+$$
+
+$dx$를 $h$의 derivative에 넣으면 $h$의 변화 $dy$가 나온다.
+그 $dy$를 $g$의 derivative에 넣으면 $f$의 변화가 나온다.
+작은 변화를 함수 하나하나에 차례로 통과시키는 것이 chain rule이다.
+
+## 재료 2: vector를 scalar로 바꾸는 inner product
+
+inner product는 같은 shape의 두 대상을 받아 scalar 하나를 낸다.
+vector에서는 익숙한 내적이다.
+
+$$
+\langle a, b \rangle = a^\top b = \sum_i a_i b_i
+$$
+
+행렬에서도 하는 일은 같다.
+같은 위치의 원소끼리 곱해서 모두 더한다.
+행렬을 한 줄로 펼쳐서 vector 내적을 한 것과 같다.
+
+$$
+\langle A, B \rangle = \sum_{i,j} A_{ij} B_{ij}
+$$
+
+이 합은 행렬 연산으로 $\mathrm{tr}(A^\top B)$라고도 쓴다.
+$\mathrm{tr}$은 대각 원소의 합인 trace다.
+$2 \times 2$로 풀어 보면 왜 같은지 보인다.
+
+$$
+A^\top B =
+\begin{pmatrix} A_{11} & A_{21} \\ A_{12} & A_{22} \end{pmatrix}
+\begin{pmatrix} B_{11} & B_{12} \\ B_{21} & B_{22} \end{pmatrix}
+=
+\begin{pmatrix}
+A_{11} B_{11} + A_{21} B_{21} & \cdots \\
+\cdots & A_{12} B_{12} + A_{22} B_{22}
+\end{pmatrix}
+$$
+
+$A^\top B$의 첫째 대각 원소는 $A$의 첫째 열과 $B$의 첫째 열의 내적이고, 둘째 대각 원소는 둘째 열끼리의 내적이다.
+대각 원소를 더하면 모든 열의 원소끼리 곱을 더한 것, 즉 모든 원소끼리 곱을 더한 것이 된다.
+
+$$
+\mathrm{tr}(A^\top B) = A_{11} B_{11} + A_{21} B_{21} + A_{12} B_{12} + A_{22} B_{22} = \sum_{i,j} A_{ij} B_{ij}
+$$
+
+굳이 trace로 다시 쓰는 이유는 계산 때문이다.
+$\sum$ 형태로는 행렬을 옮길 수 없지만, $\mathrm{tr}(A^\top B)$처럼 행렬곱으로 쓰면 아래 성질로 행렬을 옮길 수 있다.
+
+계산에는 선형대수의 다음 성질을 쓴다.
+
+| 성질 | 식 |
+| --- | --- |
+| transpose로 넘기기 (앞) | $\langle A, MB \rangle = \langle M^\top A, B \rangle$ |
+| transpose로 넘기기 (뒤) | $\langle A, BM \rangle = \langle A M^\top, B \rangle$ |
+| scalar의 transpose와 trace | $c = c^\top = \mathrm{tr}(c)$ |
+| trace 순환 (돌리기만 됨) | $\mathrm{tr}(ABC) = \mathrm{tr}(CAB) = \mathrm{tr}(BCA)$ |
+| 각 칸에 대해 linear | $\langle A, \alpha B + C \rangle = \alpha \langle A, B \rangle + \langle A, C \rangle$ |
+
+앞에 붙은 행렬은 왼쪽 칸의 앞으로, 뒤에 붙은 행렬은 왼쪽 칸의 뒤로 간다.
+어느 쪽이든 transpose가 붙는다.
+두 식은 양변을 trace로 바꾸고 $(PQ)^\top = Q^\top P^\top$과 trace 순환을 쓰면 확인할 수 있다.
+gradient 계산에서 하는 일은 이 성질들로 항을 옮기는 것뿐이다.
+
+## 재료 3: derivative를 표현하는 vector, gradient
+
+재료 1에서 derivative $df_x$는 숫자가 아니라 함수라고 했다.
+이제 $f$의 출력이 scalar 하나인 경우만 보자.
+loss가 그런 경우다.
+그러면 $df_x$는 vector $dx$를 받아 scalar 하나를 내는 linear function이다.
+재료 1의 예 $f(x_1, x_2) = x_1^2 + 3x_2$가 그렇다.
+
+$$
+df_x(dx) = 2x_1\,dx_1 + 3\,dx_2
+$$
+
+이 함수가 하는 일은 $dx$의 원소마다 정해진 수($2x_1$과 $3$)를 곱해서 더하는 것뿐이다.
+그 정해진 수들만 알면 함수를 다시 만들 수 있다.
+그래서 수들을 vector로 모으면 함수 전체를 vector 하나로 적을 수 있다.
+원소끼리 곱해서 더하는 것은 재료 2의 inner product이므로 다음과 같이 쓴다.
+
+$$
+df_x(dx) = \left\langle \begin{pmatrix} 2x_1 \\ 3 \end{pmatrix}, \begin{pmatrix} dx_1 \\ dx_2 \end{pmatrix} \right\rangle
+$$
+
+왼쪽 칸의 vector, 즉 곱해지던 수 $2x_1$과 $3$을 모은 vector가 gradient다.
+
+$$
+\nabla f(x) = \begin{pmatrix} 2x_1 \\ 3 \end{pmatrix}
+$$
+
+일반적으로 쓰면, gradient $\nabla f(x)$는 모든 $dx$에 대해 다음을 만족하는 vector다.
+
+$$
+df_x(dx) = \langle \nabla f(x),\ dx \rangle
+$$
+
+derivative는 함수이고, gradient는 그 함수를 vector 하나로 적은 것이다.
+담은 정보는 같지만 종류가 다르다.
+gradient는 scalar를 내는 함수에만 있다.
+출력이 vector이면 derivative를 vector 하나로 적을 수 없기 때문이다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Matrix-Gradient/mg-01-dual-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Matrix-Gradient/mg-01-dual-dark.svg"
+  caption="같은 dx를 위쪽 길(derivative에 넣기)로 보내든 아래쪽 길(gradient와 inner product)로 보내든 같은 df가 나온다. 그래서 linear function 전체를 vector 하나로 대신할 수 있다."
+/>
+
+산의 지형에 비유할 수 있다.
+$f(x)$를 위치 $x$의 고도라고 하자.
+derivative는 "이 방향으로 한 걸음 가면 고도가 얼마나 변하는가"에 답하는 함수다.
+
+동쪽으로 한 걸음 가면 2m 오르고, 북쪽으로 한 걸음 가면 3m 오른다고 하자.
+그러면 다른 방향은 따로 재지 않아도 된다.
+동쪽으로 $dx_1$, 북쪽으로 $dx_2$만큼 가면 고도는 $2\,dx_1 + 3\,dx_2$만큼 변한다.
+모든 방향의 답이 두 수 $(2, 3)$에서 나온다.
+이 $(2, 3)$을 지도 위의 화살표로 그린 것이 gradient다.
+
+이 화살표는 방향에 대한 정보도 준다.
+걸음의 길이가 같다면, inner product는 두 vector의 방향이 같을 때 가장 크다.
+그래서 걸음을 화살표 방향으로 내면 가장 많이 오르고, 화살표와 직각으로 내면(등고선을 따라 가면) 고도가 변하지 않고, 반대로 내면 가장 많이 내려간다.
+gradient descent가 gradient의 반대 방향으로 움직이는 이유가 이것이다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Matrix-Gradient/mg-01b-terrain-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Matrix-Gradient/mg-01b-terrain-dark.svg"
+  caption="derivative는 방향을 넣으면 고도 변화를 내는 함수이고, 하는 일은 2와 3을 곱해서 더하는 것뿐이다. 그 두 수를 동쪽 성분과 북쪽 성분으로 삼은 화살표 (2, 3)이 gradient이고, 가장 가파르게 오르는 방향을 가리킨다."
+/>
+
+이 정의에서 세 가지가 따라 나온다.
+
+**원소는 partial derivative다.**
+$dx$ 자리에 $i$번째만 1인 vector $e_i$를 넣으면 $\nabla f(x)$의 $i$번째 원소는 $df_x(e_i) = \partial f / \partial x_i$여야 한다.
+gradient는 partial derivative를 모은 vector이고, 위의 정의는 그것을 index 없이 적은 것이다.
+입력이 행렬 $W$이면 $\nabla f(W)$의 $(i, j)$ 원소는 $\partial f / \partial W_{ij}$다.
+
+**유일하다.**
+같은 derivative를 표현하는 vector는 하나뿐이다.
+두 vector $a$와 $b$가 모든 $dx$에 대해 같은 값을 낸다고 하자.
+2차원에서 풀어 쓰면 다음 식이 모든 $dx_1$, $dx_2$에 대해 성립한다는 뜻이다.
+
+$$
+a_1\,dx_1 + a_2\,dx_2 = b_1\,dx_1 + b_2\,dx_2
+$$
+
+모든 $dx$에 대해 성립하므로 원하는 $dx$를 골라 넣을 수 있다.
+
+$$
+\begin{aligned}
+dx = (1, 0): &\quad a_1 \cdot 1 + a_2 \cdot 0 = b_1 \cdot 1 + b_2 \cdot 0 &&\Rightarrow\quad a_1 = b_1 \\
+dx = (0, 1): &\quad a_1 \cdot 0 + a_2 \cdot 1 = b_1 \cdot 0 + b_2 \cdot 1 &&\Rightarrow\quad a_2 = b_2
+\end{aligned}
+$$
+
+두 원소가 모두 같으므로 $a = b$다.
+
+index 없이도 증명할 수 있고, 이쪽은 차원과 무관하며 행렬에도 그대로 통한다.
+조건을 한쪽으로 모으면 모든 $dx$에 대해 $\langle a - b,\ dx \rangle = 0$이다.
+$dx$ 자리에 $a - b$ 자신을 넣는다.
+
+$$
+\langle a - b,\ a - b \rangle = \lVert a - b \rVert^2 = 0
+\quad\Rightarrow\quad a - b = 0
+\quad\Rightarrow\quad a = b
+$$
+
+자기 자신과의 inner product는 원소 제곱의 합이므로, 0이 되려면 모든 원소가 0이어야 한다.
+
+이 성질이 계산법 전체의 근거다.
+뒤에서 우리는 gradient를 원소별로 구하지 않는다.
+대신 $df$를 어떤 방법으로든 $\langle\, ?,\ dx \,\rangle$ 꼴로 만든다.
+만드는 길은 여러 가지일 수 있지만, 조건을 만족하는 vector는 하나뿐이므로 어느 길로 가든 $?$는 같은 vector이고 그것이 gradient다.
+그래서 "왼쪽 칸에 남은 것"을 gradient라고 읽어도 된다.
+단, 식이 특정한 $dx$ 하나가 아니라 모든 $dx$에 대해 성립해야 한다.
+
+**shape는 변수와 같다.**
+$\langle \nabla f, dx \rangle$가 정의되려면 둘의 shape가 같아야 한다.
+gradient는 항상 미분하는 변수와 같은 shape다.
+변수가 $D \times F$ 행렬이면 gradient도 $D \times F$ 행렬이다.
+
+derivative와 gradient는 같은 정보를 담지만 같은 종류의 대상은 아니다.
+$df_x$는 $dx$를 받아 scalar를 내므로 row vector $\nabla f(x)^\top$처럼 동작하고, $\nabla f(x)$ 자체는 column vector다.
+숫자는 같지만 하나는 누워 있고 하나는 서 있다.
+
+## 조합: index 없는 gradient 계산법
+
+세 가지를 합치면 gradient의 정의가 그대로 계산법이 된다.
+
+1. **derivative $df_x(dx)$를 구한다.** chain rule은 이 단계에서 쓴다.
+2. **결과를 $\langle\, ?,\ dx \,\rangle$ 꼴로 정리하고 $?$를 읽는다.** 유일성에 의해 $?$가 gradient다.
+
+시작하기 전에 $f$의 출력이 scalar인지 확인한다.
+derivative를 vector 하나, 즉 gradient로 적을 수 있는 것은 출력이 scalar일 때뿐이다(재료 3).
+출력이 vector이면 derivative는 행렬, 즉 Jacobian으로만 적을 수 있다.
+loss는 scalar이므로 학습에서는 항상 gradient를 쓸 수 있다.
+
+### 예제: quadratic form의 gradient
+
+$A$가 $D \times D$ 행렬일 때 $f(x) = x^\top A x$의 gradient를 구한다.
+
+먼저 표기 하나를 정한다.
+$g(x) = Ax$는 linear하므로 $dg_x(dx) = A\,dx$다.
+이것을 $d(Ax) = A\,dx$라고 줄여 쓴다.
+일반적으로 $d(\text{식})$은 "$x$를 그 식으로 보내는 함수의 derivative에 $dx$를 넣은 값"이다.
+
+1단계에서는 곱의 미분으로 derivative를 구한다.
+
+$$
+df_x(dx) = d(x^\top A x) = (dx)^\top A x + x^\top A\,dx
+$$
+
+2단계에서는 $dx$를 오른쪽 칸으로 모은다.
+첫 항은 scalar이므로 transpose해도 값이 같다.
+즉 $(dx)^\top A x = x^\top A^\top dx$다.
+
+$$
+df_x(dx) = (x^\top A^\top + x^\top A)\,dx = \big\langle (A + A^\top)x,\ dx \big\rangle
+$$
+
+따라서 $\nabla f(x) = (A + A^\top)x$다.
+$A$가 대칭이면 익숙한 $2Ax$가 된다.
+
+## Backprop: gradient의 chain rule
+
+지금까지는 함수 하나의 gradient를 구했다.
+신경망은 layer를 여러 개 이은 것이다.
+forward는 입력에서 loss 쪽으로 값을 계산하고, backprop은 반대로 loss에서 입력 쪽으로 layer 하나씩 gradient를 전한다.
+이 절에서 볼 것은 그중 layer 하나가 하는 일이다.
+
+중간에 있는 아무 layer 하나를 $y = h(x)$라고 하고, 그 뒤 loss 쪽의 나머지 전부를 묶어서 $g$라고 하자.
+backprop은 loss에서 거꾸로 오므로, $g$는 backprop이 이미 지나온 부분이다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Matrix-Gradient/mg-02a-chain-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Matrix-Gradient/mg-02a-chain-dark.svg"
+  caption="forward는 왼쪽에서 오른쪽으로, backward는 오른쪽에서 왼쪽으로 흐른다. layer h는 이미 지나온 부분 g에서 gradient를 받아, 아직 안 온 입력 쪽으로 넘길 gradient를 만든다."
+/>
+
+그러면 loss는 $f(x) = g(h(x))$다.
+$g$와 $f$는 모두 scalar를 낸다.
+마지막 layer만의 이야기가 아니다.
+어느 layer든 loss 쪽을 $g$로 묶으면 같은 꼴이 되므로, loss에서부터 이 단계를 반복하면 모든 layer의 gradient를 얻는다.
+
+- 이 layer가 받는 것: 출력 쪽 gradient $\nabla g(y)$. loss를 $y$로 미분한 것이고, backprop이 $g$를 지나오면서 이미 계산했다.
+- 이 layer가 만들 것: 입력 쪽 gradient $\nabla f(x)$. loss를 $x$로 미분한 것이고, 입력 쪽 layer로 넘긴다.
+
+출력 쪽 gradient에서 입력 쪽 gradient를 얻는 방법은 조합에서 만든 계산법 그대로다.
+
+$$
+\begin{aligned}
+\langle \nabla f(x),\ dx \rangle
+&= \langle \nabla g(y),\ dy \rangle && \text{둘 다 loss의 변화량} \\
+&= \langle \nabla g(y),\ J_h(x)\,dx \rangle && dy = J_h(x)\,dx \\
+&= \langle J_h(x)^\top \nabla g(y),\ dx \rangle && J_h(x)\text{를 반대편 칸으로}
+\end{aligned}
+$$
+
+첫째 줄은 같은 loss의 변화를 두 쪽에서 쓴 것이다.
+$x$가 $dx$만큼 움직이면 $y$는 $dy$만큼 움직이고, loss의 변화는 어느 쪽에서 계산해도 같다.
+왼쪽은 $x$ 쪽에서, 오른쪽은 $y$ 쪽에서 gradient의 정의(재료 3)로 쓴 것이다.
+둘째 줄은 $dy$를 $dx$로 바꾼다.
+$J_h$는 layer $h$의 Jacobian, 즉 재료 1의 derivative를 행렬로 적은 것이다.
+셋째 줄은 재료 2의 transpose로 넘기기다.
+
+첫째 줄의 두 변화량이 같다는 것을 숫자로 확인해 보자.
+layer가 $y = 3x$이고 loss가 $L = y^2$이며, 지금 $x = 1$이라고 하자.
+그러면 $y = 3$, $L = 9$다.
+$x$를 $0.01$만큼 움직이면 $y$는 $0.03$만큼 움직이고, $L$은 $3.03^2 \approx 9.18$이 된다.
+loss의 변화는 약 $0.18$ 하나뿐이다.
+이 변화를 두 쪽에서 재 본다.
+
+$$
+\begin{aligned}
+x\text{ 쪽:} &\quad L = 9x^2,\ \ \bar x = 18x = 18 &&\Rightarrow\quad \bar x\,dx = 18 \times 0.01 = 0.18 \\
+y\text{ 쪽:} &\quad L = y^2,\ \ \bar y = 2y = 6 &&\Rightarrow\quad \bar y\,dy = 6 \times 0.03 = 0.18
+\end{aligned}
+$$
+
+$x$ 쪽은 "작은 움직임 $0.01$ 곱하기 큰 민감도 $18$"이고, $y$ 쪽은 "큰 움직임 $0.03$ 곱하기 작은 민감도 $6$"이다.
+$x$가 움직인 것과 $y$가 움직인 것은 같은 한 번의 움직임이고, 그 결과인 loss의 변화도 하나다.
+그래서 어느 쪽에서 재든 같은 값이 나온다.
+vector에서는 곱이 inner product로 바뀔 뿐 같은 이야기다.
+
+양 끝을 비교하면 유일성에 의해 다음을 얻는다.
+
+$$
+\nabla f(x) = J_h(x)^\top \nabla g(y)
+$$
+
+출력 쪽 gradient에 layer의 Jacobian을 transpose해서 곱하면 입력 쪽 gradient가 된다.
+이것이 gradient의 chain rule이고 backprop의 한 단계다.
+예를 들어 layer가 $h(x) = Wx$이면 $J_h = W$이므로 입력 쪽 gradient는 $W^\top \nabla g(y)$다.
+
+### scalar chain rule과의 비교
+
+이 결과를 익숙한 scalar의 chain rule과 같은 기호로 나란히 놓으면 순서가 뒤집혀 있다.
+
+$$
+\begin{aligned}
+\text{scalar:} &\quad f'(x) = \underbrace{g'(h(x))}_{\text{바깥}}\ \underbrace{h'(x)}_{\text{안쪽}} \\[4pt]
+\text{vector:} &\quad \nabla f(x) = \underbrace{J_h(x)^\top}_{\text{안쪽}}\ \underbrace{\nabla g(h(x))}_{\text{바깥}}
+\end{aligned}
+$$
+
+$x$와 $y$가 scalar이면 바깥 것이 앞, 안쪽 것이 뒤에 온다.
+vector이면 안쪽 것이 앞에 오고, transpose까지 붙는다.
+보통은 "shape를 맞추려면 이렇게 될 수밖에 없다"고 외우고 넘어간다.
+위 유도에서 보듯 실제 이유는 $J_h$를 inner product의 반대편으로 넘겼기 때문이다.
+한 문장으로 줄이면, derivative는 chain rule로 합성되지만 gradient는 vector-Jacobian product로 합성된다.
+
+$J_h(x)^\top \nabla g(y)$를 transpose하면 row vector 곱하기 Jacobian인 $\nabla g(y)^\top J_h(x)$가 되므로, 이 연산을 VJP(vector-Jacobian product)라고 부른다.
+실제 구현은 $J_h$를 행렬로 만들지 않는다.
+너무 클 수 있기 때문이고, 아래 예제처럼 곱한 결과만 바로 계산한다.
+
+앞에서 $\bar Y$에 쓴 bar 표기를 vector와 다른 변수에도 그대로 쓴다.
+
+$$
+\bar y := \nabla L(y), \qquad \bar x := \nabla \mathcal{L}(x), \qquad \bar W := \nabla \mathcal{L}(W)
+$$
+
+bar 표기는 reverse-mode 자동 미분에서 온 것이고, $\bar y$를 $y$의 adjoint라고 부른다.
+PyTorch에서 backward 함수를 직접 만들 때 인자로 받는 `grad_output`이 $\bar y$다.
+
+### 예제: vector에 대한 gradient
+
+$y = Wx$에서 $x$는 column vector, $W$는 고정된 $F \times D$ 행렬이다.
+아는 것은 $\bar y$이고 구할 것은 $\bar x$다.
+$dy = W\,dx$이므로 다음과 같다.
+
+$$
+\langle \bar x,\ dx \rangle = \langle \bar y,\ dy \rangle = \bar y^\top (W\,dx) = \langle W^\top \bar y,\ dx \rangle
+\quad\Rightarrow\quad
+\bar x = W^\top \bar y
+$$
+
+### JVP와 VJP
+
+이름은 곱하는 순서를 그대로 읽은 것이다.
+JVP(Jacobian-vector product)는 $J\,v$, VJP(vector-Jacobian product)는 $v^\top J$다.
+$J$가 입력 크기 $n$, 출력 크기 $m$인 $m \times n$ 행렬이면, $J\,v$의 $v$는 입력 크기이고 결과는 출력 크기다.
+$v^\top J$의 $v$는 출력 크기이고 결과는 입력 크기다.
+그래서 JVP는 입력에서 출력으로(forward), VJP는 출력에서 입력으로(backward) 간다.
+
+위 식의 가운데 항 $\bar y^\top W\,dx$는 계산 순서가 두 가지다.
+
+- JVP: $W\,dx$를 먼저 계산하고 $\bar y$와 inner product를 구한다. forward mode다. 방향 $dx$ 하나에 대한 변화량 하나를 얻는다.
+- VJP: $\bar y^\top W$를 먼저 계산한다. 이 값은 $dx$와 무관하고, transpose하면 gradient 전체인 $W^\top \bar y$다. reverse mode, 즉 backprop이다.
+
+forward mode로 gradient 전체를 얻으려면 입력 차원마다 JVP를 한 번씩 해야 한다.
+reverse mode는 VJP 한 번이면 된다.
+신경망은 파라미터가 매우 많고 loss는 scalar 하나이므로 backprop으로 학습한다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Matrix-Gradient/mg-02-vjp-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Matrix-Gradient/mg-02-vjp-dark.svg"
+  caption="JVP는 Jacobian 오른쪽에 vector를 곱해 변화량을 앞으로 보내고, VJP는 Jacobian 왼쪽에 vector를 곱해 gradient를 뒤로 보낸다. 가운데 두 inner product는 x가 dx만큼 움직였을 때의 같은 loss 변화를 x 쪽과 y 쪽에서 잰 것이라 값이 같다."
+/>
+
+### 예제: 행렬에 대한 gradient
+
+처음의 문제로 돌아간다.
+$Y = XW$에서 아는 것은 $\bar Y$이고 구할 것은 $\bar W$다.
+행렬에서도 $\langle A, B \rangle = \mathrm{tr}(A^\top B)$를 쓰면 같은 방법이 그대로 통한다.
+
+$$
+\begin{aligned}
+\langle \bar W,\ dW \rangle
+&= \langle \bar Y,\ dY \rangle && \text{chain rule} \\
+&= \langle \bar Y,\ X\,dW \rangle && dY = X\,dW \\
+&= \langle X^\top \bar Y,\ dW \rangle && X\text{를 반대편으로}
+\end{aligned}
+\quad\Rightarrow\quad
+\bar W = X^\top \bar Y
+$$
+
+index로 구한 답과 같다.
+shape도 맞는다.
+$X^\top$이 $D \times B$, $\bar Y$가 $B \times F$이므로 곱은 $W$와 같은 $D \times F$다.
+index 유도에서는 transpose를 마지막에 눈으로 찾아야 했지만, 여기서는 $X$를 옮기는 규칙이 transpose를 만들어 준다.
+
+$X$에 대한 gradient도 같은 방법이다.
+이번에는 $dY = (dX)\,W$이고, $W$가 뒤에 붙어 있으므로 왼쪽 칸의 뒤로 넘긴다.
+
+$$
+\langle \bar Y,\ (dX)\,W \rangle = \langle \bar Y W^\top,\ dX \rangle
+\quad\Rightarrow\quad
+\bar X = \bar Y W^\top
+$$
+
+### 예제: matrix inverse를 지나는 gradient
+
+$W$가 역행렬이 있는 정사각 행렬이고 $y = W^{-1}x$라고 하자.
+$dy = d(W^{-1})\,x$이므로 $d(W^{-1})$이 필요하다.
+
+$W W^{-1} = I$에서 시작한다.
+$I$는 상수이므로 양변을 곱의 미분으로 미분하면 다음과 같다.
+
+$$
+(dW)\,W^{-1} + W\,d(W^{-1}) = 0
+\quad\Rightarrow\quad
+d(W^{-1}) = -W^{-1}\,(dW)\,W^{-1}
+$$
+
+$W^{-1}x = y$이므로 $dy = -W^{-1}\,(dW)\,y$다.
+$dW$의 앞에는 $-W^{-1}$이, 뒤에는 $y$가 붙어 있다.
+앞의 것은 왼쪽 칸의 앞으로, 뒤의 것은 왼쪽 칸의 뒤로 넘긴다.
+
+$$
+\begin{aligned}
+\langle \bar W,\ dW \rangle
+&= \langle \bar y,\ -W^{-1}\,(dW)\,y \rangle \\
+&= \langle (-W^{-1})^\top \bar y,\ (dW)\,y \rangle \\
+&= \langle (-W^{-1})^\top \bar y\, y^\top,\ dW \rangle
+\end{aligned}
+\quad\Rightarrow\quad
+\bar W = -(W^{-1})^\top \bar y\, y^\top
+$$
+
+index로 풀려면 역행렬의 원소를 미분해야 하는 문제다.
+여기서는 항을 두 번 옮기는 것으로 끝난다.
+
+## 요약: 5단계 레시피
+
+scalar loss가 $y = h(\theta)$를 거쳐 $\theta$에 의존하고, $\bar y$를 안다고 하자.
+$\bar\theta$는 다음 순서로 구한다.
+
+1. 출력이 scalar인지 확인한다. 출력이 vector이면 derivative를 vector 하나로 적을 수 없으므로 gradient가 없고, Jacobian을 구해야 한다.
+2. chain rule을 inner product로 쓴다. $\langle \bar\theta,\ d\theta \rangle = \langle \bar y,\ dy \rangle$.
+3. layer를 미분한다. 다른 입력은 고정하고 $dy$를 $d\theta$로 표현한다.
+4. $d\theta$ 외의 것을 모두 왼쪽 칸으로 옮긴다. transpose로 행렬을 넘기고, scalar를 trace로 쓰고, trace를 돌려서 $\langle\, ?,\ d\theta \,\rangle$ 꼴을 만든다.
+5. gradient를 읽는다. 유일성에 의해 $?$가 $\bar\theta$다.
+
+기억할 것은 세 가지다.
+derivative는 변화량을 받아 변화량을 내는 linear function이다.
+gradient는 그 linear function을 inner product로 적었을 때의 vector다.
+transpose는 shape를 맞추다 생기는 것이 아니라, 행렬을 inner product의 반대편으로 넘길 때 생긴다.
+
+이 방법은 loss가 scalar일 때만 쓸 수 있고, 표준 inner product를 쓴다는 가정 위에 있다.
+inner product를 다른 것으로 바꾸면 derivative는 그대로지만 gradient는 달라진다.
+머신러닝에서는 거의 항상 표준 inner product를 쓰므로 이 글의 결과를 그대로 쓰면 된다.
+
+## Reference
+
+- Alex Wang, [Matrix gradients, without the pain](https://alexwang.ai/posts/derivatives-and-gradients/), 2026.
