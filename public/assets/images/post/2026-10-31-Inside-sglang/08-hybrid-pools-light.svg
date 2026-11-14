@@ -14,9 +14,9 @@
     <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
     <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
   </defs>
-  <rect width="100%" height="100%" fill="#f5f5f5"/>
+  <rect width="100%" height="100%" fill="#efede7"/>
   <text x="40" y="30" fill="#2d3142" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">Physical pools behind a layer_id -&gt; pool router</text>
-  <rect x="40" y="46" width="176" height="44" rx="4" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="40" y="46" width="176" height="44" rx="4" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="50" y="64" fill="#2d3142" font-size="9" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">full KV pool</text>
   <text x="50" y="78" fill="#7a8399" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">size N tokens · full layers</text>
   <rect x="230" y="46" width="176" height="44" rx="4" fill="rgba(46,90,168,0.08)" stroke="#2e5aa8" stroke-width="1"/>
@@ -29,7 +29,7 @@
   <text x="40" y="128" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">SWA layers read full_to_swa_index_mapping[slot] -&gt; SWA slot</text>
   <line x1="40" y1="148" x2="600" y2="148" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
   <text x="40" y="164" fill="#4f5d75" font-size="8" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" letter-spacing="0.12em" xml:space="preserve">LEGEND</text>
-  <rect x="40" y="178" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="40" y="178" width="14" height="10" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="60" y="186" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">Full KV</text>
   <rect x="114" y="178" width="14" height="10" rx="2" fill="rgba(46,90,168,0.08)" stroke="#2e5aa8" stroke-width="1"/>
   <text x="134" y="186" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">SWA KV</text>

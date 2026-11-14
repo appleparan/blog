@@ -16,7 +16,7 @@ OUT = ROOT / 'public/assets/images/post/2026-11-14-Matrix-Gradient'
 FONT_STYLE = re.search(r'<style>.*?</style>', REF.read_text(), re.S).group(0)
 
 THEMES = {
-    'light': {'bg': '#f5f5f5', 'ink': '#2d3142', 'muted': '#66708a', 'rule': '#cfd3dc',
+    'light': {'bg': '#efede7', 'ink': '#2d3142', 'muted': '#66708a', 'rule': '#cfd3dc',
               'blue': '#2e5aa8', 'orange': '#eb6c36'},
     'dark': {'bg': '#2d3142', 'ink': '#f5f5f5', 'muted': '#a3acbf', 'rule': '#4a5068',
              'blue': '#6a95d8', 'orange': '#f08a59'},

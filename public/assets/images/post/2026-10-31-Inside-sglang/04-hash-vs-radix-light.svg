@@ -15,14 +15,14 @@
     <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
     <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
   </defs>
-  <rect width="100%" height="100%" fill="#f5f5f5"/>
+  <rect width="100%" height="100%" fill="#efede7"/>
   <text x="40" y="36" fill="#2d3142" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">vLLM · block hash (block_size 16)</text>
   <text x="40" y="66" fill="#4f5d75" font-size="9" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">Request 1</text>
-  <rect x="150" y="52" width="110" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="150" y="52" width="110" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="205.0" y="66.5" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">0–15</text>
-  <rect x="262" y="52" width="110" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="262" y="52" width="110" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="317.0" y="66.5" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">16–31</text>
-  <rect x="374" y="52" width="110" height="22" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="374" y="52" width="110" height="22" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="429.0" y="66.5" fill="#2d3142" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">32–47</text>
   <rect x="486" y="52" width="54" height="22" rx="2" fill="none" stroke="rgba(45,49,66,0.35)" stroke-width="1" stroke-dasharray="3,2"/>
   <text x="513.0" y="66.5" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">48–55</text>
@@ -39,12 +39,12 @@
   <text x="150" y="146" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">hash(h_prev, 16 tokens) → block ID · a partial block has no hash</text>
   <line x1="40" y1="166" x2="600" y2="166" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
   <text x="40" y="192" fill="#2d3142" font-size="11" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">SGLang · radix tree (page_size 1)</text>
-  <circle cx="160" cy="250" r="11" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <circle cx="160" cy="250" r="11" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="160" y="253" fill="#4f5d75" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">root</text>
   <rect x="206" y="236" width="150" height="28" rx="4" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
   <text x="281" y="254" fill="#eb6c36" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">tokens 0–39 · shared</text>
   <path d="M171 250 H204" fill="none" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
-  <rect x="420" y="206" width="150" height="28" rx="4" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="420" y="206" width="150" height="28" rx="4" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="495" y="224" fill="#2d3142" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">Request 1 · 40–55</text>
   <rect x="420" y="266" width="150" height="28" rx="4" fill="rgba(79,93,117,0.15)" stroke="#4f5d75" stroke-width="1"/>
   <text x="495" y="284" fill="#2d3142" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" xml:space="preserve">Request 2 · 40–59</text>
@@ -54,7 +54,7 @@
   <text x="150" y="338" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" xml:space="preserve">children keyed by first token · page_size &gt; 1 truncates keys to page multiples</text>
   <line x1="40" y1="370" x2="600" y2="370" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
   <text x="40" y="386" fill="#4f5d75" font-size="8" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" letter-spacing="0.12em" xml:space="preserve">LEGEND</text>
-  <rect x="40" y="400" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+  <rect x="40" y="400" width="14" height="10" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
   <text x="60" y="408" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">Cached tokens</text>
   <rect x="141" y="400" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
   <text x="161" y="408" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif" text-anchor="start" xml:space="preserve">Reused KV</text>

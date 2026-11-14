@@ -15,14 +15,14 @@
     <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
     <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
   </defs>
-  <rect width="100%" height="100%" fill="#f5f5f5"/>
+  <rect width="100%" height="100%" fill="#efede7"/>
   <g transform="translate(0,-8)">
   <g>
     <rect x="40" y="100" width="320" height="236" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
-    <rect x="56" y="104" width="120" height="12" rx="2" fill="#f5f5f5"/>
+    <rect x="56" y="104" width="120" height="12" rx="2" fill="#efede7"/>
     <text x="116.0" y="113" fill="rgba(45,49,66,0.45)" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">EXECUTE_MODEL()</text>
     <rect x="40" y="376" width="320" height="236" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
-    <rect x="56" y="380" width="120" height="12" rx="2" fill="#f5f5f5"/>
+    <rect x="56" y="380" width="120" height="12" rx="2" fill="#efede7"/>
     <text x="116.0" y="389" fill="rgba(45,49,66,0.45)" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">SAMPLE_TOKENS()</text>
     <path d="M200 68 V126" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
     <path d="M200 170 V198" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
@@ -32,60 +32,60 @@
     <path d="M200 518 V546" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
     <path d="M200 590 V638" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
     <path d="M500 314 V560 A8 8 0 0 1 492 568 H338" fill="none" stroke="#eb6c36" stroke-width="1.2" marker-end="url(#arrow-accent)"/>
-    <rect x="208" y="352" width="148" height="12" rx="2" fill="#f5f5f5"/>
+    <rect x="208" y="352" width="148" height="12" rx="2" fill="#efede7"/>
     <text x="210" y="361" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" letter-spacing="0.08em">④ HIDDEN STATES · SAVED</text>
-    <rect x="208" y="606" width="64" height="12" rx="2" fill="#f5f5f5"/>
+    <rect x="208" y="606" width="64" height="12" rx="2" fill="#efede7"/>
     <text x="210" y="615" fill="#7a8399" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="start" letter-spacing="0.08em">TOKEN IDS</text>
-    <rect x="388" y="548" width="96" height="12" rx="2" fill="#f5f5f5"/>
+    <rect x="388" y="548" width="96" height="12" rx="2" fill="#efede7"/>
     <text x="436.0" y="557" fill="#eb6c36" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">APPLY BITMASK</text>
     <text x="500" y="258" fill="#eb6c36" font-size="8" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.14em">WHILE THE GPU RUNS ③</text>
-    <rect x="80" y="24" width="240" height="44" rx="6" fill="#f5f5f5"/>
-    <rect x="80" y="24" width="240" height="44" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="80" y="24" width="240" height="44" rx="6" fill="#efede7"/>
+    <rect x="80" y="24" width="240" height="44" rx="6" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <text x="200.0" y="44.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Step plan</text>
     <text x="200.0" y="58.0" fill="#4f5d75" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">SchedulerOutput</text>
-    <rect x="64" y="126" width="272" height="44" rx="6" fill="#f5f5f5"/>
-    <rect x="64" y="126" width="272" height="44" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="64" y="126" width="272" height="44" rx="6" fill="#efede7"/>
+    <rect x="64" y="126" width="272" height="44" rx="6" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <rect x="72" y="134" width="16" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.5" stroke-width="0.8"/>
     <text x="80.0" y="143" fill="#2d3142" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">1</text>
     <text x="200.0" y="146" fill="#2d3142" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Update request state</text>
     <text x="200.0" y="161" fill="#4f5d75" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">finish / add / update_requests()</text>
-    <rect x="64" y="198" width="272" height="44" rx="6" fill="#f5f5f5"/>
-    <rect x="64" y="198" width="272" height="44" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="64" y="198" width="272" height="44" rx="6" fill="#efede7"/>
+    <rect x="64" y="198" width="272" height="44" rx="6" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <rect x="72" y="206" width="16" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.5" stroke-width="0.8"/>
     <text x="80.0" y="215" fill="#2d3142" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">2</text>
     <text x="200.0" y="218" fill="#2d3142" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Prepare inputs</text>
     <text x="200.0" y="233" fill="#4f5d75" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">input_ids · positions · attn metadata</text>
-    <rect x="64" y="270" width="272" height="44" rx="6" fill="#f5f5f5"/>
+    <rect x="64" y="270" width="272" height="44" rx="6" fill="#efede7"/>
     <rect x="64" y="270" width="272" height="44" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
     <rect x="72" y="278" width="16" height="12" rx="2" fill="transparent" stroke="#eb6c36" stroke-opacity="0.5" stroke-width="0.8"/>
     <text x="80.0" y="287" fill="#eb6c36" font-size="7" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle" letter-spacing="0.08em">3</text>
     <text x="200.0" y="290" fill="#2d3142" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Forward</text>
     <text x="200.0" y="305" fill="#4f5d75" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">CUDA graph replay or model()</text>
-    <rect x="64" y="402" width="272" height="44" rx="6" fill="#f5f5f5"/>
-    <rect x="64" y="402" width="272" height="44" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="64" y="402" width="272" height="44" rx="6" fill="#efede7"/>
+    <rect x="64" y="402" width="272" height="44" rx="6" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <text x="200.0" y="422.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Pick last positions</text>
     <text x="200.0" y="436.0" fill="#4f5d75" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">hidden_states[logits_indices]</text>
-    <rect x="64" y="474" width="272" height="44" rx="6" fill="#f5f5f5"/>
-    <rect x="64" y="474" width="272" height="44" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="64" y="474" width="272" height="44" rx="6" fill="#efede7"/>
+    <rect x="64" y="474" width="272" height="44" rx="6" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <text x="200.0" y="494.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Logits</text>
     <text x="200.0" y="508.0" fill="#4f5d75" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">compute_logits()</text>
-    <rect x="64" y="546" width="272" height="44" rx="6" fill="#f5f5f5"/>
-    <rect x="64" y="546" width="272" height="44" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="64" y="546" width="272" height="44" rx="6" fill="#efede7"/>
+    <rect x="64" y="546" width="272" height="44" rx="6" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <text x="200.0" y="566.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Sample</text>
     <text x="200.0" y="580.0" fill="#4f5d75" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">penalties · temperature · top-k/p</text>
-    <rect x="400" y="270" width="200" height="44" rx="6" fill="#f5f5f5"/>
+    <rect x="400" y="270" width="200" height="44" rx="6" fill="#efede7"/>
     <rect x="400" y="270" width="200" height="44" rx="6" fill="rgba(79,93,117,0.1)" stroke="#7a8399" stroke-width="1"/>
     <text x="500.0" y="290.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Grammar bitmask</text>
     <text x="500.0" y="304.0" fill="#4f5d75" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">get_grammar_bitmask()</text>
-    <rect x="80" y="638" width="240" height="44" rx="6" fill="#f5f5f5"/>
-    <rect x="80" y="638" width="240" height="44" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="80" y="638" width="240" height="44" rx="6" fill="#efede7"/>
+    <rect x="80" y="638" width="240" height="44" rx="6" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <text x="200.0" y="658.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" text-anchor="middle">Runner output</text>
     <text x="200.0" y="672.0" fill="#4f5d75" font-size="9" font-family="'Roboto Mono', 'Pretendard', ui-monospace, monospace" text-anchor="middle">ModelRunnerOutput</text>
   </g>
   <g>
     <line x1="40" y1="704" x2="600" y2="704" stroke="rgba(45,49,66,0.1)" stroke-width="0.8"/>
     <text x="40" y="720" fill="#4f5d75" font-size="8" font-weight="600" font-family="'Pretendard', system-ui, sans-serif" letter-spacing="0.12em">LEGEND</text>
-    <rect x="40" y="734" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+    <rect x="40" y="734" width="14" height="10" rx="2" fill="#f5f3ee" stroke="#2d3142" stroke-width="1"/>
     <text x="60" y="742" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif">Worker step</text>
     <rect x="140" y="734" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
     <text x="160" y="742" fill="#4f5d75" font-size="8" font-family="'Pretendard', system-ui, sans-serif">GPU forward</text>
