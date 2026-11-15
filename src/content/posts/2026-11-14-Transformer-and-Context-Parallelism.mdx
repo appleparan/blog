@@ -1,0 +1,650 @@
+---
+title: "Transformer와 Context Parallelism"
+author: jongsukim
+date: 2026-11-14 23:00:00 +0900
+categories: [LLM Inference, vLLM]
+tags:
+  - LLM Inference
+  - vLLM
+  - Transformer
+  - Context Parallelism
+  - Prefill Context Parallelism
+  - Decode Context Parallelism
+  - GLM
+  - Deepseek
+  - Kimi
+math: true
+mermaid: false
+---
+
+import Figure from '../../components/Figure.astro';
+
+## Introduction
+
+이 글은 지난 8월 Kimi K3를 띄우면서 시작되었다. 처음에는 일단 돌려 보는 것이 목적이었으므로 [vLLM recipe](https://recipes.vllm.ai/moonshotai/Kimi-K3?hardware=b300&features=tool_calling%2Creasoning%2Cspec_decoding&kv_offload=simple)를 그대로 따랐다. 당시 recipe에는 TP, PP, EP를 조합한 구성만 있었고, TP16에 EP를 더한 구성을 시도해 봤으나 성능이 기대만큼 나오지 않았다.
+
+그러다 vLLM 블로그의 [Scaling Kimi K3 on AMD Instinct MI355X](https://vllm.ai/blog/2026-10-16-kimi-k3-mi355x)(이하 MI355X 글)를 읽었고, 거기서 PD disaggregation(prefill과 decode를 다른 instance로 나누는 배치)과 context parallelism(CP)을 좀 더 깊이 이해하게 되었다.
+
+MI355X 글의 다음 문장이 출발점이었다.
+
+> Under TP8, each GPU handles 12 of Kimi K3's 96 MLA query heads but stores the entire compressed KV history.
+
+즉, TP는 head를 나누지만 KV cache는 나누지 못한다. 왜 그런지 이해하려면 Transformer layer의 두 컴포넌트인 attention과 FFN이 token을 다루는 방식이 다르다는 데서 출발해야 한다. 이 글은 그 차이에서 시작해 CP가 어디서 나왔는지 따라가고, vLLM이 CP를 PCP(Prefill Context Parallelism)와 DCP(Decode Context Parallelism)로 나눈 이유를 정리한다. 마지막으로 GLM-5.3, DeepSeek-V4.1-Flash, Kimi K3에 PCP와 DCP가 필요한지 따져 본다.
+
+결론부터 말하면, PCP는 한 prompt의 token을 GPU들에 나눠 prefill 계산을 병렬로 하고, DCP는 그 prompt의 KV cache 저장을 GPU들에 나눈다. 둘 다 head나 weight가 아니라 sequence 축(token)을 따라 나눈다.
+
+### Nomenclature
+
+| 기호 | 의미 |
+| --- | --- |
+| $T$ | 이번 step에 새로 계산하는 token 수 |
+| $P$ | 이미 KV cache에 있는 token 수 |
+| $D$ | model hidden 차원 ($d_\text{model}$) |
+| $F$ | FFN hidden 차원 ($d_\text{ff}$) |
+| $N$, $K$, $H$ | query head 수, KV head 수, head 차원 |
+| $C$ | CP 크기 (sequence 축으로 나누는 GPU 수) |
+
+## Transformer layer의 두 컴포넌트
+
+Transformer layer 하나는 attention과 FFN으로 되어 있고, 둘은 token을 다루는 방식이 다르다. attention은 각 token이 context의 다른 token을 보고 정보를 가져오는 단계다. FFN은 그렇게 모은 정보를 token 하나씩 따로 계산하는 단계다. [Transformer 원 논문](https://arxiv.org/abs/1706.03762)도 FFN을 position-wise라고 부르며, position마다 따로 똑같이 적용된다고 정의한다.
+
+### Attention: context에서 꺼내는 token 간 연산
+
+attention은 query가 key와 맞춰 보고 value를 꺼내는 연산이다. [Transformer 원 논문](https://arxiv.org/abs/1706.03762)의 식은 모든 token의 query를 한꺼번에 쓴다.
+
+$$
+\mathrm{Attention}(Q, K, V) = \mathrm{softmax}\!\left(\frac{Q K^\top}{\sqrt{d_k}}\right) V
+$$
+
+이 글은 이 식을 가장 작은 단위로 좁혀서 쓴다. 뒤에서 TP가 나누는 가장 작은 단위는 head 하나이고, CP가 나누는 가장 작은 단위는 token 하나다. 그래서 식도 head 하나, query 하나로 좁힌다.
+
+1. head 하나만 본다. multi-head attention은 head마다 이 식을 따로 계산하고, 결과를 이어 붙여 $W_O$를 곱한다. 원 논문의 $d_k$는 head 하나의 key 차원이고, 이 글의 기호로는 head 차원 $H$다.
+2. query를 token 하나로 줄인다. $Q$의 행 하나가 token 하나의 query이므로, 그 행을 소문자 $q$로 쓴다.
+
+$$
+\mathrm{Attention}(q) = \mathrm{softmax}\!\left(\frac{q K^\top}{\sqrt{H}}\right) V, \qquad q = x W_Q,\quad K = X W_K,\quad V = X W_V
+$$
+
+$q$는 $1 \times H$ 행 벡터이고, $x$는 그 token의 hidden 벡터다. $X$는 context 전체 token의 hidden 벡터를 쌓은 행렬이다. 그래서 $K$와 $V$는 $(T + P) \times H$ 행렬이고, 행 하나가 token 하나의 key와 value다. token 하나로 줄여 쓰면 뒤에 나오는 FFN의 $x$와 나란히 놓을 수 있다. $\sqrt{H}$는 원 논문의 scale 상수다.
+
+이 식은 세 단계로 읽을 수 있다.
+
+1. score: $q$와 각 key의 내적 $q \cdot k_i / \sqrt{H}$를 구한다. $q$가 key와 비슷할수록 크다.
+2. 계수: softmax가 score를 계수 $a_i$로 바꾼다. 계수는 context의 token마다 하나씩 있고, 합이 1이다. 즉 token끼리 비율을 나눠 갖는다.
+3. 가중합: value $v_i$를 $a_i$만큼 더한다.
+
+여기서 학습되는 것은 $W_Q$, $W_K$, $W_V$라는 규칙뿐이다. 실제 key와 value는 매번 현재 context $X$에서 계산된다. 그래서 token 3의 출력을 계산하려면 token 0, 1, 2의 K와 V가 있어야 한다. 계산의 입력 자체가 다른 token이다.
+
+그래서 attention은 계산과 memory가 모두 context 길이를 따라 커진다. 하나는 계산이다. 새 token $T$개는 cache된 token $P$개를 포함한 $T + P$개 전부를 봐야 한다. 다른 하나는 memory다. decode를 이어 가려면 지나간 token의 K, V를 KV cache로 계속 저장해 두어야 한다.
+
+### FFN: weight에서 꺼내는 token별 연산
+
+FFN을 attention과 비교하려면 같은 모양으로 다시 써야 한다. [Geva et al. (2021)](https://arxiv.org/abs/2012.14913)은 FFN의 행렬곱을 뉴런 단위로 쪼개 key-value 조회로 읽는다. 뉴런 $j$ 하나는 $W_\text{up}$의 $j$번째 열 $w^\text{up}_j$와 $W_\text{down}$의 $j$번째 행 $w^\text{down}_j$를 가진다. 둘 다 길이 $D$인 벡터이고, 학습이 끝나면 고정된다.
+
+$$
+W_\text{up} = \big[\, w^\text{up}_1 \mid w^\text{up}_2 \mid \cdots \mid w^\text{up}_F \,\big], \qquad
+W_\text{down} = \begin{bmatrix} w^\text{down}_1 \\ w^\text{down}_2 \\ \vdots \\ w^\text{down}_F \end{bmatrix}
+$$
+
+뉴런 하나의 계산을 따라가면 attention과 같은 세 단계가 나온다.
+
+1. score: $x$와 $W_\text{up}$의 열 $w^\text{up}_j$를 내적한다. attention에서 key가 있던 자리에 $W_\text{up}$의 열이 온다.
+2. 계수: 비선형 $\sigma$가 score를 계수 $h_j$로 바꾼다. $h_j$는 지금 token 하나의 뉴런 $j$가 켜진 정도, 곧 activation이다. 다른 token과는 관계가 없고, 뉴런마다 따로 계산하므로 합이 1이 되지도 않는다. 약하거나 음수인 score는 0 근처로 꺼진다.
+3. 가중합: $W_\text{down}$의 행 $w^\text{down}_j$를 $h_j$만큼 더해 residual에 써 넣는다. attention에서 value가 있던 자리에 $W_\text{down}$의 행이 온다.
+
+$$
+\mathrm{FFN}(x) = \sum_{j=1}^{F} \underbrace{\sigma(x \cdot w^\text{up}_j)}_{h_j:\ \text{activation}}\, w^\text{down}_j = \sigma(x W_\text{up})\, W_\text{down}
+$$
+
+요즘 model이 쓰는 SwiGLU에서는 뉴런마다 key가 두 개다. $W_\text{up}$ 옆에 $W_\text{gate}$가 하나 더 있고, 계수는 두 score로 만든다.
+
+$$
+h_j = \mathrm{SiLU}(x \cdot w^\text{gate}_j)\,(x \cdot w^\text{up}_j)
+$$
+
+gate 쪽 score가 SiLU를 거쳐 뉴런을 얼마나 켤지 정하고, up 쪽 score가 그 크기를 곱한다. 계수 $h_j$가 지금 token 하나의 뉴런별 값이고 value가 $W_\text{down}$의 행이라는 점은 같다.
+
+그래서 $\sqrt{H}$ scale을 빼고 쓰면 두 식의 모양이 같다.
+
+$$
+\mathrm{Attention}(q) = \mathrm{softmax}(q K^\top)\, V
+\qquad\longleftrightarrow\qquad
+\mathrm{FFN}(x) = \sigma(x W_\text{up})\, W_\text{down}
+$$
+
+<Figure
+  src="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-00-structure-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-00-structure-dark.svg"
+  caption="attention의 key와 value는 context에서 와서 token마다 늘어나고, FFN의 key와 value는 고정된 weight 행렬이다. 계수 막대는 설명용 값이다."
+/>
+
+두 조회의 차이는 key와 value를 어디서 가져오느냐에서 시작하고, 아래 표의 나머지 차이는 모두 여기서 따라 나온다.
+
+| 항목 | Attention | FFN |
+| --- | --- | --- |
+| key, value의 출처 | context의 token마다 계산해 KV cache에 저장 | 학습된 weight 행렬 그 자체 |
+| 계수 | softmax, token별 (합이 1, token끼리 비율을 나눠 가짐) | element-wise $\sigma$, 뉴런별 (서로 독립) |
+| memory slot 수 | context 길이 $T + P$, 계속 늘어난다 | hidden 차원 $F$, 고정이다 |
+| 꺼내는 것 | context 속 정보 | 학습 중 저장된 지식 |
+| 입력으로 쓰는 token | 자기 자신과 앞선 token 전부 | 자기 자신 하나 |
+
+둘 다 weight를 학습하는데, weight의 역할이 다르다. attention의 $W_Q$, $W_K$, $W_V$는 key와 value를 만드는 규칙(projection)일 뿐이고, 실제 key와 value는 매번 현재 context에서 계산된다($K = X W_K$, $V = X W_V$). FFN에서는 key 자리에 $W_\text{up}$의 열이, value 자리에 $W_\text{down}$의 행이 그대로 온다. 즉 attention의 weight는 key와 value를 만드는 방법이고, FFN의 weight는 key와 value 자체다.
+
+도서관에 비유하면 key는 색인 카드이고, value는 그 카드가 가리키는 내용이다. attention은 책상 위에 펼쳐 둔 자료 더미에서 찾는다. 자료는 지금의 context에서 온 것이고, token이 늘 때마다 한 장씩 쌓이므로 책상(KV cache)도 계속 넓어져야 한다. 질문(query)을 자료마다 붙은 색인 카드와 맞춰 보고, 관련된 정도에 따라 여러 자료를 나눠 읽는다. FFN은 서가의 장서에서 찾는다. 장서는 학습 때 들여놓은 뒤 바뀌지 않으므로, 질문 하나만 들고 가면 된다. 예를 들어 "프랑스의 수도는"에 강하게 반응하는 색인 카드가 있다고 하자. 그러면 그 카드의 내용이 "Paris" 쪽 방향을 residual에 더한다.
+
+[Sukhbaatar et al. (2019)](https://arxiv.org/abs/1907.01470)는 FFN을 없애고 attention에 학습되는 고정 key-value 벡터(persistent memory)를 붙여도 비슷한 성능이 나온다고 보였다. FFN을 context와 무관한 attention slot으로 보는 해석을 뒷받침하는 결과다.
+
+이 차이가 병렬화로 그대로 이어진다. FFN에서 token 3의 출력은 token 3의 hidden activation과 weight만 있으면 된다. 다른 token은 필요 없다. attention의 key와 value는 context에 있으므로, token 3의 출력에는 token 0, 1, 2의 K, V가 필요하다.
+
+### 두 컴포넌트에 맞는 병렬화 축
+
+attention과 FFN이라는 두 컴포넌트는 GPU에 나눌 수 있는 축이 서로 다르다.
+
+| 컴포넌트 | 나누는 축 | 병렬화 | context가 길어지면 |
+| --- | --- | --- | --- |
+| FFN | 뉴런 (slot) | TP | 그대로 ($F$개 고정) |
+| FFN (MoE) | expert | EP | 그대로 |
+| attention | head | TP | 그대로 |
+| attention | token (slot) | CP | 늘어난다 ($T + P$개) |
+
+PP는 컴포넌트 안이 아니라 layer 단위로 나누므로 이 표에 넣지 않았다. 뒤의 [기존 병렬화의 한계](#기존-병렬화의-한계)에서 따로 다룬다.
+
+FFN의 slot은 뉴런이다. 뉴런 $j$의 key와 value는 $W_\text{up}$의 열과 $W_\text{down}$의 행이므로, 뉴런을 나누면 곧 FFN weight를 나누게 된다. TP가 이렇게 나눈다. GPU마다 뉴런 일부를 맡아 부분합을 내고, 마지막에 그 부분합을 더한다. MoE에서는 EP가 expert 단위로 FFN weight를 나눈다. 두 방식을 함께 켜면 MoE layer는 EP가 맡고, TP는 attention만 나눈다. vLLM에서 EP 크기는 TP 크기와 DP 크기의 곱이고, EP를 켜지 않으면 MoE layer도 TP로 나뉜다([vLLM 문서](https://docs.vllm.ai/en/latest/serving/expert_parallel_deployment.html)).
+
+attention은 축이 두 개다. 하나는 head 축이다. 앞에서 head 하나로 좁혀 본 것처럼 head들은 서로 독립이므로, TP는 GPU마다 head 일부와 그 head의 $W_Q$, $W_K$, $W_V$를 맡긴다. 다른 하나는 head 안의 token 축, 곧 slot이다. head를 아무리 나눠도 head 하나가 보는 slot 수는 context 길이 $T + P$ 그대로다. 그래서 긴 context에서는 token 축을 따로 나눠야 하고, GPU마다 token 일부의 K, V를 맡는 방식이 CP다.
+
+TP와 EP도 GPU 사이 통신을 만든다. TP는 부분합을 더하고, EP는 token을 expert가 있는 GPU로 보낸다. 둘 다 weight를 나눠서 생기는 통신이다. CP는 다르다. token을 나눠도 FFN은 자기 token만 보므로 주고받을 것이 없고, 다른 GPU의 정보가 필요한 곳은 attention뿐이다. 그래서 CP의 통신은 전부 attention에서 일어난다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-01-layer-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-01-layer-dark.svg"
+  caption="token 4개를 GPU 2장에 나눈 예. token 2, 3의 attention은 token 0, 1의 K, V가 있어야 계산되므로 GPU 0에서 GPU 1로 넘어간다. FFN은 자기 token만 본다."
+/>
+
+CP와 EP의 통신은 성격이 다르다. EP에서는 router가 고른 expert가 다른 GPU에 있으면 token이 그 GPU로 갔다가 결과만 받아 돌아온다. 가서도 다른 token과 섞이지 않고 혼자 계산된다.
+
+| 항목 | attention의 통신 (CP) | MoE의 통신 (EP) |
+| --- | --- | --- |
+| GPU를 넘는 이유 | 다른 token의 KV가 입력이라서 | 필요한 expert weight가 다른 GPU에 있어서 |
+| 넘어가는 것 | 다른 token의 정보 (KV 또는 query) | 자기 자신의 hidden activation |
+| 계산할 때 token이 섞이나 | 섞인다 | token 하나씩 따로 |
+| 없앨 수 있나 | 없다. 연산의 성질이다 | 있다. expert를 GPU마다 복제하면 0이 된다 |
+
+## 추론의 두 단계
+
+CP는 token 축을 나눈다. 그러면 실제 추론에서 token 축은 얼마나 길어지고, 어디서 병목이 되는가? 추론은 새 token을 한꺼번에 처리하는 prefill과 token을 하나씩 만드는 decode로 나뉘고, 두 단계는 병목이 다르다.
+
+### prefill과 decode의 tensor shape
+
+[Context Parallelism for Scalable Million-Token Inference](https://arxiv.org/abs/2411.01783)(Yang et al., MLSys 2025)는 추론을 세 경우로 나눈다. full prefill은 $P = 0$, decode는 $T = 1$, 그 사이가 partial prefill이다. partial prefill은 이전 turn의 KV를 재사용하는 multi-turn의 경우다. 세 경우 모두 tensor 크기는 다음과 같다.
+
+$$
+\mathrm{shape}(Q) = [\,T,\ N,\ H\,], \qquad \mathrm{shape}(K) = \mathrm{shape}(V) = [\,T + P,\ K,\ H\,]
+$$
+
+Q는 새 token 수만큼, KV는 전체 context 길이만큼 있다. prefill은 $T$가 커서 Q가 크고 계산이 많다. decode는 $T = 1$이라 Q는 작고, 매 step 긴 KV를 읽어야 하므로 memory 대역폭이 병목이다. decode의 KV 읽기 병목은 이전 글의 [decode의 병목, KV cache 읽기](/posts/2026/11/LLM-in-2025-2026/#decode의-병목-kv-cache-읽기)에서 자세히 다뤘다.
+
+### agentic workload의 부하 분포
+
+coding agent 같은 multi-turn workload에서는 prefill과 KV 저장이 비용의 대부분이다. SemiAnalysis의 AgentX는 실제 coding agent trace로 만든 benchmark이고, vLLM은 [vLLM x AgentX: Optimizing for Real-World Agentic Serving](https://vllm.ai/blog/2026-09-08-vllm-agentx)(이하 AgentX 글)에서 그 특성을 다음처럼 정리한다.
+
+- session당 turn 수의 median이 43이다.
+- median input이 142K token, median output이 444 token이다. 비율로 약 320 대 1이다.
+- prefix cache hit rate가 96%를 넘는다.
+- session의 44%가 subagent를 하나 이상 쓴다.
+
+agent는 turn마다 직전 tool 결과를 context 끝에 붙여서 전체를 다시 model에 보낸다. 그래서 input은 계속 길어지고, 각 turn이 새로 prefill하는 token은 적고, 나머지는 이미 cache된 prefix다.
+
+cache hit이 96%인데도 비용이 큰 이유는 네 가지다.
+
+1. 모든 turn이 prefill request다. 한 번에 새로 계산하는 양은 작아도 session당 수십 번 반복되고, 동시에 도는 agent 수만큼 곱해진다.
+2. 새 token의 비용이 context 길이를 따라간다. dense attention에서 partial prefill의 연산량은 $4\,T\,D\,(T + P)$이므로([Yang et al.](https://arxiv.org/abs/2411.01783)), 새 token 수 $T$가 같아도 context 길이 $P$에 비례해 커진다. DeepSeek-V4.1-Flash(이하 V4.1)에서도 같은 8K token prefill이 context 없이는 87.9 ms, 512K context 위에서는 189.4 ms다.
+3. 긴 cold prefill이 섞여 있다. 첫 turn, 새 context로 시작하는 subagent, cache에서 밀려난 session은 수만 token을 처음부터 prefill한다. 이런 request 하나가 같은 GPU의 짧은 turn들을 막는다.
+4. KV를 turn 사이에 계속 저장해 두어야 한다. 다음 turn이 cache hit하려면 긴 context의 KV가 남아 있어야 하므로, session 수가 곧 memory 압력이 된다.
+
+병목은 concurrency에 따라 옮겨 간다. output이 짧은 coding agent는 기본적으로 prefill 쪽이 먼저 막히고, concurrency를 올리면 KV memory 때문에 decode 쪽이 막힌다. [GLM-5.3 Optimizations, Part 2: PCP, DCP, and Hybrid HiSparse on 16 H200s](https://vllm.ai/blog/2026-10-23-glm53-part2-pcp-dcp-hisparse)(이하 GLM-5.3 Part 2 글)의 측정에서는 concurrency 32까지 deployment가 주로 prefill에 묶였고, 32부터는 decode에 더 묶였다.
+
+### PD disaggregation과 남는 문제
+
+두 단계는 병목이 다르므로, PD disaggregation은 두 단계를 다른 instance로 나눠 서로 방해하지 않게 한다. prefill instance가 KV를 만들고, connector가 그 KV를 decode instance로 옮긴다. vLLM에서 KV block이 instance 밖으로 나가는 방식은 Inside vLLM 글의 [disaggregated prefill/decode](/posts/2026/10/Inside-vLLM/#6-disaggregated-prefilldecode-kv-block이-instance-밖으로-나갈-때)에서 다뤘다.
+
+그래도 request 하나의 문제는 남는다. 단계를 나눠도 긴 prompt 하나의 prefill은 여전히 한 instance가 처리하고, 그 KV도 한 instance에 들어가야 한다. 이것을 기존 병렬화로 풀 수 있는지가 다음 질문이다.
+
+## 기존 병렬화의 한계
+
+긴 context는 두 한계에 부딪힌다. prefill의 attention 계산량과, context 길이에 비례해 커지는 KV cache memory다. 기존 병렬화도 KV memory를 일부 나눈다. TP는 KV head 수까지, PP는 layer 단위로 나눈다. 하지만 어느 것도 한 prompt의 token을 나누지 않으므로, context가 길어지는 만큼 GPU마다 저장할 KV와 계산도 그대로 늘어난다.
+
+### DP, TP, PP, EP가 나누는 축
+
+- DP(data parallel)는 request를 나눈다. request 하나는 GPU 하나에 간다. 한 prompt의 attention은 나머지 GPU를 쓰지 못하고, KV도 그 GPU 한 장에 다 들어가야 한다.
+- TP(tensor parallel)는 attention head와 FFN 뉴런을 나눈다. KV는 head 단위로만 나뉘므로, TP 크기가 KV head 수 $K$보다 크면 KV가 복제된다.
+- PP(pipeline parallel)는 layer를 나눈다. GPU마다 layer 일부와 그 layer의 KV만 저장하므로, KV memory는 PP stage 수만큼 나뉜다. 하지만 GPU마다 자기 layer에서는 모든 token의 KV를 저장하고, decode의 token 하나는 stage를 차례로 지나가므로 한 request의 latency는 줄지 않는다.
+- EP(expert parallel)는 MoE의 expert를 나눈다. FFN 쪽 weight만 나누므로 attention과 KV에는 영향이 없다.
+
+네 방식 모두 request, weight, layer를 나눌 뿐, 한 prompt의 token을 나누지 않는다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-02-axes-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-02-axes-dark.svg"
+  caption="같은 prompt와 layer를 GPU 4장에 놓는 세 방법. DP는 GPU 한 장에 몰고, TP는 head와 FFN weight를 나누고, CP는 token을 나눈다. EP는 MoE의 expert를 나누므로 이 그림의 FFN 줄에 해당한다."
+/>
+
+### MLA에서 TP의 KV 복제
+
+앞에서 TP 크기가 KV head 수 $K$보다 크면 KV가 복제된다고 했다. MLA(Multi-head Latent Attention)에서는 TP가 KV를 전혀 나누지 못한다. MLA는 K, V 대신 latent 하나를 저장하고 모든 head가 그 latent를 공유한다. KV head가 사실상 하나이므로, TP rank 전부가 KV 전체를 저장하게 된다. MLA의 구조는 이전 글의 [MLA 섹션](/posts/2026/11/LLM-in-2025-2026/#mla-k-v-대신-latent-하나를-저장하는-full-attention)에서 다뤘다.
+
+Kimi K3는 24개 layer가 MLA다. [MI355X 글](https://vllm.ai/blog/2026-10-16-kimi-k3-mi355x)은 이 복제를 숫자로 보여 준다. 142K token에서 TP8의 GPU당 MLA KV는 약 1.96 GB이고, DCP8을 쓰면 약 245 MB로 줄어든다. 같은 글은 "Tensor parallelism divides the heads without dividing the cache"라고 쓴다. [AgentX 글](https://vllm.ai/blog/2026-09-08-vllm-agentx)도 Kimi K3에서 latent cache를 복제하는 plain TP가 "not very efficient"라고 적는다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-02b-tp-kv-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-02b-tp-kv-dark.svg"
+  caption="TP8에서는 GPU 8장이 같은 MLA KV를 한 벌씩 저장하고, DCP8을 더하면 GPU마다 1/8만 저장한다. 수치는 vLLM의 Kimi K3 on MI355X 글에서 가져왔다."
+/>
+
+내 TP16 배포에서도 같은 일이 있었다. TP16에서는 GPU 16장이 같은 MLA KV를 한 벌씩 저장하므로, 16장의 memory를 합쳐도 KV는 GPU 한 장 분량만 담는다. GPU를 늘리면 weight가 더 잘게 나뉘어 GPU마다 빈 memory가 늘기는 하지만, 그 빈 자리에도 모든 GPU가 같은 KV를 저장한다. 당시에는 multi-node 쪽 버그 때문에 model을 띄우는 것 자체가 어려워서, KV 사용률과 통신 시간을 따로 측정하지는 못했다. 이 배포는 마치며에서 다시 정리한다.
+
+## Context Parallelism의 출발
+
+### training의 sequence 축 분할
+
+TP가 나누지 못하는 token 축을 나누는 방법, 곧 CP는 training에서 먼저 나왔다. sequence 하나가 길어지면 activation이 GPU 한 장에 들어가지 않으므로, sequence 축으로 나눠 memory를 줄이는 것이 목적이었다.
+
+| 시기 | 방법 | attention의 통신 |
+| --- | --- | --- |
+| 2021.5 | [Sequence Parallelism](https://arxiv.org/abs/2105.13120) (Li et al.) | K, V를 ring으로 전달 |
+| 2023.9 | [DeepSpeed Ulysses](https://arxiv.org/abs/2309.14509) | all-to-all로 sequence 축을 head 축으로 바꿈 |
+| 2023.10 | [Ring Attention](https://arxiv.org/abs/2310.01889) (Liu et al.) | K, V block을 ring으로 전달하며 계산과 겹침 |
+| 2024.7 | [Llama 3](https://arxiv.org/abs/2407.21783) | K, V all-gather |
+
+Megatron에는 이름이 비슷한 기법이 둘 있다. [sequence parallelism](https://arxiv.org/abs/2205.05198)(Korthikanti et al., 2022)은 LayerNorm과 dropout 구간의 activation만 sequence 축으로 나누고, attention은 TP에 맡긴다. attention까지 sequence 축으로 나누는 것은 나중에 추가된 [context parallelism](https://docs.nvidia.com/megatron-core/developer-guide/latest/user-guide/features/context_parallel.html)이고, 이 글의 CP도 이쪽을 가리킨다.
+
+Llama 3는 뒤에 inference CP가 그대로 가져다 쓴 선택을 두 가지 했다. 첫째, ring 대신 K, V all-gather를 썼다. GQA에서는 K, V가 Q보다 훨씬 작고, 통신은 $O(T)$인데 계산은 $O(T^2)$이므로, all-gather를 계산과 겹치지 않아도 손해가 작다고 봤다. 둘째, causal mask 때문에 생기는 불균형을 막으려고 sequence를 $2C$개 chunk로 자르고 rank $i$에 chunk $i$와 chunk $2C - 1 - i$를 함께 맡겼다(load-balanced sharding). 앞 chunk는 볼 token이 적고 뒤 chunk는 많으므로, 짝을 지으면 rank마다 계산량이 같아진다.
+
+training은 sequence 전체를 한 번에 계산하므로 KV를 옮기는 방식 하나로 충분했다. inference에서는 decode의 query가 token 하나로 줄어들기 때문에, Q와 KV 중 무엇을 옮길지가 단계마다 달라진다.
+
+### pass-KV와 pass-Q: inference에서 옮길 쪽의 선택
+
+query와 KV가 서로 다른 GPU에 있으면 둘 중 하나가 이동해야 attention을 계산할 수 있고, 작은 쪽을 옮기는 편이 싸다. [Yang et al.](https://arxiv.org/abs/2411.01783)은 두 선택지를 pass-KV(KV를 옮김)와 pass-Q(query를 옮김)라고 부른다.
+
+어느 쪽이 작은지는 shape에서 바로 나온다. Q의 원소 수는 $T N H$이고, K와 V를 합친 원소 수는 $2 (T + P) K H$다. Q가 KV보다 작아지는 조건은 다음과 같다.
+
+$$
+T N \le 2 (T + P) K \quad\Longleftrightarrow\quad \frac{T}{T + P} \le 2 \cdot \frac{K}{N}
+$$
+
+좌변은 KV cache miss rate다. full prefill처럼 새 token이 많으면 KV를 옮기고, decode처럼 query가 token 하나뿐이면 query를 옮긴다. 논문의 128K 실험에서는 miss rate가 5% 아래면 pass-KV가 pass-Q보다 느렸다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-03-pass-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-03-pass-dark.svg"
+  caption="prefill은 query가 커서 KV를 query 쪽으로 옮기고(pass-KV), decode는 query가 token 하나라서 query를 KV 쪽으로 옮긴다(pass-Q)."
+/>
+
+논문은 pass-KV로 Llama 3 405B의 128K prefill을 3.8초, 1M prefill을 77초에 처리했다(H100 128장, 16 node). 반대로 decode에서는 CP가 token당 시간을 늘렸다. TP8의 46 ms가 TP8 위에 CP2를 더하면 60 ms, CP4를 더하면 71 ms가 됐다. 그래서 decode에는 CP가 맞지 않는다.
+
+### 단계별 분리: PCP와 DCP
+
+vLLM은 pass-KV와 pass-Q를 단계별 기법 두 개로 나눴다. [GLM-5.3 Part 2 글](https://vllm.ai/blog/2026-10-23-glm53-part2-pcp-dcp-hisparse)의 표현으로는 "PCP splits queries; DCP splits KV"다.
+
+- PCP는 prefill 쪽 극단에서 출발했다. query가 많으므로 query를 나눠 계산을 병렬로 하고, 새로 만든 KV를 모은다. pass-KV 계열이다.
+- DCP는 decode 쪽 극단에서 출발했다. query가 하나뿐이므로 KV를 나눠 저장하고, query를 KV 쪽으로 보낸다. pass-Q 계열이다.
+
+이름의 Prefill과 Decode는 각 기법이 처음 만들어진 단계를 가리킬 뿐이다. 뒤에서 보듯 GLM-5.3은 PCP와 DCP를 둘 다 prefill engine에 넣는다.
+
+## PCP: 계산의 token 분할
+
+PCP는 prompt를 token 단위로 GPU에 나눠서, 각 GPU가 prompt의 $1/C$ token에 대한 prefill 계산 전체를 모든 head로 하게 한다. query만 나누는 것이 아니다. 각 GPU는 자기 token의 Q, K, V를 직접 만들고, 만든 KV를 서로 all-gather한 뒤, 자기 query로 attention한다. head를 나누는 TP와 달리 한 prompt의 attention 연산량이 $C$등분된다.
+
+한 layer의 동작 순서는 다음과 같다.
+
+1. prompt를 $2C$개 chunk로 자른다. GPU 8장이면 16 chunk다.
+2. GPU $i$가 앞에서 $i$번째 chunk와 뒤에서 $i$번째 chunk를 한 쌍으로 가져간다.
+3. 각 GPU가 자기 token의 Q, K, V를 계산한다.
+4. 새로 만든 KV를 all-gather해서 모든 GPU가 전체 context의 KV를 갖는다.
+5. 각 GPU가 자기 query로 전체 KV에 attention한다.
+
+4번의 KV 교환 방식은 구현마다 다르다. [Yang et al.](https://arxiv.org/abs/2411.01783)은 KV를 ring으로 한 칸씩 넘기며 계산과 겹치는 방식을 기본으로 하고, all-gather 방식을 Llama 3 training의 변형으로 소개한다. GLM-5.3 Part 2 글은 통신을 all-gather라고 설명한다.
+
+### load-balanced sharding: GPU별 계산량을 맞추는 chunk 배치
+
+chunk 배치는 Llama 3의 load-balanced sharding과 같다.
+
+$$
+\text{GPU } i \;\leftarrow\; \left(C_i,\ C_{2C-1-i}\right), \qquad i = 0, 1, \dots, C - 1
+$$
+
+causal attention에서 chunk $j$의 query들이 보는 이전 token 수는 대략 $2j + 1$에 비례한다. 한 쌍의 합을 계산하면 GPU 번호와 무관한 상수가 된다. 이 값은 dense causal attention을 기준으로 직접 계산한 것이다.
+
+$$
+\underbrace{(2i + 1)}_{C_i} + \underbrace{\bigl(2(2C - 1 - i) + 1\bigr)}_{C_{2C-1-i}} = 4C
+$$
+
+vLLM 글은 이 배치를 GPU 8장에 걸친 V자 패턴이라고 부른다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-04-chunks-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-04-chunks-dark.svg"
+  caption="GPU 4장, chunk 8개의 예. GPU마다 앞쪽 chunk 하나와 뒤쪽 chunk 하나를 함께 맡기면, GPU마다 계산량의 합이 4C로 같아진다."
+/>
+
+### PCP의 비용
+
+PCP는 두 가지를 나누지 않는다.
+
+- attention weight는 나뉘지 않아 GPU마다 전부 올라간다. MoE model이면 expert는 EP로 따로 나눌 수 있다.
+- layer마다 KV를 all-gather하므로 모든 GPU가 KV cache 전체를 저장한다. 그래서 PCP만 쓸 때 context 길이를 막는 것은 연산이 아니라 이 복제된 cache다.
+
+## DCP: KV cache의 token 분할
+
+DCP는 KV cache 자체를 token 단위로 GPU에 나눠 저장해서 GPU당 KV를 $1/C$로 줄인다. TP와 PCP가 복제하던 MLA의 latent KV가 DCP에서 처음 나뉜다.
+
+### round-robin 저장 layout
+
+token을 round-robin으로 돌려서, GPU 8장이면 각 GPU가 8번째 token마다 하나씩 저장한다.
+
+$$
+\text{token } t \;\longmapsto\; \text{GPU } (t \bmod C)
+$$
+
+round-robin을 쓰는 이유는 memory 균형이다. decode로 생기는 token을 한 rank에만 쌓으면 그 rank의 KV가 먼저 차서, 다른 rank에 자리가 남아도 OOM이 난다.
+
+[Efficient Decode Context Parallelism with vLLM for Long Context Workloads](https://vllm.ai/blog/2026-08-07-decode-context-parallelism)(이하 DCP 글)는 연속 구간(0에서 50K, 50K에서 100K 등)으로 예시를 들지만, [GLM-5.3 Part 2 글](https://vllm.ai/blog/2026-10-23-glm53-part2-pcp-dcp-hisparse)은 8번째 token마다 저장한다고 명시한다.
+
+### decode: query를 KV 쪽으로
+
+decode는 request마다 query가 token 하나뿐이라 query를 옮기는 편이 훨씬 싸다. [DCP 글](https://vllm.ai/blog/2026-08-07-decode-context-parallelism)의 순서는 다음과 같다.
+
+1. AllGather Q: query를 모든 GPU에 모은다.
+2. Compute: 각 GPU가 자기 KV shard에 대해서만 attention하고, partial output과 LSE(log-sum-exp)를 낸다.
+3. AllGather + ReduceScatter: partial output을 LSE로 다시 가중해서 합치고, 각 GPU에 자기 head 몫을 돌려준다.
+
+<Figure
+  src="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-05-dcp-decode-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-05-dcp-decode-dark.svg"
+  caption="DCP의 decode 순서. query를 모든 GPU에 모으고, 각 GPU가 자기 KV shard로 attention한 뒤, partial output을 LSE로 합친다."
+/>
+
+GPU $s$가 자기 shard에서 계산한 값은 다음 둘이다.
+
+$$
+\mathrm{LSE}_s = \log \sum_{i \in \text{shard } s} \exp\!\left(\frac{q \cdot k_i}{\sqrt{H}}\right), \qquad
+O_s = \frac{\sum_{i \in \text{shard } s} \exp\!\left(q \cdot k_i / \sqrt{H}\right) v_i}{\exp(\mathrm{LSE}_s)}
+$$
+
+이것을 합치면 전체 KV에 대한 attention과 정확히 같은 값이 나온다.
+
+$$
+O = \frac{\sum_{s=0}^{C-1} O_s \exp\!\left(\mathrm{LSE}_s - \mathrm{LSE}_\text{max}\right)}{\sum_{s=0}^{C-1} \exp\!\left(\mathrm{LSE}_s - \mathrm{LSE}_\text{max}\right)}
+$$
+
+$\exp(\mathrm{LSE}_s)$는 그 shard의 softmax 분모, 즉 그 shard가 받은 attention의 총량이다. 반별 평균 점수를 반 인원수로 가중평균하면 전교 평균이 되는 것과 같은 원리라서, 근사가 아니라 정확한 계산이다. 최댓값을 빼는 것은 overflow를 막기 위한 장치일 뿐이다.
+
+이것은 [Yang et al.](https://arxiv.org/abs/2411.01783)의 pass-Q decode에 해당한다. 논문은 query를 ring으로 돌린 뒤 All2All로 partial output을 원래 rank에 돌려보내고, vLLM은 같은 일을 AllGather와 ReduceScatter로 한다. vLLM에서 이 단계의 함수 이름은 `cp_lse_ag_out_rs`이고, GLM-5.3이 쓰는 `--dcp-comm-backend ag_rs`도 이 AllGather + ReduceScatter다([vLLM 설정](https://github.com/vllm-project/vllm/blob/main/vllm/config/parallel.py)에서 model이 따로 정하지 않을 때의 기본값). Kimi K3 recipe는 다른 backend인 `a2a`를 쓴다.
+
+### prefill: KV를 query 쪽으로
+
+prefill은 query가 많아서 반대로 한다. layer마다 각 GPU가 다음을 반복한다.
+
+1. $C$개 shard를 all-gather해서 전체 context의 임시 copy를 만든다.
+2. 자기 query로 그 copy에 attention한다.
+3. copy를 해제한다.
+
+$1/C$로 줄어드는 것은 계속 저장해 두는 cache뿐이고, 계산 순간에는 전체가 잠깐 모인다.
+
+### DCP의 비용
+
+prefill 쪽 all-gather는 layer마다 cache된 context 전체를 다시 보내므로 context가 길수록 비싸다. decode 쪽은 query 하나와 partial output만 오가서 통신량은 작지만, attention마다 collective 통신이 끼어들어 token당 latency가 늘 수 있다. 그래서 DCP는 NVLink 같은 빠른 GPU 사이 연결을 전제로 한다.
+
+TP와 조합할 때는 제약이 있다. [DCP 글](https://vllm.ai/blog/2026-08-07-decode-context-parallelism)에 따르면 MLA model은 `tensor_parallel_size`가 `decode_context_parallel_size` 이상이고 그 배수여야 한다. GQA model은 `tensor_parallel_size`가 아니라 `tensor_parallel_size // num_key_value_heads`가 이 기준이 된다.
+
+## PCP와 DCP의 조합
+
+PCP와 DCP는 경쟁 관계가 아니라 서로 다른 것을 나눈다. PCP는 KV를 만들고 attention하는 계산을 나누고, DCP는 만든 KV의 저장을 나눈다. 그래서 둘을 같이 쓰면 KV를 계산하는 GPU와 저장하는 GPU가 따로 정해진다.
+
+| 구성 | token $t$의 KV를 계산하는 GPU | token $t$의 KV를 저장하는 GPU |
+| --- | --- | --- |
+| PCP8만 | $t$가 속한 chunk를 맡은 GPU | 8장 전부 (all-gather 결과를 각자 보관, 같은 cache가 8벌) |
+| DCP8만 | 8장 전부 (head는 TP로 나눔) | GPU $(t \bmod 8)$ 한 장만 |
+| PCP8 $\times$ DCP8 | $t$가 속한 chunk를 맡은 GPU | GPU $(t \bmod 8)$ 한 장만 |
+
+<Figure
+  src="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-06-layout-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-06-layout-dark.svg"
+  caption="PCP는 계산하는 token을, DCP는 저장하는 KV를 나눈다. 하나만 쓰면 다른 쪽은 나뉘지 않고, 둘을 함께 써야 계산과 저장이 모두 1/4이 된다."
+/>
+
+예를 들어 GPU 4장, 32 token prompt(chunk당 4 token)에서 token 30은 chunk 7에 속하고, chunk 7은 chunk 0과 짝지어져 GPU 0이 계산한다. PCP만 쓰면 그 KV는 4장 모두에 저장된다. DCP를 켜면 $30 \bmod 4 = 2$이므로 GPU 2만 저장하고, 다른 GPU는 attention할 때 layer마다 임시로 받아 쓰고 버린다.
+
+두 layout이 어긋나기 때문에 layer마다 all-gather가 필요하다. 계산한 GPU에서 저장할 GPU로 KV가 넘어가는 구체적인 시점은 vLLM 글에 나와 있지 않다.
+
+| 항목 | PCP | DCP |
+| --- | --- | --- |
+| 나누는 것 | token별 계산 (Q, K, V 생성과 attention) | KV cache 저장 |
+| 푸는 한계 | prefill 속도, TTFT | KV memory, context 길이, concurrency |
+| token 배치 | $2C$ chunk로 잘라 앞뒤를 짝지음 | round-robin ($C$번째 token마다) |
+| 처음 만들어진 단계 | prefill (query가 많음) | decode (query가 token 하나) |
+| 옮기는 것 | 새로 만든 KV를 all-gather | decode: query를 보내고 LSE로 merge. prefill: shard를 임시로 all-gather |
+| [Yang et al.](https://arxiv.org/abs/2411.01783)의 대응 개념 | pass-KV, load-balanced sharding | pass-Q decode |
+| 남는 비용 | 모든 GPU가 KV 전체를 보유 | attention마다 통신 |
+| vLLM flag | `--prefill-context-parallel-size` | `--decode-context-parallel-size` |
+
+## PCP와 DCP의 적용 조건
+
+PCP와 DCP는 통신과 구현 복잡도가 추가되므로, 병목이 있을 때만 써야 한다. 조건은 둘이다.
+
+1. **prefill 조건**: **prefill 비용이 context 길이보다 빠르게 커진다.** dense attention은 $O(T^2)$로 커지고, 이전 token 전부에 score를 매기는 GLM-5.3의 indexer(뒤에서 설명)도 그렇다. 반대로 prompt가 짧거나 대부분 prefix cache에서 오면, 새로 계산할 양이 작아 이 조건에 해당하지 않는다. 이 조건에서는 PCP가 prefill 계산을 GPU $C$장에 나눈다.
+2. **KV 조건**: **KV가 decode의 병목이다.** 경우는 둘이다.
+   - **용량**: token당 KV에 context 길이를 곱한 값이 GPU 한 장의 KV 예산을 넘거나, 들어가더라도 concurrency를 막는다.
+   - **대역폭**: context가 길어 decode step마다 KV를 읽는 시간이 step 시간을 지배한다. 뒤의 Kimi K3 절에서 KV 자리가 충분한데도 DCP8이 TPOT를 줄인 측정이 이 경우다.
+
+   TP처럼 같은 KV를 여러 GPU가 저장하면 두 경우가 모두 심해진다. GPU마다 KV 전체를 저장하고, 매 step 전체를 읽기 때문이다. 반대로 KV가 작거나 MoE가 decode 시간을 지배하면 이 조건에 해당하지 않는다. 이 조건에서는 DCP가 KV를 GPU $C$장에 나눠 저장하고 나눠 읽는다.
+
+둘 다 해당하지 않으면 PCP와 DCP는 필요 없다. 이때는 weight를 담는 데 필요한 만큼만 TP나 EP로 나누고, 남은 GPU는 DP로 request를 나눈다. 이 글에서도 V4.1의 DEP 구성과 GLM-5.3의 decode node(DP rank 8개와 EP8)가 이 방식이다.
+
+| 상황 | 선택 |
+| --- | --- |
+| 긴 prompt의 TTFT가 병목이고 KV는 들어간다 | PCP |
+| decode에서 KV 용량이나 KV 읽기가 병목이다 | DCP (TP 위에) |
+| 긴 prompt인데 KV도 안 들어간다 | PCP $\times$ DCP |
+| request가 많고 각 request의 KV가 rank 하나에 들어간다 | DP와 EP (MoE) |
+
+### agentic workload의 turn별 조건
+
+agentic workload에서는 같은 session 안에서도 turn마다 맞는 조건이 바뀐다. 앞에서 본 AgentX 수치(median input 142K, cache hit 96% 이상)를 기준으로 하면 다음과 같다.
+
+| 경우 | prefill 조건 | KV 조건 | 맞는 선택 |
+| --- | --- | --- | --- |
+| warm turn (앞 turn의 prefix가 prefix cache에 있는 turn) | 약함. 새 token은 142K의 4%, 약 5.7K | 강함. 142K의 KV를 계속 저장 (용량) | DCP 또는 KV offload |
+| cold prefill (첫 turn, 새 subagent, cache에서 밀려난 session) | 강함. 수만 token을 처음부터 계산하고, 그동안 짧은 turn을 막음 | 보통 | PCP |
+| 동시 session이 많을 때 | 무관 | 강함. tool 실행 중에도 session의 KV를 보관 (용량) | DCP, CPU KV offload |
+| 긴 context의 decode | 무관 | KV 읽기가 step 시간을 지배하면 강함 (대역폭) | DCP. MoE가 지배하면 DEP |
+
+warm turn은 prefill이지만 모양은 decode에 가깝다. 새 token은 context의 약 4%이고, 나머지 96%는 이미 저장된 KV다.
+
+DCP로 KV 자리를 늘리면 cache에서 밀려나는 session이 줄어, cold prefill 자체가 줄어든다.
+
+### PCP와 DCP를 쓰지 않는 편이 나은 경우
+
+반대로 다음 경우에는 통신과 복잡도만 늘어난다.
+
+| 경우 | 쓰지 않을 것 | 이유 |
+| --- | --- | --- |
+| prompt가 짧거나 cache hit이 높고, context에 비례해 커지는 계산(indexer 등)도 없는 prefill | PCP | 줄어드는 계산 시간보다 all-gather 시간이 길다 |
+| decode | PCP | 앞의 pass-KV와 pass-Q 절에서 본 [Yang et al.](https://arxiv.org/abs/2411.01783) 측정에서, decode에 CP를 쓰면 token당 시간이 TP8의 46 ms에서, TP8 위에 CP4를 더한 71 ms로 늘었다 |
+| KV를 이미 강하게 압축한 model (DeepSeek-V4.1-Flash) | DCP | KV가 작아 용량과 대역폭 어느 쪽도 병목이 아니고, decode step마다 통신만 더해진다 |
+| DP로 배치해 KV 복제가 없고, request 하나의 KV가 rank 하나에 들어가며 KV 읽기도 병목이 아닐 때 | DCP | 용량과 대역폭 모두 병목이 아니다 |
+| rank당 batch가 커서 MoE가 병목일 때 | DCP | [AgentX 글](https://vllm.ai/blog/2026-09-08-vllm-agentx)에서 rank당 batch가 3을 넘으면 DEP16(attention은 DP, expert는 EP로 GPU 16장에 나눈 구성)이 DCP8보다 낫다 |
+| 필요한 기능을 아직 지원하지 않을 때 | PCP, DCP | 예를 들어 upstream의 V4.1 PCP는 CUDA graph, LoRA, multimodal을 지원하지 않는다(뒤의 V4.1 절) |
+
+아래에서 세 model(GLM-5.3, DeepSeek-V4.1-Flash, Kimi K3)을 이 두 조건으로 본다.
+
+### GLM-5.3: PCP와 DCP 모두 필요
+
+GLM-5.3은 두 조건 모두에 해당한다. 이 절의 수치는 모두 [GLM-5.3 Part 2 글](https://vllm.ai/blog/2026-10-23-glm53-part2-pcp-dcp-hisparse)에서 가져왔다.
+
+prefill 조건은 indexer 때문에 성립한다. GLM-5.3의 attention은 두 부분이다. indexer가 이전 token 전부에 score를 매겨 2,048개를 고르고, sparse MLA가 그 2,048개에만 attention한다. 그래서 sparse MLA 비용은 prompt 길이에 선형이고, indexer 비용은 제곱으로 커진다. 이 구조에서 PCP는 TP보다 두 가지가 낫다.
+
+- indexer를 복제하지 않는다. TP8에서는 indexer가 나뉘지 않아 GPU 8장이 같은 제곱 비용을 각자 반복한다. PCP8에서는 GPU마다 자기 token만 index하므로 1/8만 계산한다. indexer의 FLOPs가 sparse MLA를 넘어서는 지점이 TP8의 약 32K token에서 PCP8의 약 256K token으로 밀려난다.
+- KV row 하나를 쓰는 head가 많다. TP8은 KV row 하나를 memory에서 읽어 head 8개에만 쓰지만, PCP8은 64개 head 전부에 쓴다. 옮긴 byte당 연산량이 약 26 FLOPs에서 약 191 FLOPs로 올라가, H200이 compute-bound가 되는 경계(약 206 FLOPs/byte)에 가까워진다.
+
+warm turn은 새 token이 적어 PCP로 나눌 계산도 적다. 다만 GLM-5.3의 indexer는 새 token 하나마다 이전 token 전부에 score를 매기므로, 새 token이 약 5.7K뿐이어도 score 계산은 약 5.7K $\times$ 142K번이다. PCP8은 새 token을 GPU 8장에 나누므로, GPU마다 이 score 계산의 1/8만 맡는다.
+
+KV 조건은 token당 KV 크기에서 확인할 수 있다. FP8 기준, MLA KV 78 layer, indexer key 21 layer, MTP layer 1개를 더하고, 1M($2^{20}$) token context를 곱하면 다음과 같다.
+
+$$
+78 \times 656 + 21 \times 132 + 788 = 54{,}728\ \text{B/token}
+\quad\Longrightarrow\quad
+54{,}728\ \text{B} \times 2^{20} \approx 53.4\ \text{GiB}
+$$
+
+세 수치는 [GLM-5.3 Part 2 글](https://vllm.ai/blog/2026-10-23-glm53-part2-pcp-dcp-hisparse)의 각주에 나온다.
+
+- 656 B: MLA layer 하나의 KV다. [FlashMLA](https://github.com/deepseek-ai/FlashMLA)의 `fp8_ds_mla` 형식으로, FP8 latent 512 byte, FP32 scale 4개 16 byte, BF16 RoPE 64차원 128 byte를 더한 값이다.
+- 132 B: indexer key 하나다. FP8 값 128개와 4 byte scale이다.
+- 788 B: MTP layer 하나다. 글은 수치만 적지만, MLA KV와 indexer key를 함께 가진 layer라고 보면 $656 + 132 = 788$로 맞는다.
+
+1M context 하나의 KV가 53.4 GiB인데, H200 한 장에 KV용으로 남는 공간은 약 15 GiB다. PCP만 쓰면 모든 GPU가 이 KV를 한 벌씩 저장해야 하므로 공간이 모자란다. DCP8이면 GPU당 6.7 GiB만 필요하다.
+
+DCP8은 GPU당 KV를 1/8로 줄이지만, 대신 prefill step 시간이 늘어난다. PCP8 engine에서 2K token chunk를 prefill할 때 DCP8을 켜면, step 시간이 context 64K까지는 약 6%, 248K에서는 약 15% 늘어난다. 그래도 250K token을 넘는 context에서는 이 비용을 낼 수밖에 없다. PCP8만 쓰면 GPU마다 KV 전체를 저장해야 해서, 약 250K token에서 KV 공간이 가득 차기 때문이다.
+
+vLLM은 H200 16장을 prefill node 하나와 decode node 하나로 나눴다.
+
+| node (8 $\times$ H200) | 병렬화 | KV 관리 |
+| --- | --- | --- |
+| Prefill | PCP8 $\times$ DCP8 $\times$ EP8, engine 1개 | CPU KV offload 512 GiB (다음 turn이 prefix를 재사용) |
+| Decode | DP rank 8개 + EP8 | Hybrid HiSparse |
+
+<Figure
+  src="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-07-glm-light.svg"
+  darkSrc="/assets/images/post/2026-11-14-Transformer-and-Context-Parallelism/cp-07-glm-dark.svg"
+  caption="GLM-5.3의 H200 16장 구성. PCP와 DCP는 prefill node에만 있고, NIXL connector가 흩어진 KV를 decode rank 한 장의 layout으로 다시 모아 옮긴다."
+/>
+
+prefill engine의 주요 flag는 다음과 같고, vLLM v0.32.0 이상에서 동작한다. `sparse_mla_force_mqa`는 prompt가 top-k 2,048 token 안에 들어오는 batch도 dense MHA 경로 대신 sparse MLA(MQA) kernel에 남겨서, KV row 하나가 모든 head에 쓰이게 한다.
+
+```bash
+--prefill-context-parallel-size 8 \
+--decode-context-parallel-size 8 \
+--dcp-comm-backend ag_rs \
+--enable-expert-parallel \
+--attention-config '{"sparse_mla_force_mqa":true}'
+```
+
+GLM-5.3 Part 2 글의 AgentX 측정 결과는 다음과 같다.
+
+- 앞의 agentic workload 절에서 본 것처럼, concurrency 32까지는 주로 prefill이 병목이다. PCP8 $\times$ DCP8 prefill은 DP8 prefill보다 같은 throughput에서 사용자당 속도가 1.7배에서 3.2배이고, median TTFT가 1.5초에서 5.2초 사이에서 0.8초에서 0.9초 사이로 줄었다.
+- concurrency 32부터는 decode 쪽 병목이 커진다. concurrency 64에서 HiSparse decode 구성은 GPU당 8,340 logical tok/s와 사용자당 29.6 tok/s를 냈다.
+- 1M context는 이 구성만 처리했다. DP8 prefill rank도, offload만 쓰는 decode rank도 1M request 하나를 담지 못한다.
+
+
+### DeepSeek-V4.1-Flash: 이미 작은 KV와 prefill 비용
+
+V4.1은 prefill 조건에는 부분적으로만 해당하고, KV 조건에는 해당하지 않는다. model 구조가 이미 KV와 prefill 비용을 줄여 놓았기 때문이다. V4.1의 [CSA2](/posts/2026/11/LLM-in-2025-2026/#csa2-layer-축의-kv와-선택-공유)와 [FP4 KV](/posts/2026/11/LLM-in-2025-2026/#fp4-main-kv-cache)는 이전 글에서 다뤘다.
+
+| 항목 | GLM-5.3 | DeepSeek-V4.1-Flash |
+| --- | --- | --- |
+| GPU에 두는 KV (token당) | 54,728 B (FP8) | global KV 890 B (FP4, layer 사이 공유) |
+| 1M context의 KV | 53.4 GiB | global KV 약 0.87 GiB |
+| context에 따라 커지는 prefill 연산 | indexer가 이전 token 전부에 score (제곱) | 뒤쪽 indexer는 고정된 16K 후보에서만 고르고, layer 21에서 39는 마지막 128 token만 처리 |
+| decode에서 context의 영향 | KV가 GPU에 안 들어가 host memory까지 사용 | 128K에서 855K로 늘려도 step 시간 +7% |
+
+0.87 GiB는 890 B에 $2^{20}$을 곱해 직접 계산한 값이고, global KV만 센 것이다. 어느 쪽으로 봐도 GLM-5.3의 1/10 이하다.
+
+prefill 조건에는 부분적으로 해당한다. 긴 prompt 하나를 여러 GPU로 나눠 빠르게 처리하는 방법으로 TP는 맞지 않는다. V4.1도 모든 head가 KV latent 하나를 공유해서, TP로 나누면 KV가 복제되기 때문이다. [DeepSeek-V4.1-Flash on vLLM: 5x Agentic Throughput Since Day 0](https://vllm.ai/blog/2026-10-07-deepseek-v41-flash)는 이를 "TP would duplicate the KV cache across GPUs"라고 쓴다. 그래서 prompt 하나를 여러 GPU로 빠르게 하려면 token 축으로 나누는 PCP가 맞는 방법이다. 하지만 PCP로 줄일 TTFT가 이미 작다.
+
+- vLLM의 NVIDIA 대표 구성은 PCP 없이 DEP2로 prefill한다. DEP2는 prefill instance 하나를 GPU 2장으로 만들고, attention은 DP 2로, expert는 EP 2로 나눈 구성이다([Serving DeepSeek-V4.1-Flash at Scale](https://vllm.ai/blog/2026-10-23-deepseek-v41-flash-pd-wide-ep)). 앞의 agentic workload 절에서 본 8K token prefill 수치(cache된 context 없이 87.9 ms, 512K context 위에서 189.4 ms)가 이 GB300 2장 구성에서 잰 값이다.
+- prefill instance가 작을수록 GPU당 throughput이 높다. DEP4는 GPU당 throughput이 DEP2의 83%였다.
+- vLLM Ascend의 P/D 권장 구성은 prefill에 PCP4를 쓴다.
+
+지원 현황에도 제약이 있다. vLLM은 NVIDIA CUDA에서 V4.1용 PCP 경로를 갖고 있다. DSpark speculative decoding과의 조합([#61994](https://github.com/vllm-project/vllm/pull/61994))은 10월 26일(UTC) main에 merge되었고, 다음 릴리스인 v0.34.0에 들어갈 예정이다(2026년 11월 15일 기준). ROCm 지원([#66842](https://github.com/vllm-project/vllm/pull/66842))은 아직 열린 PR이다. upstream의 V4.1 PCP는 CUDA graph, LoRA, multimodal 입력을 지원하지 않는다. PCP를 켠 것과 끈 것을 비교한 공개 수치는 찾지 못했다.
+
+KV 조건에는 해당하지 않는다.
+
+- 나눌 KV가 작다. vLLM은 V4.1에서 KV 용량이 batch 크기를 거의 제한하지 않고, benchmark 내내 KV offloading도 필요 없었다고 적는다.
+- decode의 병목이 attention이 아니다. DEP4, 128K context에서 decode step의 62%가 MoE이고, attention과 indexer는 합쳐 13%다. 그래서 vLLM은 expert를 넓게 나누는 Wide-EP를 택했고, MoE 시간이 DEP4의 13.4 ms에서 DEP32의 6.0 ms로 줄었다.
+- 배치가 DP라서 복제가 없다. 각 rank가 자기 request의 KV만 갖는다.
+- 지원이 초기 단계다. upstream vLLM은 V4.1의 compressed indexer와 sliding-window cache layout 때문에 DCP를 거부한다. 이를 여는 draft PR([#56738](https://github.com/vllm-project/vllm/pull/56738))은 DCP2와 DCP4만 다루고, 정확성 기준선일 뿐 속도나 용량 이득은 주장하지 않는다고 스스로 밝힌다.
+
+[AgentX 글](https://vllm.ai/blog/2026-09-08-vllm-agentx)도 DeepSeek-V4에서 "DCP only matched DEP rather than surpassing it"이라고 적는다.
+
+| 항목 | GLM-5.3 | DeepSeek-V4.1-Flash |
+| --- | --- | --- |
+| PCP | 필수에 가깝다. indexer의 제곱 비용을 나누고, TP가 맞지 않는다 | 선택이다. 아주 긴 prompt의 TTFT용이고 장비에 따라 다르다 |
+| DCP | 약 250K token을 넘으면 필수다 | 거의 필요 없다. 지원도 초기다 |
+| 실제 주력 구성 | PCP8 $\times$ DCP8 prefill, Hybrid HiSparse decode | DEP2 prefill, Wide-EP decode |
+
+KV를 강하게 압축하고 layer 사이에 공유하는 model일수록 V4.1과 같은 결론이 된다. KV가 작아질수록 DCP로 줄일 memory가 작아지고, prefill이 가벼워질수록 PCP로 줄일 TTFT도 작아진다.
+
+### Kimi K3: DCP 측정 결과와 PCP 측정 부재
+
+Kimi K3는 KV 조건에 분명히 해당한다. vLLM에 들어간 Kimi 최적화도 대부분 DCP 쪽이고, PCP는 구성만 있고 측정은 없다.
+
+#### Kimi K3의 KV: 24개 MLA layer
+
+Kimi K3는 2.8T parameter MoE이고, token마다 896개 expert 중 16개를 쓴다. attention layer 93개 중 24개가 MLA이고, 나머지 69개는 KDA(Kimi Delta Attention)라는 linear attention이다. KDA는 context가 길어져도 크기가 고정된 state만 저장하므로, context를 따라 커지는 KV는 24개 MLA layer의 것뿐이다.
+
+앞에서 본 것처럼 이 KV는 TP에서 복제된다. 142K token에서 MLA KV는 $24 \times 142{,}000 \times 576$ byte로 GPU당 약 1.96 GB이고, DCP8을 쓰면 약 245 MB가 된다.
+
+#### DCP 지원과 측정
+
+| 항목 | 구성 | 결과 | 상태 |
+| --- | --- | --- | --- |
+| [#50484](https://github.com/vllm-project/vllm/pull/50484) Kimi K3 DCP 지원 | 120K context, concurrency 1 | TPOT p50: TP8 13.806 ms, DCP8 10.544 ms. TP8의 HBM 사용률은 평균 4.93%로 KV 자리가 충분했다 | 2026-08-10(UTC) merge |
+| [#52239](https://github.com/vllm-project/vllm/pull/52239) prefill KV를 MLA layout으로 바로 저장 | 60K에서 180K prefill | P50 TTFT: TP8 3.130 s, DCP8 3.149 s. KV token 용량은 약 7.5배 | 열린 PR |
+| [MI355X 글](https://vllm.ai/blog/2026-10-16-kimi-k3-mi355x) AITER MLA decode | 32K 입력, TP8, DCP 없음 | TPOT 43.8 ms에서 23.6 ms | merge |
+| [MI355X 글](https://vllm.ai/blog/2026-10-16-kimi-k3-mi355x) MoE 중복 projection 제거 | TP8 $\times$ DCP8 | GPU당 약 3.85 GiB 확보, concurrency 70에서 throughput 28.9% 증가 | merge |
+
+DCP8은 decode를 빠르게 하면서 KV 용량을 크게 늘리고, prefill의 TTFT는 거의 그대로다. 마지막 행은 DCP 자체가 아니라 weight 쪽 memory를 줄인 결과지만, 늘어난 자리가 KV로 가면서 concurrency 70의 prefix cache hit rate가 74.8%에서 80.1%로 올랐다.
+
+recipe의 기본 8$\times$B300 구성은 DCP 없는 TP8이다. DCP는 tuning된 구성에만 있고, `--decode-context-parallel-size`를 TP 크기의 약수로 두고 `--dcp-comm-backend a2a`와 함께 쓴다.
+
+#### DCP 크기를 바꾸는 구성
+
+DCP가 항상 쓰이지는 않는다. [MI355X 글](https://vllm.ai/blog/2026-10-16-kimi-k3-mi355x)의 AMD 구성은 30과 50 tok/s/user에서 CPU KV offload와 함께 DCP8에서 DCP1 사이를 쓰고, 150 tok/s/user에서는 GPU만 쓰는 DCP1에 draft token 5개에서 7개를 쓴다. NVIDIA 구성은 세 지점 모두 DCP8이다. [AgentX 글](https://vllm.ai/blog/2026-09-08-vllm-agentx)에서는 rank당 batch가 3을 넘으면 DEP16이 DCP8보다 낫다.
+
+#### Kimi K3.1의 sparse MLA
+
+Kimi K3.1은 24개 MLA layer가 sparse MLA로 바뀌었다. [#67262](https://github.com/vllm-project/vllm/pull/67262)는 K3.1이 "69 KDA (linear attention) layers and 24 sparse MLA (DSA) layers"를 가진다고 적는다. DSA(DeepSeek Sparse Attention)는 indexer로 고른 token에만 attention하는 sparse MLA다. GLM-5.3처럼 indexer가 이전 token 전부에 score를 매기는 구조가 Kimi에도 들어온 것이다.
+
+K3.1용 DCP 최적화도 진행 중이다. [#66027](https://github.com/vllm-project/vllm/pull/66027)은 sparse MLA의 DCP 경로를 고쳐, GB300 8장(4장씩 2 tray, TP = DCP = 8)에서 prefill TTFT를 8K 입력은 569.7 ms에서 375.0 ms로, 32K 입력은 1,921.5 ms에서 1,358.3 ms로 줄였다. 아직 열린 PR이다. K3.1의 기본 지원인 [#66532](https://github.com/vllm-project/vllm/pull/66532)는 2026년 11월 10일 main에 merge되었으므로 v0.33.0에는 없다.
+
+#### PCP 현황
+
+Kimi K3는 recipe, vLLM 글, PR 어디에도 PCP 구성이나 측정이 없다. K3에서는 69개 KDA layer의 prefill 비용이 context에 선형이고, 제곱으로 커지는 것은 24개 MLA layer뿐이다.
+
+K3.1에는 PCP 구성이 있다. [vLLM Ascend의 Kimi-K3.1-Pro tutorial](https://github.com/vllm-project/vllm-ascend/blob/main/docs/source/tutorials/models/Kimi-K3.1-Pro.md)은 Ascend A3 8 node의 4P4D 구성에서 prefill에 PP4, PCP4, TP4를, decode에 DP4, DCP16, TP16을 쓴다. K3.1에는 indexer가 들어왔으므로, GLM-5.3에서 PCP가 필요했던 이유가 K3.1에도 생길 수 있다. 다만 PCP를 켠 것과 끈 것을 비교한 측정은 아직 없다.
+
+## 마치며
+
+attention의 key와 value는 context에 있어서 앞선 token 전부가 필요하고, FFN의 key와 value는 weight에 있어서 token마다 따로 계산된다. 그래서 긴 context의 attention은 token 축을 나누는 CP가 맡고, FFN은 weight를 나누는 TP와 EP가 맡는다.
+
+vLLM은 이 CP를 두 가지로 나눴다.
+
+- PCP는 prefill의 계산을 token 단위로 나눈다. prefill 비용이 context보다 빠르게 커질 때, 특히 cold prefill이 TTFT를 막을 때 필요하다.
+- DCP는 KV의 저장을 token 단위로 나눈다. KV가 GPU 한 장에 들어가지 않거나, TP 때문에 KV가 복제될 때 필요하다.
+
+둘 다 통신을 더하므로 병목이 있을 때만 쓴다. GLM-5.3은 두 조건에 모두 걸려 PCP와 DCP를 함께 쓰고, DeepSeek-V4.1-Flash는 KV와 prefill을 model 구조로 이미 줄여서 거의 쓰지 않는다. Kimi K3는 KV 조건에 걸려 DCP를 쓰고, K3.1은 indexer가 들어와 prefill 조건도 다시 봐야 한다.
+
+이 글은 Kimi K3를 TP16으로 띄웠다가 성능이 기대만큼 나오지 않은 데서 시작했다. 돌이켜보면 그 선택이 실수였다. TP16은 KV 자리가 부족한 model에서 MLA KV를 16벌로 복제하는 구성이었다. KV 자리를 늘리려고 GPU를 16장으로 늘렸지만, MLA의 KV는 16장 모두에 복제되므로 GPU를 늘린 만큼 KV 자리가 늘지 않았다. 오히려 GPU 16장이 node 두 대에 걸치면서, layer마다 하는 TP all-reduce가 node 사이 network까지 지나게 되어 더 느려졌다. 필요했던 것은 TP를 키우는 것이 아니라 DCP로 KV를 나누는 것이었다.
+
+## 참고 자료
+
+- [Context Parallelism for Scalable Million-Token Inference](https://arxiv.org/abs/2411.01783) (Yang et al., Meta, MLSys 2025). pass-KV, pass-Q, load-balanced sharding, merge attention 수식의 출처.
+- [GLM-5.3 Optimizations, Part 2: PCP, DCP, and Hybrid HiSparse on 16 H200s](https://vllm.ai/blog/2026-10-23-glm53-part2-pcp-dcp-hisparse) (vLLM, 2026-10-23). PCP와 DCP의 정의, GLM-5.3 수치, 구성과 flag의 출처.
+- [Efficient Decode Context Parallelism with vLLM for Long Context Workloads](https://vllm.ai/blog/2026-08-07-decode-context-parallelism) (vLLM, 2026-08-07). decode의 통신 순서와 TP 제약의 출처.
+- [Scaling Kimi K3 on AMD Instinct MI355X](https://vllm.ai/blog/2026-10-16-kimi-k3-mi355x) (vLLM, 2026-10-16). Kimi K3에서 TP의 MLA KV 복제, DCP8 수치, AITER MLA decode와 MoE projection 최적화, 구성별 DCP 선택의 출처.
+- [vLLM recipe: Kimi K3](https://recipes.vllm.ai/moonshotai/Kimi-K3). TP8 serve 명령과 DCP 구성 notes의 출처.
+- [vLLM x AgentX: Optimizing for Real-World Agentic Serving](https://vllm.ai/blog/2026-09-08-vllm-agentx) (vLLM, 2026-09-08). coding agent trace의 통계, Kimi K3의 DCP8과 TP8, DEP16 비교의 출처.
+- [Serving DeepSeek-V4.1-Flash at Scale](https://vllm.ai/blog/2026-10-23-deepseek-v41-flash-pd-wide-ep) (vLLM, 2026-10-23). V4.1의 KV 크기, DEP2 prefill, Wide-EP decode, decode 시간 분해의 출처.
+- [DeepSeek-V4.1-Flash on vLLM: 5x Agentic Throughput Since Day 0](https://vllm.ai/blog/2026-10-07-deepseek-v41-flash) (vLLM, 2026-10-07). TP가 V4.1의 KV를 복제한다는 설명, 16K 후보 indexer의 출처.
+- vLLM PR [#56738](https://github.com/vllm-project/vllm/pull/56738) (V4.1 DCP draft), [#61994](https://github.com/vllm-project/vllm/pull/61994) (V4.1 PCP와 DSpark), [#66842](https://github.com/vllm-project/vllm/pull/66842) (ROCm PCP). V4.1 지원 현황의 출처.
+- vLLM PR [#50484](https://github.com/vllm-project/vllm/pull/50484) (Kimi K3 DCP), [#52239](https://github.com/vllm-project/vllm/pull/52239) (Kimi K3 DCP prefill), [#66027](https://github.com/vllm-project/vllm/pull/66027) (Kimi K3.1 sparse MLA DCP), [#66532](https://github.com/vllm-project/vllm/pull/66532) (Kimi K3.1 지원), [#67262](https://github.com/vllm-project/vllm/pull/67262) (Kimi K3.1 layout). Kimi 측정과 지원 현황의 출처.
+- [vLLM Ascend: Kimi-K3.1-Pro tutorial](https://github.com/vllm-project/vllm-ascend/blob/main/docs/source/tutorials/models/Kimi-K3.1-Pro.md). Kimi K3.1의 PCP4 prefill 구성의 출처.
+- [Sequence Parallelism: Long Sequence Training from System Perspective](https://arxiv.org/abs/2105.13120) (Li et al., 2021).
+- [Reducing Activation Recomputation in Large Transformer Models](https://arxiv.org/abs/2205.05198) (Korthikanti et al., 2022). Megatron sequence parallelism의 출처.
+- [DeepSpeed Ulysses](https://arxiv.org/abs/2309.14509) (Jacobs et al., 2023).
+- [Ring Attention with Blockwise Transformers for Near-Infinite Context](https://arxiv.org/abs/2310.01889) (Liu et al., 2023).
+- [Megatron Core context parallelism](https://docs.nvidia.com/megatron-core/developer-guide/latest/user-guide/features/context_parallel.html) (NVIDIA).
+- [The Llama 3 Herd of Models](https://arxiv.org/abs/2407.21783) (Meta, 2024). all-gather CP와 $2C$ chunk load balancing의 출처.
+- [Transformer Feed-Forward Layers Are Key-Value Memories](https://arxiv.org/abs/2012.14913) (Geva et al., 2021). FFN의 key-value memory 해석의 출처.
+- [Attention Is All You Need](https://arxiv.org/abs/1706.03762) (Vaswani et al., 2017). position-wise FFN 정의의 출처.
