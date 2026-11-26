@@ -1,0 +1,687 @@
+---
+title: "vLLM MNNVL all-reduce 버그 디버깅"
+author: jongsukim
+date: 2026-11-25 22:00:00 +0900
+categories: [LLM Inference, vLLM]
+tags:
+  - LLM Inference
+  - vLLM
+  - FlashInfer
+  - Tensor Parallelism
+  - All-Reduce
+  - NCCL
+  - MNNVL
+  - Kimi
+math: true
+mermaid: false
+draft: false
+---
+
+import Figure from '../../components/Figure.astro';
+
+## Introduction
+
+8월에 올린 vLLM issue [#51986](https://github.com/vllm-project/vllm/issues/51986)을 고친 PR [#53377](https://github.com/vllm-project/vllm/pull/53377)이 3개월이 지난 11월 24일에 머지되었다. 머지된 김에 그때의 디버깅을 복기하고, 고치면서 알게 된 것을 정리해 둔다.
+
+먼저 밝혀 둔다. issue를 올리고 PR을 낸 것은 나지만, 원인을 추적하고 코드를 읽어 분석한 일은 대부분 Claude Fable이 했다. 이 글은 그 분석을 내가 따라가며 이해한 만큼 다시 적은 것이다.
+
+발단은 이전 글의 [마치며](/posts/2026/11/Transformer-and-Context-Parallelism/#마치며)에 나왔던 그 이야기다. IB(InfiniBand)로 연결된 B300 node 2대에 Kimi K3를 multi-node TP로 띄우려 했다. 그런데 vLLM이 workspace를 초기화할 때 30초씩 멈췄고, 한 시간쯤 뒤 OOM으로 죽었다.
+
+결론부터 적는다.
+
+- vLLM은 FlashInfer의 fusion kernel(all-reduce와 RMSNorm을 한 kernel로 합친 것)을 쓴다. 이 kernel은 다른 rank의 GPU에 있는 값을 직접 읽어서 더한다. 그러려면 rank들이 서로의 buffer를 읽을 수 있도록 미리 연결해 둔 GPU memory가 있어야 한다. 이것이 workspace다.
+- vLLM v0.27.1은 node가 여러 대면 workspace의 backend를 무조건 `mnnvl`로 정했다. MNNVL(multi-node NVLink)은 node 사이까지 NVLink로 잇는 구성이고, GB300 NVL72 같은 rack 단위 system에만 있다. 버그가 발생한 클러스터는 B300 node를 IB로 묶은 것이라 MNNVL이 없다.
+- vLLM이 backend를 `mnnvl`로 확정해서 넘겼기 때문에, FlashInfer가 `auto`일 때만 하는 capability 검사가 실행되지 않았다.
+- FlashInfer는 memory handle을 file descriptor로 넘기려고 다른 host의 Unix socket에 접속을 시도했다. 이 접속은 될 수 없고, 30초 뒤 timeout이 난다.
+- 수정은 workspace를 만들기 전에 rank마다 NVLink fabric을 확인하고, 모든 rank가 그 결과를 투표하는 것이다. 하나라도 없으면 만들지 않는다.
+
+이 글은 PyTorch Core SIG의 [Distributed Programming in PyTorch](https://core-sig.pytorch.kr/lectures/05-distributed-programming/) 강의의 내용을 바탕으로 한다. 강의가 설명하는 rank, world, process group, rendezvous, collective(all-reduce, all-gather, broadcast), backend(NCCL, Gloo)는 다시 설명하지 않는다. 강의가 다루지 않는 process 사이의 GPU memory 공유와 NVLink multicast는 필요한 만큼 설명한다.
+
+코드는 버그가 있던 당시의 버전으로 설명한다. vLLM [v0.27.1](https://github.com/vllm-project/vllm/tree/v0.27.1)과 그 버전이 고정한 FlashInfer [v0.6.16.post3](https://github.com/flashinfer-ai/flashinfer/tree/v0.6.16.post3)이다. 고친 코드는 merge commit [`f214e0d4`](https://github.com/vllm-project/vllm/commit/f214e0d4cdbf2305c0a0d131e5ff100f56a41347)이다.
+
+## 배경: node 2대에 걸친 TP group
+
+### rank 배치
+
+이 글에서는 multi-node TP의 예로 GPU 16장, 즉 rank 16개가 node 2대에 8개씩 놓인 경우를 든다. rank 0-7은 node 0에, rank 8-15는 node 1에 있다.
+
+<Figure
+  src="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01-topology-light.svg"
+  darkSrc="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01-topology-dark.svg"
+  caption="TP group 하나가 node 2대에 걸친다. node 안의 GPU 8장은 NVLink로 이어져 있다고 가정한다. 직접 연결일 수도 있고 NVSwitch를 거칠 수도 있다. node 사이는 InfiniBand뿐이다."
+/>
+
+이 그림에서 중요한 것은 연결의 종류가 둘이라는 점이다. node 안의 GPU들은 NVLink로 이어져 있다고 가정한다. GPU끼리 직접 이은 구성이든 NVSwitch를 거치는 구성이든 이 글의 논의에는 차이가 없다. NVLink로 이어진 GPU끼리는 서로의 memory를 직접 읽고 쓸 수 있다. InfiniBand로 이어진 node끼리는 data를 network로 보내고 받을 수만 있다. 이 차이가 뒤에서 버그의 원인이 된다.
+
+node 사이까지 NVLink로 이어진 구성을 MNNVL(multi-node NVLink)이라 한다. GB200 NVL72나 GB300 NVL72 같은 rack 단위 system이 여기에 해당한다. 아래는 GB200 NVL72의 구조다.
+
+<Figure
+  src="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/aisp_0209-gb200-nvl72.png"
+  caption={<>GB200 NVL72의 compute tray와 rack 구조. 출처: Chris Fregly, AI Systems Performance Engineering, <a href="https://github.com/cfregly/ai-performance-engineering/blob/main/img/aisp_0209.png">Figure 2-9</a>. <a href="https://github.com/cfregly/ai-performance-engineering">ai-performance-engineering</a> 저장소, <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache License 2.0</a>.</>}
+  alt="GB200 NVL72의 compute tray와 rack 구조"
+  background="#fff"
+/>
+
+이 rack에서는 GPU 4장이 든 compute tray 하나가 node 하나다. 모든 GPU는 자기 tray 안이 아니라 rack의 NVSwitch들에 NVLink로 붙는다. 그래서 node 18대의 GPU 72장이 NVLink domain 하나에 들어간다. 그림 위쪽의 IB는 rack 밖과 통신하는 별도의 network다.
+
+NVLink domain 안에 있다는 것의 의미는 memory 주소 공간으로 설명할 수 있다. NVLink로 이어진 GPU끼리는 상대 GPU의 memory를 내 process의 주소 공간 한 구간에 매핑할 수 있다. 매핑하고 나면 GPU kernel은 그 주소를 자기 memory처럼 읽고 쓴다. 접근은 NVLink를 타고 상대 GPU로 가고, 보내는 쪽과 받는 쪽이 따로 없다. MNNVL은 이 매핑이 node 경계를 넘어서도 되는 구성이다.
+
+InfiniBand에는 이런 매핑이 없다. 다른 node의 GPU memory는 내 주소 공간에 나타나지 않는다. data를 옮기려면 한쪽이 보내고 다른 쪽이 받아야 하며, NCCL이 하는 일이 이것이다.
+
+InfiniBand의 전송 방식은 RDMA(Remote Direct Memory Access)다. NIC(network interface card)가 OS kernel을 거치지 않고 상대 host의 memory에 data를 직접 써 넣는다. 이름에 memory access가 들어 있어서 NVLink의 매핑과 같은 것처럼 들리지만 다르다. NVLink에서는 GPU kernel이 매핑된 주소에 load와 store를 직접 한다. RDMA에서는 "이 buffer를 저쪽의 저 구간으로 옮겨라"는 요청을 NIC에 넣고, NIC가 복사를 끝내야 data가 도착한다. 복사가 빠를 뿐 여전히 보내고 받는 연산이다.
+
+이 차이가 fusion kernel의 조건을 정한다. kernel 하나가 여러 rank의 buffer를 직접 읽어 합산하려면 그 buffer들이 kernel의 주소 공간에 있어야 한다. RDMA 위에서는 이것이 되지 않는다. MNNVL workspace가 NVLink fabric을 요구하는 이유다.
+
+<Figure
+  src="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01b-address-space-light.svg"
+  darkSrc="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01b-address-space-dark.svg"
+  caption="NVLink domain에서는 상대 GPU의 memory가 내 주소 공간의 한 구간으로 매핑된다. InfiniBand에서는 각 process가 자기 GPU의 memory만 보고, data는 복사로 옮긴다."
+/>
+
+다만 주소 공간이 하나로 합쳐지는 것은 아니다. 주소 공간은 여전히 process마다 따로이고, process마다 자기 주소 구간을 따로 잡아서 같은 memory를 거기에 매핑한다. 그 절차는 뒤의 [GPU memory 공유 절차](#gpu-memory-공유-절차)에서 다룬다. CUDA 쪽의 설명은 CUDA Programming Guide의 [Virtual Memory Management](https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/virtual-memory-management.html) 절에 있다.
+
+버그가 발생한 클러스터는 다르다. NVLink는 node 안의 GPU 8장만 잇고 node 밖으로 나가지 않는다. vLLM [#59208](https://github.com/vllm-project/vllm/pull/59208)의 검증 표가 이 구분을 수치로 보여 준다. 같은 NVL72 안의 GB300 node 2대는 NVLink fabric UUID가 같았고, H100이나 B200 node 2대는 fabric UUID가 비어 있었다. B300 node도 뒤쪽에 속한다.
+
+### 행렬곱의 TP: 부분합과 all-reduce
+
+TP는 layer의 weight 행렬을 한 차원을 따라 rank 수만큼의 부분 행렬로 나누고, 각 rank에 하나씩 배치한다. 이 부분 행렬 하나를 shard라 하고, 행렬을 이렇게 여러 device에 나누어 배치하는 것을 sharding이라 한다.
+
+나눈 차원이 행렬곱에서 더하면서 없어지는 차원(contracting dimension)이라면, 각 rank가 계산한 값은 layer의 완전한 출력이 아니라 출력에 기여하는 부분합이다. 모든 rank의 부분합을 더해야 원래의 출력이 복원된다. 이처럼 모든 rank의 부분합을 더하고 그 결과를 모든 rank가 갖도록 하는 collective가 all-reduce(SUM)다.
+
+부분합이 되는 이유는 행렬곱을 outer product의 합으로 보면 드러난다. SVD 글의 [Outer product perspective](/posts/2025/10/SVD/#outer-product-perspective-column--row)에서 본 것처럼, 행렬곱 $AB$는 $A$의 column $a_j$와 $B$의 row $b_j^{*}$를 하나씩 짝지어 곱한 rank-one 행렬의 합이다.
+
+$$
+AB = \sum_{j=1}^{J} a_j b_j^{*}
+= \underbrace{a_1 b_1^{*} + \cdots + a_{J/2}\, b_{J/2}^{*}}_{\text{rank 0}}
++ \underbrace{a_{J/2+1}\, b_{J/2+1}^{*} + \cdots + a_J b_J^{*}}_{\text{rank 1}}
+$$
+
+항 하나하나가 이미 $AB$와 같은 크기의 행렬이다. $A$를 column 방향으로, $B$를 row 방향으로 나누면 이 항들을 rank마다 나눠 갖게 된다. 그림으로 그리면 아래와 같다.
+
+<Figure
+  src="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01c-partial-sum-light.svg"
+  darkSrc="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01c-partial-sum-dark.svg"
+  caption="rank마다 자기가 가진 shard끼리만 곱한다. 결과는 C와 크기가 같지만 J의 절반만 더한 부분합이다. all-reduce가 둘을 더해 C를 만든다."
+/>
+
+어느 차원을 나누는지에 따라 경우는 둘로 갈린다. contracting dimension $J$를 나누면 위와 같이 각 rank가 부분합을 얻고, all-reduce로 더해야 한다. $J$가 아닌 차원을 나누면 더할 것이 없다. 예를 들어 $A$를 $I$를 따라 나누면 각 rank는 $C$의 row 일부를 완전한 값으로 얻고, 이어 붙이기만 하면 된다.
+
+scaling book의 [Case 3](https://jax-ml.github.io/scaling-book/sharding/#case-3-both-multiplicands-have-sharded-contracting-dimensions)이 이 경우다. 이 책은 두 행렬 $A[I, J]$와 $B[J, K]$의 곱에서, contracting dimension $J$가 양쪽 모두 나뉘어 있는 경우를 이렇게 적는다.
+
+$$
+\begin{aligned}
+A[I, J_X] \;\cdot_{\text{LOCAL}}\; B[J_X, K] &\rightarrow C[I, K]\{U_X\} \\
+\text{AllReduce}_X \; C[I, K]\{U_X\} &\rightarrow C[I, K]
+\end{aligned}
+$$
+
+아래 첨자 $X$는 그 차원이 device들에 나뉘어 있다는 뜻이다. $\cdot_{\text{LOCAL}}$은 곱셈 기호에 붙은 표시이고, device마다 자기가 가진 조각끼리만 곱한다는 뜻이다. $\{U_X\}$는 아직 다 더하지 않은(unreduced) 상태라는 뜻이다. all-reduce가 이 부분합들을 더하고, 모든 device가 같은 온전한 값을 갖게 한다.
+
+### transformer layer의 all-reduce 위치
+
+vLLM은 TP로 나눈 linear layer를 두 종류로 구현한다. 이름의 Column과 Row는 weight 행렬을 어느 방향으로 나누는지를 가리킨다. 두 class의 docstring은 linear layer를 $Y = XW$로 쓰고 $W$의 shape를 [입력 차원, 출력 차원]으로 본다. $X$가 앞에 오는 것은 token 하나를 row vector로 두기 때문이다. $X$는 row마다 token 하나가 놓인 행렬로 shape가 [token 수, 입력 차원]이고, 여기에 $W$를 오른쪽에서 곱한 $Y$의 shape는 [token 수, 출력 차원]이다. column vector로 적는 $y = Wx$와 같은 연산이고, 이때의 $W$는 여기의 $W$를 transpose한 것이다.
+
+- [`ColumnParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L419-L424)는 $W$를 column 방향, 곧 출력 차원으로 나눈다.
+- [`RowParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L1613-L1623)는 $W$를 row 방향, 곧 입력 차원으로 나눈다. 입력 $X$도 같은 차원으로 나뉜 채 들어온다.
+
+<Figure
+  src="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01e-row-column-light.svg"
+  darkSrc="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01e-row-column-dark.svg"
+  caption="ColumnParallelLinear는 rank마다 출력의 일부를 온전하게 내고, RowParallelLinear는 rank마다 부분합을 낸다."
+/>
+
+앞 절의 행렬곱 그림은 오른쪽의 [`RowParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L1613-L1623)와 같은 것이다. 그 그림의 $A$가 입력 $X$이고, $B$가 weight $W$다. $A$를 column 방향으로, $B$를 row 방향으로 나눈 것은 $X$와 $W$를 입력 차원 하나로 나눈 것이다.
+
+TP는 attention과 FFN 양쪽에 모두 적용된다. 두 컴포넌트는 구조가 같다. [`ColumnParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L419-L424) 하나로 시작해서 [`RowParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L1613-L1623) 하나로 끝난다. [`ColumnParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L419-L424)가 낸 $Y_0, Y_1$이 rank 안의 계산을 거쳐 그대로 [`RowParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L1613-L1623)의 $X_0, X_1$이 된다.
+
+<Figure
+  src="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01d-layer-light.svg"
+  darkSrc="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01d-layer-dark.svg"
+  caption="색은 rank이고, 행렬이 나뉜 방향이 분할 방향이다. ColumnParallelLinear의 weight는 좌우로 나뉘어 rank마다 출력의 일부를 내고, RowParallelLinear의 weight는 위아래로 나뉘어 rank마다 부분합을 낸다. all-reduce가 그 부분합을 더한다."
+/>
+
+두 컴포넌트는 나누는 축이 다르다. attention은 head를 나누고, FFN은 hidden 차원 $F$를 나눈다. rank 하나는 자기가 맡은 head 또는 $F$의 구간에 대해서만 계산한다.
+
+| 컴포넌트 | 나누는 축 | [`ColumnParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L419-L424) | rank 안의 계산 | [`RowParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L1613-L1623) |
+| --- | --- | --- | --- | --- |
+| attention | head | `qkv_proj` | 맡은 head의 attention | `o_proj` |
+| FFN | hidden 차원 $F$ | `gate_up_proj` | 맡은 $F$ 구간의 activation | `down_proj` |
+
+`qkv_proj`와 `gate_up_proj`는 [`ColumnParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L419-L424)이고, 통신이 없다. 입력 $X$는 모든 rank가 온전하게 갖고 있고, $W$만 출력 차원으로 나뉘어 있다. 그래서 rank 0은 $Y_0$을, rank 1은 $Y_1$을 온전하게 얻는다. 둘을 이어 붙일 필요도 없다. 그 뒤의 attention과 activation이 rank 안에서 끝나기 때문이다.
+
+`o_proj`와 `down_proj`는 [`RowParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L1613-L1623)이고, 앞 절의 행렬곱이 이것이다. 입력은 $X_0$, $X_1$로 이미 나뉜 채 오고, $W$도 같은 차원으로 나뉘어 있다. contracting dimension이 양쪽 모두 나뉜 경우이므로 결과는 부분합이고, all-reduce가 필요하다. 그래서 layer 하나에 all-reduce가 두 번 생긴다. attention의 끝과 FFN의 끝이다.
+
+vLLM의 [`LlamaAttention`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/models/llama.py#L162-L177)과 [`LlamaMLP`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/models/llama.py#L92-L107)가 이 구성 그대로다. `qkv_proj`와 `gate_up_proj`는 [`ColumnParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L419-L424)의 하위 class이고, `o_proj`와 `down_proj`는 [`RowParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L1613-L1623)다. all-reduce는 [`RowParallelLinear.forward`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L1766-L1767)의 이 두 줄에서 불린다.
+
+```python
+if self.reduce_results and self.tp_size > 1:
+    output = tensor_model_parallel_all_reduce(output_parallel)
+```
+
+위 구성은 dense model의 것이다. Kimi K3는 MoE model이고, 이 실행은 EP를 함께 켰다. 그러면 FFN 자리가 달라진다.
+
+### Kimi K3의 MoE layer와 EP
+
+MoE layer는 FFN 하나 대신 expert 여러 개를 두고, token마다 router가 고른 몇 개만 쓴다. EP(expert parallelism)는 이 expert들을 rank에 나누어 배치한다. 나누는 축이 hidden 차원 $F$에서 expert로 바뀐 것이다.
+
+결과는 여기서도 부분합이다. 이 실행처럼 DP 없이 TP와 EP만 켜면 모든 rank가 같은 token을 갖고 있고, 각 rank는 맡은 expert의 출력만 계산한다. token이 고른 expert가 다른 rank에 있으면 그 rank가 계산한다. 그래서 token 하나의 MoE 출력은 여러 rank에 흩어진 expert 출력의 합이고, all-reduce로 더해야 한다.
+
+Kimi K3의 MoE layer([`KimiMoE`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/models/kimi_k3/nvidia/model.py#L524-L575))는 두 경로를 합친다.
+
+<Figure
+  src="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01f-moe-light.svg"
+  darkSrc="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-01f-moe-dark.svg"
+  caption="routed expert 경로는 weight 행렬이 아니라 expert의 집합을 rank에 나눈다. 앞뒤의 projection은 복제되어 있다. shared expert 경로는 dense FFN과 같다. 두 경로 모두 부분합을 내고, all-reduce가 각각 한 번씩 더한다."
+/>
+
+| 경로 | 병렬화 | 나누는 축 | rank 안의 계산 | 부분합을 더하는 곳 |
+| --- | --- | --- | --- | --- |
+| routed expert | EP | expert | 맡은 expert들의 출력 | all-reduce, 그 뒤에 RMSNorm |
+| shared expert | TP | hidden 차원 $F$ | 맡은 $F$ 구간의 FFN 출력 | all-reduce |
+
+routed expert 경로의 앞뒤에 projection이 하나씩 있는 것은 Kimi K3가 latent MoE를 쓰기 때문이다. latent MoE는 expert를 hidden 차원이 아니라 더 작은 latent 차원에서 계산하는 구조다. `routed_expert_down_proj`가 hidden state를 latent 차원으로 줄이고, expert들이 그 차원에서 계산한 뒤, `routed_expert_up_proj`가 다시 hidden 차원으로 키운다. Kimi K3에서는 hidden 차원이 7168이고 latent 차원이 3584다.
+
+이 projection은 FFN의 `gate_up_proj`, `down_proj`와 이름이 비슷하지만 다른 것이다. FFN의 up과 down은 expert 안에서 $F$로 넓혔다가 되돌리는 것이고, 여기의 down과 up은 expert 바깥에서 expert의 입출력 차원을 줄였다가 되돌리는 것이다.
+
+두 projection은 복제되어 있어서 통신이 없다. shared expert는 모든 token이 항상 거치는 FFN이고, 앞 절의 dense FFN과 같은 방식으로 나뉜다. 다만 `down_proj`가 all-reduce를 직접 부르지 않고([`reduce_results=False`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/models/kimi_k3/nvidia/model.py#L533)), 부분합을 그대로 내보낸다.
+
+shared expert를 projection처럼 복제하지 않고 TP로 나누는 이유는 코드에 적혀 있지 않지만, 계산량으로 설명된다. 복제하면 통신은 없어도 모든 rank가 같은 FFN 전체를 각자 계산하고, weight도 rank마다 전부 올라간다. $F$를 따라 나누면 각 rank는 그중 자기 shard만큼만 계산하고, 그 대가로 all-reduce를 한 번 한다. 반대로 두 projection은 나눌 수 없다. expert가 down projection의 출력 전체를 입력으로 받아야 하기 때문이다.
+
+이 교환은 all-reduce가 쌀 때 이득이다. TP group이 InfiniBand를 넘으면 all-reduce 한 번의 비용이 크게 오르므로, 버그가 발생한 클러스터 같은 구성에서는 복제가 더 빠를 수도 있다. 어느 쪽이 빠른지 따로 재지는 않았다.
+
+두 부분합을 더하는 일은 [`LatentMoERunner`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/fused_moe/runner/latent_moe_runner.py#L186-L212)가 맡는다. routed 쪽은 all-reduce 뒤에 RMSNorm이 온다. RMSNorm은 부분합에 적용할 수 없으므로 더하기가 먼저다. 이 "all-reduce 다음 RMSNorm"이 FlashInfer fusion kernel이 합치는 바로 그 순서이고, runner는 [`allreduce_norm_latent_out`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/fused_moe/runner/latent_moe_runner.py#L221-L261)에서 그 kernel을 쓸 수 있는지 먼저 묻는다. 쓸 수 없으면 일반 all-reduce와 RMSNorm으로 돈다.
+
+attention 쪽은 앞 절과 같다. Kimi K3의 attention은 [MLA](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/models/kimi_k3/nvidia/mla.py#L187-L257)이고, head를 나누는 projection이 [`ColumnParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L419-L424)이며 `o_proj`가 [`RowParallelLinear`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/linear.py#L1613-L1623)다. 맨 앞의 low-rank projection만 복제되어 있다. 정리하면 Kimi K3의 layer 하나는 세 가지 축으로 나뉘고, 부분합을 더하는 곳도 세 군데다. head로 나눈 attention의 `o_proj` 뒤, expert로 나눈 routed expert 경로, $F$로 나눈 shared expert 경로다.
+
+TP가 8이나 16이고 GPU가 SM100(Blackwell)이면 이 경로의 끝부분이 하나 더 갈린다. vLLM은 token이 16개 이하인 step에서 위의 두 all-reduce와 up projection, 덧셈을 Kimi K3 전용 kernel 묶음으로 바꾼다. 코드는 이것을 [tail fusion](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/models/kimi_k3/nvidia/ops/latent_moe_tail.py#L192-L226)이라 부른다. token이 더 많은 step은 위의 [`allreduce_norm_latent_out`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/fused_moe/runner/latent_moe_runner.py#L221-L261) 경로로 간다.
+
+| 단계 | tail fusion이 하는 일 |
+| --- | --- |
+| 1 | routed 쪽 부분합을 all-reduce하고 RMSNorm을 적용한다. 같은 kernel이 shared 쪽 부분합을 reduce-scatter한다 |
+| 2 | 각 rank가 up projection 출력 중 자기 shard만 계산하고, 거기에 shared 쪽 shard를 더한다 |
+| 3 | 그 shard를 multicast로 모든 rank에 써서, 모든 rank가 온전한 출력을 갖게 한다 |
+
+reduce-scatter는 all-reduce와 달리 더한 결과를 모든 rank에 돌려주지 않고, rank마다 결과의 shard 하나만 준다. 이 kernel 묶음은 FlashInfer의 workspace를 쓰지 않는다. PyTorch의 symmetric memory로 [자기 buffer를 따로 만든다](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/models/kimi_k3/nvidia/ops/cute_dsl/latent_moe_tail/allreduce_rmsnorm_reduce_scatter_early_exit.py#L873-L893). symmetric memory와 `rendezvous`는 아래의 [symmetric memory](#symmetric-memory) 절에서 설명한다. 초기화할 때 TP group 전체로 `rendezvous`를 부르고, multicast 주소를 얻지 못하면 `RuntimeError`를 낸다. v0.27.1의 이 코드는 group이 node를 넘는지 확인하지 않는다.
+
+이 글의 실행에서 tail fusion이 켜졌는지는 확인하지 못했다. 조건만 보면 TP16이라 켜질 수 있었다. 다만 켜졌다면 model을 올리는 단계에서 node를 넘는 multicast를 요구했을 것이고, 버그가 발생한 클러스터는 그것을 줄 수 없다. server가 뜨고 나서 멈췄다는 증상과는 맞지 않으므로 켜지지 않았다고 추정한다. 당시의 load log로 확인할 수 있다.
+
+all-reduce는 더한 결과를 모든 rank에 돌려준다. 그 뒤의 연산을 rank마다 각자 해야 하므로, 모든 rank가 같은 출력을 가져야 하기 때문이다. 합친 결과는 residual에 더해지고 다음 RMSNorm으로 들어간다. RMSNorm은 hidden vector 전체의 크기로 나누는 연산이라서, 합치기 전의 부분합에는 적용할 수 없다. 그래서 all-reduce는 layer마다 빠짐없이 생기고, 그 바로 뒤에는 항상 RMSNorm이 온다. 이 "all-reduce 다음 RMSNorm"이라는 순서를 기억해 두면 뒤의 fusion 연산이 쉽게 읽힌다.
+
+### NCCL communicator 초기화
+
+NCCL에서 통신의 단위는 communicator다. communicator는 함께 collective를 부를 rank들의 묶음이고, rank마다 GPU 하나가 붙는다. NCCL은 process를 띄워 주지 않고, rank들이 서로를 찾게 해 주지도 않는다. 그 일은 NCCL을 쓰는 프로그램의 몫이다. NCCL 문서의 [Communicators](https://docs.nvidia.com/deeplearning/nccl/user-guide/docs/usage/communicators.html) 절이 설명하는 순서는 이렇다.
+
+1. communicator마다 한 번, 한 process가 `ncclGetUniqueId()`를 불러 ID를 만든다.
+2. 프로그램이 그 ID를 모든 rank에 전달한다. NCCL은 전달 수단을 정하지 않는다. MPI든 TCP든 CPU 쪽 통신이면 된다.
+3. 각 rank가 자기 GPU를 current device로 두고 `ncclCommInitRank(nranks, id, rank)`를 부른다. 이 호출 안에서 rank들이 서로 동기화하므로, 모든 rank가 불러야 끝난다.
+
+2번이 rendezvous와 같은 구조다. NCCL communicator를 만들려면 모두가 같은 ID를 알아야 하고, 그 ID를 돌리려면 NCCL보다 먼저 있는 통신 수단이 필요하다.
+
+CPU 쪽 통신을 거치는 것은 이 준비 단계뿐이다. GPU는 스스로 다른 GPU를 찾아 연결하지 못한다. 어느 GPU와 어떤 경로로 이을지는 GPU를 다루는 host process가 정해 줘야 하고, process끼리 말을 맞추려면 CPU 쪽 통신이 있어야 한다. 이때 오가는 것은 128 byte짜리 ID 하나다. communicator가 만들어진 뒤에 all-reduce가 보내는 tensor는 CPU의 memory를 거치지 않고 GPU에서 GPU로 간다.
+
+PyTorch를 쓰면 보통 이 순서를 직접 볼 일이 없다. [`init_process_group(backend="nccl")`](https://docs.pytorch.org/docs/stable/distributed.html#torch.distributed.init_process_group)로 만든 process group이 ID 전달과 `ncclCommInitRank`를 안에서 처리하기 때문이다. vLLM은 여기에 자기 것을 하나 더 둔다. parallel group 하나(예를 들어 TP group)에 대해 vLLM이 만드는 것은 셋이다.
+
+| 만드는 것 | backend | 쓰임 |
+| --- | --- | --- |
+| [`cpu_group`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/parallel_state.py#L455-L466) | Gloo (TCP) | Python 객체와 metadata 전달, barrier |
+| [`device_group`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/parallel_state.py#L455-L466) | NCCL | [`torch.distributed`](https://docs.pytorch.org/docs/stable/distributed.html)의 tensor collective |
+| [`PyNcclCommunicator`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/pynccl.py#L60-L146) | NCCL을 직접 호출 | forward의 all-reduce |
+
+[`PyNcclCommunicator`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/pynccl.py#L60-L146)는 NCCL library를 `ctypes`로 직접 부르는 wrapper다. [`torch.distributed.all_reduce`](https://docs.pytorch.org/docs/stable/distributed.html#torch.distributed.all_reduce)를 두고 이것을 따로 만든 이유는 [wrapper의 주석](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/pynccl_wrapper.py#L4-L12)에 있다. vLLM은 forward를 CUDA graph로 capture하는데, [`torch.distributed.all_reduce`](https://docs.pytorch.org/docs/stable/distributed.html#torch.distributed.all_reduce)는 capture 중에 허용되지 않는 CUDA 호출을 안에서 한다는 것이다.
+
+그래서 [`PyNcclCommunicator`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/pynccl.py#L60-L146)는 위의 세 단계를 [직접 한다](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/pynccl.py#L110-L145).
+
+1. rank 0이 `ncclGetUniqueId()`로 ID를 만든다. 나머지 rank는 빈 ID를 만들어 둔다.
+2. `cpu_group`의 [`dist.broadcast`](https://docs.pytorch.org/docs/stable/distributed.html#torch.distributed.broadcast)로 그 ID를 모든 rank에 보낸다. ID 전달에 쓰는 CPU 쪽 통신이 Gloo인 것이다.
+3. 각 rank가 `ncclCommInitRank(world_size, unique_id, rank)`를 부르고, 원소 하나짜리 all-reduce로 warm-up한다.
+
+[`CudaCommunicator`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/cuda_communicator.py#L84-L89)가 [`PyNcclCommunicator`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/pynccl.py#L60-L146)를 만들 때 넘기는 group이 `cpu_group`이다. [`PyNcclCommunicator`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/pynccl.py#L60-L146)는 넘겨받은 group이 NCCL backend가 아닌지를 assert로 확인한다.
+
+이 초기화는 worker process가 model을 load하기 전에 일어난다. executor는 모든 worker에서 `init_device`를 먼저 부르고 그 다음에 `load_model`을 부른다. process를 직접 띄우는 [multiproc executor](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/v1/executor/multiproc_executor.py#L640-L648)와 Ray를 쓰는 [Ray executor](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/v1/executor/ray_executor.py#L359-L363)가 같은 순서다. [`init_device`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/v1/worker/gpu_worker.py#L372-L382)는 자기 GPU를 current device로 정한 뒤 [`init_worker_distributed_environment`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/v1/worker/gpu_worker.py#L1347-L1386)를 부른다. 이 함수가 하는 일은 둘이다.
+
+1. `init_distributed_environment`가 모든 rank를 담은 world group을 만든다.
+2. `ensure_model_parallel_initialized`가 world group을 TP group 같은 parallel group으로 나누고, group마다 위의 셋을 만든다.
+
+`init_device`의 주석은 이 순서의 이유를 적는다. NCCL이 쓰는 buffer를 먼저 할당해 두어야 그 뒤에 재는 여유 GPU memory가 맞기 때문이다. 그래서 weight를 올리고 KV cache의 크기를 정하는 일은 모두 NCCL 초기화 뒤에 온다.
+
+여기까지는 v0.27.1의 코드다. 이 글을 쓰는 시점의 main([`689b84c3`](https://github.com/vllm-project/vllm/commit/689b84c3697623552c0a11eb1e348bf32bc31bba), 11월 25일)에서도 큰 틀은 같다. group마다 만드는 셋, `PyNcclCommunicator`의 세 단계, `init_device`가 `load_model`보다 먼저인 순서가 그대로다. 달라진 점은 셋이다.
+
+- group 생성: `torch.distributed.split_group`으로 group을 만드는 [경로](https://github.com/vllm-project/vllm/blob/689b84c3697623552c0a11eb1e348bf32bc31bba/vllm/distributed/parallel_state.py#L486-L492)가 추가됐다. 환경 변수 `VLLM_DISTRIBUTED_USE_SPLIT_GROUP`로 켜고, 기본값은 꺼짐이다. 기본 경로는 여전히 `new_group`으로 `device_group`과 `cpu_group`을 따로 만든다.
+- Ray executor: `ray_executor.py`가 없어지고 [`RayExecutorV2`](https://github.com/vllm-project/vllm/blob/689b84c3697623552c0a11eb1e348bf32bc31bba/vllm/v1/executor/ray_executor_v2.py#L239)가 생겼다. 이 class는 multiproc executor를 상속하므로, worker를 초기화하는 순서는 multiproc executor의 것 하나다.
+- ID 전달: `PyNcclCommunicator`에 [`from_unique_id_bytes`](https://github.com/vllm-project/vllm/blob/689b84c3697623552c0a11eb1e348bf32bc31bba/vllm/distributed/device_communicators/pynccl.py#L196-L204)가 추가됐다. process group 없이, 다른 방법으로 미리 나눠 가진 ID로 communicator를 만든다. vLLM이 TP group을 만들 때의 기본 경로는 여전히 `cpu_group`의 broadcast다.
+
+NCCL을 부르는 쪽은 data가 어떤 경로로 가는지 몰라도 된다. NCCL이 `ncclCommInitRank` 안에서 GPU 쌍마다 쓸 수 있는 경로를 찾아 고르기 때문이다.
+
+| GPU 쌍의 위치 | NCCL이 쓰는 경로 |
+| --- | --- |
+| 같은 node, P2P 가능 | P2P: NVLink나 PCIe로 상대 GPU의 memory에 직접 쓴다 |
+| 같은 node, P2P 불가 | SHM: host의 shared memory를 거친다 |
+| 다른 node | NET: NIC로 보낸다. InfiniBand나 RoCE가 있으면 RDMA, 없으면 TCP socket |
+
+P2P(peer-to-peer)는 GPU가 같은 node의 다른 GPU memory에 직접 접근하는 것이다. NVLink가 없고 두 GPU의 NUMA node가 다르면 P2P가 안 될 수 있다. NUMA node는 server 한 대 안에서 CPU socket 하나와 거기에 붙은 memory, PCIe 장치를 묶은 단위이고, 이 글에서 server를 가리키는 node와는 다른 말이다. 어느 경로든 결과는 같고 속도만 다르다.
+
+`NCCL_DEBUG=INFO`를 켜고 띄운 vLLM의 log를 확인한 결과, NCCL은 node 2대에 걸쳐서도 문제없이 초기화되었다. 이 버그의 원인은 NCCL이 아니다.
+
+이것이 다음 절의 symmetric memory와 갈리는 점이다. NCCL은 경로를 고르고, 없으면 느린 경로로 내려간다. symmetric memory는 한 가지 경로만 쓸 수 있고, 그것이 없으면 만들 수 없다.
+
+### symmetric memory
+
+NCCL의 all-reduce는 library를 부르는 일이다. data가 어떻게 오가는지는 NCCL이 정하고, 부르는 쪽은 결과만 받는다. fusion kernel은 다르게 한다. all-reduce를 자기 kernel 안에서 하려고, 다른 rank의 buffer를 직접 읽고 쓴다. 그러려면 kernel이 다른 rank의 buffer를 가리키는 주소를 갖고 있어야 한다. 그 준비를 해 두는 것이 symmetric memory다.
+
+symmetric memory는 두 가지를 뜻한다.
+
+- 모든 rank가 같은 크기의 buffer를 자기 GPU에 하나씩 만든다. rank마다 배치가 같아서 symmetric이라 부른다.
+- 각 rank가 다른 모든 rank의 buffer를 자기 주소 공간에 매핑한다. 그 결과 rank마다 주소가 rank 수만큼 생기고, $i$번째 주소가 $i$번째 rank의 buffer를 가리킨다.
+
+매핑이 끝나면 통신은 library 호출이 아니고 memory 접근이다. kernel은 $i$번째 주소에서 값을 읽어 더하면 된다. 이 접근이 실제로 동작하려면 두 GPU가 서로의 memory에 닿을 수 있어야 하고, 그 길이 NVLink다. [rank 배치](#rank-배치)에서 본 것처럼 InfiniBand로는 이 매핑을 만들 수 없다.
+
+buffer는 rank들이 부분합을 주고받는 자리다. all-reduce 한 번은 이 buffer 위에서 두 단계로 끝난다.
+
+1. 각 rank가 자기 부분합을 모든 rank의 buffer에 쓴다. buffer 안에는 보내는 rank마다 자리가 따로 있어서 서로 덮어쓰지 않는다.
+2. 각 rank가 자기 buffer에 모인 부분합들을 읽어서 더한다.
+
+쓰기는 다른 rank의 buffer로 가고, 읽기는 자기 buffer에서만 한다. 다른 rank의 buffer 주소가 필요한 것은 1번 때문이다. multicast는 이 1번을 줄인다. 주소 하나에 한 번 쓰면 모든 rank의 buffer에 같이 써진다.
+
+받는 쪽은 값이 도착했는지를 buffer만 보고 안다. FlashInfer는 buffer를 미리 [`-0.0`으로 채워 두고](https://github.com/flashinfer-ai/flashinfer/blob/v0.6.16.post3/flashinfer/comm/mnnvl.py#L1174-L1190), 그 값이 남아 있는 자리는 아직 쓰이지 않은 것으로 본다. 그래서 rank들이 "다 썼다"는 신호를 따로 주고받지 않는다.
+
+한 번 쓴 자리는 다음에 쓰기 전에 다시 `-0.0`으로 되돌려야 한다. 이 일도 kernel이 한다. buffer를 [세 벌](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/models/kimi_k3/nvidia/ops/cute_dsl/latent_moe_tail/primitives.py#L19) 두고 호출마다 돌아가며 쓰고, all-reduce를 하는 kernel이 이전 호출에서 쓴 벌을 [같이 지운다](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/models/kimi_k3/nvidia/ops/cute_dsl/latent_moe_tail/allreduce_rmsnorm_reduce_scatter_early_exit.py#L328-L343). 지금 쓰는 벌과 지우는 벌이 달라서, 느린 rank가 아직 읽고 있는 값을 지우는 일이 없다. 이 내용은 FlashInfer의 kernel을 본뜬 Kimi K3의 kernel 코드에서 확인한 것이다.
+
+이 글에는 symmetric memory를 만드는 구현이 셋 나온다.
+
+| 구현 | 쓰는 곳 |
+| --- | --- |
+| FlashInfer의 [`SymmDeviceMemory`](https://github.com/flashinfer-ai/flashinfer/blob/v0.6.16.post3/flashinfer/comm/mnnvl.py#L1038-L1101) | fusion kernel의 workspace. 이 글의 버그가 난 곳 |
+| PyTorch의 `torch.distributed._symmetric_memory` | Kimi K3의 tail fusion, vLLM의 [`SymmMemCommunicator`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/symm_mem.py) |
+| NCCL의 symmetric memory | vLLM의 [`PyNcclCommunicator`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/pynccl.py#L42-L48)가 등록하는 all-reduce |
+
+셋은 서로를 부르지 않는 별개의 구현이다. FlashInfer가 PyTorch를 부르거나 PyTorch가 NCCL을 부르는 층 구조가 아니고, 각자 자기 buffer를 따로 만든다. 그래서 한 process에서 둘을 켜면 buffer도 두 벌 생긴다. 이 실행에서 시도된 것은 FlashInfer의 것 하나였다. 뒤의 log에서 보듯 `SYMM_MEM`과 `NCCL_SYMM_MEM` backend는 꺼져 있었다.
+
+하는 일은 셋이 같다. buffer를 만들고, 그 handle을 rank들끼리 교환하고, 받은 handle을 자기 주소 공간에 매핑한다. PyTorch의 `rendezvous`는 이 교환과 매핑을 합쳐서 부르는 말이다. Introduction에서 말한 workspace는 FlashInfer가 이렇게 만든 symmetric memory다. 교환과 매핑의 자세한 순서는 뒤의 [GPU memory 공유 절차](#gpu-memory-공유-절차)에서 다룬다.
+
+## 증상: 30초 멈춤과 OOM
+
+head node의 log에서 처음 눈에 띈 것은 이 한 줄이다. 이 글의 log는 message가 잘 보이도록 level, 시각, file 위치를 `...`으로 생략하고 message 앞에서 줄을 나눴다.
+
+```text
+(Worker_TP0_EP0 pid=2226) ...
+  Failed to initialize FlashInfer Allreduce norm fusion workspace
+  with backend=mnnvl
+```
+
+worker node의 마지막 log는 이랬다.
+
+```text
+(Worker_TP8_EP8 pid=2019) ...
+  Failed to initialize FlashInfer All Reduce workspace:
+  [fd_exchange] timed out connecting to
+  /tmp/cuda_fd_xchg_2226_0_ewa1btyl/fd.sock.
+
+(Worker_TP8_EP8 pid=2019) ...
+  Failed to initialize FlashInfer All Reduce workspace:
+  CUDA error code=2(b'CUDA_ERROR_OUT_OF_MEMORY').
+```
+
+그때 확인한 사실은 세 가지였다.
+
+- `vllm/vllm-openai:kimi-k3` image에서는 같은 구성이 문제없이 떴다.
+- v0.27.1에서는 `--compilation-config '{"pass_config":{"fuse_allreduce_rms":false}}'`를 주면 떴다.
+- log에 `backend=mnnvl`이 찍혀 있었는데, 버그가 발생한 클러스터는 MNNVL 구성이 아니었다.
+
+처음 의심한 것은 [#47219](https://github.com/vllm-project/vllm/pull/47219)였다. 제목이 "Default FlashInfer allreduce to mnnvl on single node"여서, 기본 backend가 `mnnvl`로 바뀐 것이 원인이라고 봤다. 방향은 맞았지만 어디서 왜 멈추는지는 설명하지 못했다.
+
+## 추적 1: NCCL log와 FlashInfer 실패 message의 모순
+
+log를 다시 보면 이상한 점이 있다. vLLM은 시작할 때 TP group이 쓸 all-reduce backend를 찍는다.
+
+```text
+(Worker pid=2226) ...
+  Using ['PYNCCL'] all-reduce backends (in dispatch order) for group 'tp:0'
+  out of potential backends: ['NCCL_SYMM_MEM', 'QUICK_REDUCE', 'FLASHINFER',
+  'AITER_CUSTOM', 'CUSTOM', 'SYMM_MEM', 'PYNCCL'].
+```
+
+후보 일곱 개 중 켜진 것은 `PYNCCL` 하나다. 나머지가 꺼진 이유는 각각 확인할 수 있다.
+
+- `CUSTOM`은 [`CustomAllreduce`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/custom_all_reduce.py#L56-L57)다. vLLM이 NCCL 대신 쓰려고 직접 만든 all-reduce kernel로, rank들이 buffer를 공유하고 작은 tensor를 NCCL보다 빨리 더한다. 내가 `--disable-custom-all-reduce`로 껐다.
+- `SYMM_MEM`은 world size 16을 지원하지 않는다. log에 `SymmMemCommunicator: World size 16 not supported`가 있다.
+- `FLASHINFER`는 v0.27.1에서 `VLLM_ALLREDUCE_USE_FLASHINFER`의 기본값이 `0`이라 꺼져 있었다.
+
+all-reduce는 NCCL로 한다고 했는데 실패 message는 FlashInfer에서 나왔다. 그렇다면 all-reduce를 하는 경로가 하나 더 있다는 뜻이다.
+
+### 합산의 두 경로
+
+vLLM에는 rank 사이의 합을 계산하는 경로가 둘 있다.
+
+<Figure
+  src="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-02-two-paths-light.svg"
+  darkSrc="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-02-two-paths-dark.svg"
+  caption="(a)는 all-reduce, residual 덧셈, RMSNorm을 따로 실행한다. (b)는 셋을 FlashInfer kernel 하나로 실행하고, rank 사이에 공유하는 workspace가 필요하다."
+/>
+
+(a)는 [transformer layer의 all-reduce 위치](#transformer-layer의-all-reduce-위치) 절에서 `RowParallelLinear.forward`가 부분합을 더하려고 부른 함수 [`tensor_model_parallel_all_reduce`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/communication_op.py#L12-L14)다. 이 함수는 TP group의 [`CudaCommunicator.all_reduce`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/cuda_communicator.py#L275-L341)를 부르고, `all_reduce`는 켜진 backend를 정해진 순서로 확인해서 처음 맞는 것으로 합을 계산한다. 위 log의 backend 목록이 그 순서다. 이 실행에서는 `PYNCCL`만 켜져 있었으므로 (a)의 all-reduce는 NCCL이 한다. residual 덧셈과 RMSNorm은 그 뒤에 model 코드가 따로 실행한다.
+
+Kimi K3의 MoE layer도 이 함수를 쓴다. [`_fused_forward`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/fused_moe/runner/latent_moe_runner.py#L186-L212)는 shared expert 경로의 부분합을 항상 이 함수로 더한다. routed expert 경로의 [`allreduce_norm_latent_out`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/fused_moe/runner/latent_moe_runner.py#L221-L261)은 (b)를 먼저 시도하고, (b)를 쓸 수 없으면 이 함수와 RMSNorm을 차례로 부른다. 즉 dense layer든 MoE layer든 합을 계산하는 경로는 (a)와 (b) 둘뿐이다.
+
+위 log의 backend 목록은 (a)만 말한다.
+
+(b)는 all-reduce와 그 뒤의 residual 덧셈, RMSNorm을 한 kernel로 합친 연산이다. FlashInfer의 `allreduce_fusion`을 직접 부르므로 (a)의 backend 선택을 거치지 않는다. 대신 rank들이 서로의 buffer를 읽을 수 있어야 하고, 그 buffer가 workspace다. workspace는 [`get_fi_ar_workspace`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/flashinfer_all_reduce.py#L141-L196)가 만든다. 실패 message를 찍은 함수가 바로 이것이다.
+
+v0.27.1에서 이 함수를 부르는 경로는 둘이고, eager 경로에는 부르는 곳이 둘 있다.
+
+- compile 경로: [`AllReduceFusionPass.__init__`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/compilation/passes/fusion/allreduce_rms_fusion.py#L1050-L1055). torch.compile graph에서 "all-reduce 다음 RMSNorm" pattern을 찾아 fusion op로 바꾸는 pass다.
+- eager 경로: [`fused_allreduce_rms_norm`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/models/common/ops/fused_allreduce_rms_norm.py). compile을 쓰지 않는 model이 같은 fusion을 직접 부르는 helper다. Kimi K3의 DSpark drafter가 [layer마다 두 번](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/models/kimi_k3/nvidia/dspark_mla.py#L85-L95) 부른다. Kimi K3 본체도 같은 검사 함수를 쓴다. 앞에서 본 MoE layer의 [`allreduce_norm_latent_out`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/model_executor/layers/fused_moe/runner/latent_moe_runner.py#L221-L261)이 routed expert 경로의 부분합을 더할 때 부른다.
+
+{/* TODO(author): 내 실행에서 실제 호출자가 어느 쪽이었는지 확인이 필요하다. log에는 "disabling vLLM's torch.compile pipeline. Equivalent to -cc.mode=none"이 있어서 eager 경로로 보이지만, eager helper는 코드상 fuse_allreduce_rms를 보지 않는다. 그런데 이 flag를 끄면 서빙이 됐다. v0.27.1 재현 환경에서 멈춘 worker에 py-spy dump를 찍어 호출 stack을 확인한 뒤 이 문단을 확정할 것. */}
+
+내 실행에서 어느 쪽이 workspace를 요청했는지는 확정하지 못했다. log에 `disabling vLLM's torch.compile pipeline`이 있으므로 eager 경로일 가능성이 높다. eager 경로 안에서도 drafter인지 본체의 MoE layer인지는 가리지 못했다. eager 경로라면 `fuse_allreduce_rms: false`가 왜 효과가 있었는지도 코드로 설명하지 못한다. 세 호출자 모두 `get_fi_ar_workspace`를 부르고, 이 글이 추적하는 것은 그 함수 안에서 일어난 일이다.
+
+## 추적 2: 댓글의 두 가지 지적
+
+막혀 있던 나에게 실마리를 준 것은 issue에 달린 [댓글](https://github.com/vllm-project/vllm/issues/51986)이었다. 댓글은 vLLM이 workspace를 만드는 코드의 순서를 지적한다. 그래서 그 코드의 흐름을 먼저 본다.
+
+### v0.27.1의 workspace 생성 흐름
+
+workspace를 만드는 코드는 [`flashinfer_all_reduce.py`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/flashinfer_all_reduce.py) 한 file에 있고, 함수 셋이 차례로 불린다. 아래는 [`get_fi_ar_workspace`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/flashinfer_all_reduce.py#L141-L196)를 간추린 것이다. 주석의 번호는 내가 붙였다.
+
+```python
+def get_fi_ar_workspace(world_size, rank, max_token_num, hidden_dim, dtype, group):
+    global _fi_ar_workspace
+    if _fi_ar_workspace is not None:  # 1
+        return _fi_ar_workspace
+
+    backend, allow_trtllm_fallback = _resolve_fi_ar_backend()  # 2
+
+    _fi_ar_workspace = _create_workspace(backend, ...)  # 3, 4
+    if _fi_ar_workspace is None and allow_trtllm_fallback:
+        _fi_ar_workspace = _create_workspace("trtllm", ...)
+
+    if _fi_ar_workspace is None:  # 5
+        logger.warning_once(
+            "Failed to initialize FlashInfer Allreduce norm fusion workspace "
+            f"with backend={backend}"
+        )
+    return _fi_ar_workspace
+```
+
+1. workspace는 process마다 하나다. 이미 만들었으면 그것을 돌려준다.
+2. [`_resolve_fi_ar_backend`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/flashinfer_all_reduce.py#L113-L138)가 backend를 정한다. backend는 workspace를 구현하는 방식이다. 사용자는 환경 변수 [`VLLM_FLASHINFER_ALLREDUCE_BACKEND`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/envs.py#L1660-L1665)로 셋 중 하나를 고른다.
+   - `trtllm`: 같은 node의 process끼리 GPU memory를 공유한다. node 한 대 안에서만 동작한다.
+   - `mnnvl`: node가 여러 대여도 동작한다. multicast가 되는 NVLink 구성이 필요하다.
+   - `auto`: vLLM이 위의 둘 중 하나를 고른다. 기본값이고, 나는 이 변수를 지정하지 않았으므로 `auto`였다.
+
+   `trtllm`과 `mnnvl`은 둘 다 NVIDIA의 추론 library인 TensorRT-LLM의 all-reduce kernel을 FlashInfer로 옮긴 것이다.
+3. [`_create_workspace`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/flashinfer_all_reduce.py#L46-L90)가 FlashInfer의 `create_allreduce_fusion_workspace`를 부른다. workspace는 이 호출 안에서 실제로 만들어진다. 모든 rank가 GPU memory를 할당하고 서로의 buffer를 매핑한다.
+4. `_create_workspace`는 만들어진 workspace에 multicast 주소가 있는지 검사한다. 없으면 workspace를 버리고 `None`을 돌려준다. 이 topology에서 workspace를 쓸 수 있는지 확인하는 이런 검사를 이 글에서는 capability 검사라 부른다.
+5. workspace가 `None`이면 경고를 찍고 `None`을 돌려준다. 호출자는 `None`을 받으면 fusion을 포기하고 (a)로 돌아간다. [증상](#증상-30초-멈춤과-oom) 절에서 본 head node의 log가 이 경고다.
+
+정상이라면 `mnnvl`을 쓸 수 없는 클러스터에서는 4번이 `None`을 내고, 5번을 거쳐 (a)로 돌아가야 한다. 버그가 발생한 클러스터에서도 결국 5번까지는 갔다. 댓글은 거기까지 가는 과정의 두 곳을 지적한다.
+
+### 댓글의 내용
+
+첫째, capability 검사가 너무 늦다. 흐름의 3번과 4번을 말한다.
+
+> `_resolve_fi_ar_backend()` selects mnnvl for multi-node auto, while `_create_workspace()` only checks `workspace.mc_ptr` after `flashinfer_comm.create_allreduce_fusion_workspace()` has already been attempted.
+
+둘째, fusion이 이미 적용된 뒤라면 검사가 실패해도 되돌릴 수 없다. 흐름의 5번에서 `None`을 받은 호출자를 말한다.
+
+> `allreduce_rms_fusion.py` can already replace the normal all-reduce & rmsNorm with the flashInfer fused operation, and that fused operation later asserts that `get_fi_ar_workspace()` returns a valid workspace.
+
+그리고 FlashInfer에 `is_mnnvl_fabric_supported()`, `is_multicast_supported()`, `all_ranks_support_mnnvl()`이 있으니 이것을 먼저 부를 수 없겠냐고 물었다. 아래에서 이 두 지적을 코드로 하나씩 확인한다.
+
+### 지적 1: 생성 뒤에 있는 capability 검사
+
+맞는 지적이었다. 먼저 2번에서 backend를 정하는 [`_resolve_fi_ar_backend`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/flashinfer_all_reduce.py#L113-L138)다.
+
+```python
+backend = "mnnvl"
+allow_trtllm_fallback = get_node_count() == 1
+```
+
+`auto`는 조건 없이 `mnnvl`이 된다. `trtllm`으로 물러설 수 있는 것은 node가 한 대일 때뿐이다. `trtllm`을 직접 지정해도 소용없다. node가 2대 이상이면 `get_fi_ar_workspace`가 [`ValueError`를 낸다](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/flashinfer_all_reduce.py#L162-L166). 그래서 node가 2대면 무엇을 지정하든 `mnnvl` 말고는 선택지가 없다.
+
+다음은 3번과 4번이 들어 있는 [`_create_workspace`](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/flashinfer_all_reduce.py#L46-L90)다.
+
+```python
+workspace = flashinfer_comm.create_allreduce_fusion_workspace(
+    backend=backend,
+    ...
+)
+if backend == "mnnvl" and not getattr(workspace, "mc_ptr", 0):
+    workspace.destroy()
+    ...
+    return None
+```
+
+`mc_ptr`는 multicast 주소다. 이것이 0이면 multicast를 쓸 수 없는 topology이므로 workspace를 버린다. 검사 자체는 옳다. 문제는 위치다. 버그가 발생한 클러스터에서는 `create_allreduce_fusion_workspace` 호출이 돌아오지 않고 멈추므로, 그 아래 줄의 검사에는 도달하지 못한다.
+
+### 지적 2: fusion op의 assert
+
+이쪽은 이미 막혀 있었다. `AllReduceFusionPass.__init__`은 pattern을 등록하기 전에 workspace부터 만들어 보고, `None`이면 [바로 돌아간다](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/compilation/passes/fusion/allreduce_rms_fusion.py#L1050-L1055).
+
+```python
+if get_fi_ar_workspace(**workspace_kwargs) is None:
+    logger.warning_once(
+        "Failed to initialize Flashinfer allreduce workspace. "
+        "Flashinfer allreduce-norm fusion will be disabled."
+    )
+    return
+```
+
+pattern이 등록되지 않으므로 graph는 바뀌지 않고, fusion op의 `assert`는 실행될 일이 없다. eager helper도 같다. workspace가 `None`이면 [일반 all-reduce와 RMSNorm으로 돌아간다](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/models/common/ops/fused_allreduce_rms_norm.py).
+
+정리하면 fallback이 낸 결과는 맞았다. 틀린 것은 순서다. vLLM은 workspace를 쓸 수 있는지 검사하기 전에 먼저 만들었다. 그 생성이 실패하기까지 30초가 걸렸고, 실패한 뒤에도 GPU memory가 남았다. 그래서 고칠 곳은 지적 1이다. capability 검사를 workspace 생성 앞으로 옮겨야 한다.
+
+## 추적 3: vLLM이 건너뛴 FlashInfer의 검사
+
+댓글이 말한 함수들을 FlashInfer에서 찾아보니, FlashInfer는 이미 그 함수들로 스스로 검사하고 있었다. [`create_allreduce_fusion_workspace`](https://github.com/flashinfer-ai/flashinfer/blob/v0.6.16.post3/flashinfer/comm/allreduce.py#L457-L472)의 일부다.
+
+```python
+if backend == "auto":
+    ...
+    local_mnnvl_supported = is_multicast_supported(torch.cuda.current_device())
+    if all_ranks_support_mnnvl(
+        local_mnnvl_supported, world_size, comm_backend, group
+    ):
+        suitable_backends.append("mnnvl")
+    ...
+else:
+    actual_backend = backend
+```
+
+검사는 `backend == "auto"`일 때만 한다. 호출자가 backend를 직접 지정하면 그대로 믿는다. 그런데 vLLM은 `auto`를 자기 쪽에서 `mnnvl`로 풀어서 넘긴다. 그래서 `else` 분기로 들어가고, 검사 없이 `MNNVLAllReduceFusionWorkspace`를 만들기 시작한다.
+
+양쪽 다 나름의 이유가 있었다. vLLM은 backend 정책을 직접 정해야 했다. single node에서 `mnnvl`과 `trtllm` 중 무엇이 빠른지, 어떤 조합이 CUDA graph에서 멈추는지를 vLLM 쪽에서 측정하고 바꿔 왔기 때문이다. FlashInfer는 명시적으로 지정된 backend를 의심할 이유가 없었다. 두 library의 경계에서 "누가 topology를 확인하는가"가 비어 있었다.
+
+## 추적 4: 30초의 출처
+
+남은 질문은 왜 실패가 즉시 나지 않고 30초가 걸리는가였다. 이것을 이해하려면 process들이 GPU memory를 어떻게 공유하는지 알아야 한다.
+
+### GPU memory 공유 절차
+
+rank는 각자 별도의 process이고, process마다 주소 공간이 따로 있다. rank 0이 가진 pointer 값은 rank 1에게 아무 의미가 없다. 그래서 공유는 pointer가 아니라 handle로 한다. FlashInfer의 [`SymmDeviceMemory`](https://github.com/flashinfer-ai/flashinfer/blob/v0.6.16.post3/flashinfer/comm/mnnvl.py#L1038-L1101)가 하는 순서는 이렇다.
+
+1. 각 rank가 `cuMemCreate`로 자기 GPU에 물리 memory를 만든다.
+2. `cuMemExportToShareableHandle`로 그 memory의 handle을 내보낸다.
+3. rank들이 handle을 서로 교환한다.
+4. 받은 handle을 `cuMemImportFromShareableHandle`로 가져온다.
+5. `cuMemAddressReserve`로 가상 주소를 rank 수만큼 예약하고, $i$번째 rank의 memory를 $i$번째 자리에 `cuMemMap`으로 붙인다.
+
+5번이 끝나면 각 process는 자기 주소 공간 안에 모든 rank의 buffer를 가리키는 주소를 rank 수만큼 갖는다. 같은 물리 memory가 process마다 다른 가상 주소로 보이지만, 각 process는 자기 주소표만 쓰면 되므로 문제가 없다. 이 주소들이 unicast pointer(`uc_ptrs`)다.
+
+multicast는 그 위에 하나를 더한다. rank 0이 `cuMulticastCreate`로 multicast 객체를 만들고, 모든 rank가 자기 memory를 거기에 묶는다. 그러면 주소 하나(`mc_ptr`)에 쓴 값이 모든 rank의 buffer에 동시에 기록된다. rank 수만큼 쓸 것을 한 번에 쓰는 셈이다. CUDA Programming Guide의 [Virtual Memory Management](https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/virtual-memory-management.html) 절은 이 기능을 NVSwitch로 연결된 GPU에서 쓰는 것으로 설명한다.
+
+### handle 종류와 전달 경로
+
+멈춤은 3번, handle 교환에서 났다. handle에는 두 종류가 있고, 종류에 따라 전달 경로가 다르다.
+
+<Figure
+  src="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-03-handles-light.svg"
+  darkSrc="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-03-handles-dark.svg"
+  caption="POSIX fd는 같은 host의 process끼리만 넘길 수 있다. FABRIC handle은 byte 열이라 node를 넘지만, 양쪽 GPU가 같은 NVLink fabric에 있어야 쓸 수 있다."
+/>
+
+POSIX file descriptor는 process 안에서만 뜻이 있는 번호다. 다른 process에 넘기려면 kernel이 받는 쪽의 descriptor table에 새 항목을 만들어 줘야 하고, 그 수단이 Unix domain socket의 `SCM_RIGHTS`다. Unix domain socket은 같은 host 안에서만 통한다.
+
+FABRIC handle은 그냥 byte 열이다. 일반 message처럼 `allgather`로 node를 넘겨도 된다. 대신 보내는 GPU와 받는 GPU가 같은 NVLink fabric에 속해 있어야 import할 수 있다.
+
+v0.6.16.post3은 둘 중 무엇을 쓸지를 [rank마다 따로](https://github.com/flashinfer-ai/flashinfer/blob/v0.6.16.post3/flashinfer/comm/mnnvl.py#L679-L689) 정했다.
+
+```python
+if is_mnnvl_fabric_supported(dev_id):
+    handle_type = cuda.CUmemAllocationHandleType.CU_MEM_HANDLE_TYPE_FABRIC
+else:
+    handle_type = (
+        cuda.CUmemAllocationHandleType.CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR
+    )
+```
+
+버그가 발생한 클러스터는 B300 node 2대를 InfiniBand로 묶은 것이고, GPU 16개 중 어느 것도 node를 넘는 NVLink fabric에 속해 있지 않다. 그래서 rank 16개가 모두 POSIX fd를 골랐다. worker node의 log에 찍힌 `[fd_exchange]`가 이 분기로 들어갔다는 표시다. 그 다음 [`exchange_fds`](https://github.com/flashinfer-ai/flashinfer/blob/v0.6.16.post3/flashinfer/comm/fd_exchange.py#L115)가 실행된다. 각 rank는 자기 `/tmp` 아래에 socket을 만들고, 그 경로를 `allgather`로 모든 rank에 알린 뒤, 다른 rank의 socket에 접속한다.
+
+node가 2대면 이 접속이 실패한다. node 1의 rank 8은 `/tmp/cuda_fd_xchg_2226_0_ewa1btyl/fd.sock`이라는 경로를 받는다. pid 2226은 node 0의 process이고, 이 경로는 node 0의 file system에 있다. node 1에는 그런 file이 없다. [`_connect_with_retry`](https://github.com/flashinfer-ai/flashinfer/blob/v0.6.16.post3/flashinfer/comm/fd_exchange.py#L93-L107)는 `FileNotFoundError`를 "상대가 아직 socket을 안 만들었다"로 해석하고 10 ms마다 다시 시도한다. 그 한도가 [`_TIMEOUT_S = 30.0`](https://github.com/flashinfer-ai/flashinfer/blob/v0.6.16.post3/flashinfer/comm/fd_exchange.py#L43)이다.
+
+log의 error message가 이 설명과 정확히 맞는다. node 1의 worker(pid 2019)가 pid 2226의 socket 경로에 접속하다 timeout이 났다.
+
+memory가 남는 이유도 순서에서 나온다. 1번의 [`cuMemCreate`](https://github.com/flashinfer-ai/flashinfer/blob/v0.6.16.post3/flashinfer/comm/mnnvl.py#L1044-L1047)는 handle만 만드는 호출이 아니다. workspace의 buffer로 쓸 GPU memory를 실제로 할당한다. 이 buffer는 rank들이 부분합을 써 넣는 자리이고, model의 weight와는 무관하다. 이 호출은 교환보다 먼저 실행되고 성공한다. 3번에서 예외가 나면 그 memory를 놓아주는 코드를 거치지 않고 생성자를 빠져나간다. 그래서 시도 한 번마다 buffer 하나만큼의 GPU memory가 남는다. 여기까지는 코드를 읽어 확인한 것이다.
+
+한 시간 동안 멈춘 것과 OOM까지 간 것은 가설로만 설명할 수 있다. v0.27.1의 `get_fi_ar_workspace`는 [성공한 workspace만 기억한다](https://github.com/vllm-project/vllm/blob/v0.27.1/vllm/distributed/device_communicators/flashinfer_all_reduce.py#L157-L158). 실패하면 `None`을 돌려주고 다음 호출에서 처음부터 다시 시도한다. eager helper는 fusion 연산을 부를 때마다 이 함수를 부르므로, 시도마다 30초와 memory 한 덩어리가 쌓인다. 이 가설은 재현 환경에서 시도 횟수와 GPU memory 증가량을 재서 확인해야 하는데, 따로 재지는 않았다.
+
+## 수정: fabric probe와 모든 rank 투표
+
+고칠 방향은 추적 2에서 정해졌다. 만들기 전에 물어본다.
+
+<Figure
+  src="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-04-fix-light.svg"
+  darkSrc="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-04-fix-dark.svg"
+  caption="버그가 발생한 클러스터에서 두 버전이 실행하는 순서다. 점선 상자는 실행되지 않는 단계다. 수정 전에는 생성이 먼저여서 30초를 멈추고 memory를 남긴다. 수정 후에는 검사가 먼저여서 생성을 시작하지 않는다. 결과는 둘 다 None이다."
+/>
+
+merge된 코드는 [`_mnnvl_group_supported`](https://github.com/vllm-project/vllm/blob/f214e0d4cdbf2305c0a0d131e5ff100f56a41347/vllm/distributed/device_communicators/flashinfer_all_reduce.py#L68-L86) 함수 하나와, `_create_workspace` 맨 앞의 [검사 한 번](https://github.com/vllm-project/vllm/blob/f214e0d4cdbf2305c0a0d131e5ff100f56a41347/vllm/distributed/device_communicators/flashinfer_all_reduce.py#L118-L127)이다.
+
+```python
+def _mnnvl_group_supported(
+    world_size: int, comm_backend: Any, group: ProcessGroup
+) -> bool:
+    """Collectively check cross-node fabric support before allocating a workspace."""
+    if is_mnnvl_fabric_supported is None or all_ranks_support_mnnvl is None:
+        # Older FlashInfer versions retain the attempt-and-check behavior.
+        return True
+    if _node_count(group) == 1:
+        return True
+
+    try:
+        local_supported = is_mnnvl_fabric_supported(
+            torch.accelerator.current_device_index()
+        )
+    except Exception as e:
+        logger.debug_once("MNNVL fabric probe failed: %s", e)
+        # Still join the collective vote below or other ranks deadlock.
+        local_supported = False
+    return all_ranks_support_mnnvl(local_supported, world_size, comm_backend)
+```
+
+이 함수에는 판단이 세 개 들어 있다.
+
+### node 한 대인 group의 제외
+
+group이 node 한 대 안에 있으면 probe를 하지 않는다. 같은 host에서는 POSIX fd 교환이 되므로 fabric이 필요 없기 때문이다. 기준은 job 전체의 node 수가 아니라 이 group의 node 수다. node 2대짜리 job이라도 DP로 나눠 TP8 group이 node마다 하나씩 있으면, 각 group은 node 한 대 안에 있다.
+
+### probe 선택: multicast 대신 fabric
+
+FlashInfer가 `auto`에서 쓰는 probe는 `is_multicast_supported`다. PR은 이것 대신 `is_mnnvl_fabric_supported`를 쓴다.
+
+`is_multicast_supported`는 CUDA device 속성 하나를 읽는다. 이 GPU가 multicast를 할 수 있는가를 답할 뿐, 다른 node의 GPU와 NVLink로 이어져 있는가는 답하지 않는다. node 안에서만 multicast가 되는 장비에서도 `True`다. 즉 이 probe로는 "node 사이에 NVLink가 있는가"를 알 수 없다.
+
+`is_mnnvl_fabric_supported`는 NVML로 fabric 상태를 읽는다. fabric 등록이 끝났고 cluster UUID가 0이 아닐 때만 `True`다. 10월에 같은 구성(8xB300 2대, InfiniBand)을 재현한 issue의 [다른 댓글](https://github.com/vllm-project/vllm/issues/51986)이 이 선택을 뒷받침한다.
+
+> Each node has a working local NVLink domain and local multicast support, but NVML reports an all-zero fabric ClusterUUID.
+
+이 차이 때문에 "vLLM이 `auto`를 그대로 FlashInfer에 넘기면 된다"는 더 단순한 수정은 답이 되지 못한다. FlashInfer의 `auto` 검사는 이 topology를 통과시킨다.
+
+### 실패한 rank의 투표 참여
+
+`all_ranks_support_mnnvl`은 `allgather`로 모든 rank의 답을 모아 AND를 낸다. 이것은 collective다. collective는 group의 모든 rank가 불러야 끝난다. 한 rank라도 빠지면 나머지는 그 rank를 영원히 기다린다.
+
+<Figure
+  src="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-05-vote-light.svg"
+  darkSrc="/assets/images/post/2026-11-25-vLLM-MNNVL-AllReduce-Debugging/ar-05-vote-dark.svg"
+  caption="T는 True, F는 False다. rank 11의 probe만 실패한 경우를 가정한 예다. (a) 각 rank가 자기 GPU를 probe하고, allgather로 답 16개를 모으고, AND를 낸다. 모든 rank가 같은 결과를 얻는다. (b) 한 rank가 투표하지 않으면 allgather가 끝나지 않는다."
+/>
+
+투표는 세 단계다.
+
+1. probe: 각 rank가 `is_mnnvl_fabric_supported`로 자기 GPU만 확인한다. 답은 rank마다 다를 수 있다.
+2. allgather: 각 rank가 자기 답을 내고, 모든 rank의 답이 담긴 같은 목록을 받는다.
+3. AND: 각 rank가 그 목록에 `all`을 적용한다. 목록이 같으므로 결과도 같다.
+
+버그가 발생한 클러스터에서는 1번의 답이 모든 rank에서 `False`다. 그림은 투표가 왜 필요한지 보이려고 한 rank만 다른 경우를 그렸다.
+
+그래서 probe가 예외를 던져도 함수를 빠져나가면 안 된다. NVML을 못 여는 rank가 조용히 `False`를 돌려주고 끝내면, 나머지 15개 rank는 `allgather`에서 멈춘다. 30초 멈춤을 고치려다 무한 멈춤을 만드는 셈이다. 예외를 잡아 `local_supported = False`로 바꾸고 투표에는 참여하게 한 것이 그 때문이다. PR은 이 경우를 unit test 하나로 고정한다.
+
+투표가 필요한 이유도 같다. rank마다 답이 다르면 어떤 rank는 workspace를 만들려 하고 어떤 rank는 건너뛴다. workspace 생성도 collective이므로 이 역시 멈춘다. 모든 rank가 같은 답을 갖고 같은 분기로 가야 한다.
+
+### 결과
+
+투표가 `False`면 `_create_workspace`는 warning 한 줄을 찍고 `None`을 돌려준다. 그 뒤는 추적 2에서 확인한 기존 fallback이 그대로 처리한다. fusion이 꺼지고 일반 all-reduce와 RMSNorm으로 돈다.
+
+검증은 두 가지로 했다. unit test는 probe와 투표를 mock해서 다섯 경우를 확인한다. 실제 장비 검증은 같은 8xB300 2대에서 했고, 시작할 때의 멈춤이 없어지고 실패한 할당이 남긴 GPU memory가 없는 것을 확인했다.
+
+## 이후의 변화
+
+PR을 열고 merge되기까지 석 달이 걸렸고, 그 사이 주변 코드가 여러 번 바뀌었다.
+
+| 날짜 | 변경 | 내용 |
+| --- | --- | --- |
+| 8월 29일 | vLLM [#53253](https://github.com/vllm-project/vllm/pull/53253) | `CustomAllreduce`의 cross-node MNNVL 경로에 GPU 세대와 local multicast 검사 추가 |
+| 10월 4일 | vLLM [#56891](https://github.com/vllm-project/vllm/pull/56891) | `auto`의 backend 선택 수정. multi-node는 Blackwell에서만 `mnnvl` |
+| 10월 21일 | FlashInfer [#6734](https://github.com/flashinfer-ai/flashinfer/pull/6734) | handle 종류를 모든 rank가 함께 정하도록 변경. host가 다른데 fabric이 없으면 바로 예외 |
+| 11월 16일 | vLLM [#59208](https://github.com/vllm-project/vllm/pull/59208) | `nvlink_fabric.py` 추가. symmetric memory를 쓰는 경로들이 cluster UUID와 clique ID로 topology를 분류 |
+| 11월 24일 | vLLM [#53377](https://github.com/vllm-project/vllm/pull/53377) | 이 글의 수정 |
+
+[#56891](https://github.com/vllm-project/vllm/pull/56891)은 이 버그를 고치지 않는다. B300은 Blackwell이라서 multi-node에서 여전히 `mnnvl`이 선택된다. 그 PR 위로 rebase하면서 node 수 기준을 job 전체에서 group으로 맞췄다.
+
+같은 버그는 FlashInfer workspace에만 있지 않았다. vLLM에는 TP group 전체에 걸쳐 symmetric memory를 만드는 경로가 둘 더 있다. `CustomAllreduce`가 node 사이에서 buffer를 공유하는 경로와, [앞에서 본](#kimi-k3의-moe-layer와-ep) Kimi K3의 tail fusion이다. 10월에 issue에 달린 [댓글](https://github.com/vllm-project/vllm/issues/51986)은 같은 구성에서 이 두 경로도 멈춘다고 보고했다. 두 경로는 server가 시작할 때 FlashInfer workspace보다 먼저 실행되므로, 멈춤도 거기서 먼저 난다.
+
+표의 두 PR이 이 경로들을 고쳤다. [#53253](https://github.com/vllm-project/vllm/pull/53253)은 `CustomAllreduce`에 검사를 넣었지만, 각 GPU가 multicast를 할 수 있는지만 봤다. `is_multicast_supported`와 같은 한계가 있어서, node 안에서만 multicast가 되는 이 구성을 걸러내지 못했다. [#59208](https://github.com/vllm-project/vllm/pull/59208)은 [`nvlink_fabric.py`](https://github.com/vllm-project/vllm/blob/689b84c3697623552c0a11eb1e348bf32bc31bba/vllm/distributed/device_communicators/nvlink_fabric.py)를 추가했다. 모든 rank의 cluster UUID와 clique ID가 같은지 확인하는 검사이고, symmetric memory를 쓰는 경로들이 함께 쓴다.
+
+세 경로의 원인은 같다. node 안에서 동작하는지만 확인하고, node 사이에서도 동작한다고 가정했다.
+
+이 guard가 앞으로도 필요한지는 더 확인해야 한다. FlashInfer [#6734](https://github.com/flashinfer-ai/flashinfer/pull/6734) 이후로는 FlashInfer도 host가 다른데 fabric이 없으면 handle을 교환하기 전에 예외를 낸다. 코드로 보면 guard가 없어도 30초 멈춤은 나지 않을 것으로 읽힌다. 그러나 guard를 빼고 실제 장비에서 실행해 보지는 않았고, 예외가 나기 전에 할당한 GPU memory가 남는지도 확인하지 않았다. FlashInfer의 `auto` 검사가 이 구성을 걸러내지 못하는 것도 그대로다. 그래서 PR의 첫 commit부터 `_mnnvl_group_supported` 위에 [TODO 주석](https://github.com/vllm-project/vllm/blob/f214e0d4cdbf2305c0a0d131e5ff100f56a41347/vllm/distributed/device_communicators/flashinfer_all_reduce.py#L65-L67)을 붙여 두었다. FlashInfer가 `mnnvl`을 지정받았을 때도 fabric 상태를 스스로 검사하게 되면, 그때는 이 guard가 필요 없어질 수 있다.
+
+## 한계와 남은 질문
+
+이 글에서 확인하지 못한 것을 적어 둔다.
+
+- 내 실행에서 workspace를 요청한 쪽이 compile pass인지, drafter의 eager helper인지, 본체의 MoE layer인지 확정하지 못했다. `fuse_allreduce_rms: false`가 효과가 있었던 이유도 그에 달려 있다.
+- 한 시간 멈춤과 OOM의 원인은 가설이다. 시도 횟수와 memory 증가량을 따로 재지는 않았다.
+- 현재 고정된 FlashInfer 0.7.4에서 guard 없이도 멈춤이 사라지는지는 실행해 보지 않았다. 코드상으로는 그럴 것으로 읽힌다.
+- 이 수정은 성능을 올리지 않는다. InfiniBand 2 node에서는 fusion이 꺼지고 NCCL all-reduce로 돈다. fusion을 쓸 때와 안 쓸 때의 차이를 이 구성에서 잰 수치는 없다.
+- NCCL이 내부에서 transport를 고르는 과정은 다루지 않았다.
+
+guard가 적용되지 않는 경우도 있다. FlashInfer에 probe 함수가 없는 옛 버전이면 예전처럼 일단 만들어 본다.
+
+## 마치며
+
+정리하면 이 버그의 원인은 검사의 내용이 아니라 검사가 실행되는 시점이다. workspace를 쓸 수 없는 topology를 걸러내는 검사는 원래 있었고, 내용도 맞았다. 그런데 필요한 시점에 실행되지 않았다.
+
+- vLLM의 `mc_ptr` 검사는 workspace를 만든 뒤에 있었다. 버그가 발생한 클러스터에서는 생성이 30초 동안 멈췄다가 예외로 끝나므로, 이 검사에 도달하지 못했다.
+- FlashInfer의 검사는 생성 앞에 있었지만 backend가 `auto`일 때만 실행됐다. vLLM이 backend를 `mnnvl`로 정해서 넘겼으므로 이 검사는 건너뛰었다.
+
+수정은 검사가 생성 앞에서 실행되게 한 것이다. workspace를 만들기 전에 각 rank가 NVLink fabric을 확인하고, 모든 rank가 그 결과를 모은다. 한 rank라도 `False`면 workspace를 만들지 않고 일반 all-reduce로 돌아간다. 돌아가는 경로는 원래 있던 것이고, 바뀐 것은 거기에 도달하는 방법이다. 30초를 멈춘 뒤 예외로 도달하던 것이 검사 한 번으로 도달한다.
+
+이 디버깅을 복기하며 배운 것은 두 가지다.
+
+첫째, 서로 맞지 않는 log 두 줄이 추적의 출발점이었다. vLLM은 시작할 때 `Using ['PYNCCL'] all-reduce backends`를 찍었다. all-reduce에 NCCL만 쓴다는 뜻이다. 그런데 실패 경고는 `Failed to initialize FlashInfer Allreduce norm fusion workspace`였다. NCCL만 쓴다면 FlashInfer의 workspace를 만들 이유가 없다. 두 log가 모두 사실이려면 backend log에 나오지 않는 all-reduce 경로가 하나 더 있어야 한다. 그 경로가 [fusion 경로](#합산의-두-경로)였고, 버그는 그 안에 있었다.
+
+둘째, 여러 rank가 함께 하는 초기화는 실패하는 데도 시간이 든다. process 하나에서는 예외가 바로 난다. rank 16개가 서로를 기다리는 코드에서는 timeout이 지나야 실패한다. 그래서 만들어 보고 실패를 확인하는 것보다 만들기 전에 조건을 검사하는 쪽이 싸다.
+
+## 참고 자료
+
+- vLLM issue [#51986](https://github.com/vllm-project/vllm/issues/51986): mnnvl allreduce workspace init hangs 30s and leaks GPU memory on IB-only multi-node
+- vLLM PR [#53377](https://github.com/vllm-project/vllm/pull/53377): Gate MNNVL allreduce workspace creation on fabric support
+- vLLM PR [#59208](https://github.com/vllm-project/vllm/pull/59208): Guard cross-node symmetric-memory rendezvous
+- FlashInfer PR [#6734](https://github.com/flashinfer-ai/flashinfer/pull/6734): choose MNNVL handle types collectively and confirm them by allocating
+- Chris Fregly, AI Systems Performance Engineering, Figure 2-9. [ai-performance-engineering](https://github.com/cfregly/ai-performance-engineering) 저장소 (Apache License 2.0)
+- NVIDIA, CUDA Programming Guide, [Virtual Memory Management](https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/virtual-memory-management.html)
+- NVIDIA, CUDA Driver API, [Multicast Object Management](https://docs.nvidia.com/cuda/cuda-driver-api/cuda_driver_api/group__CUDA__MULTICAST.html)
+- Google DeepMind, How To Scale Your Model, [Sharded Matrices and How to Multiply Them](https://jax-ml.github.io/scaling-book/sharding/)
+- PyTorch Core SIG, [Distributed Programming in PyTorch](https://core-sig.pytorch.kr/lectures/05-distributed-programming/)

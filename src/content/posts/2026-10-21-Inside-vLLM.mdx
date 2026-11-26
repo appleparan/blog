@@ -1112,5 +1112,5 @@ SGLang은 같은 문제를 반대 방향으로 푼다. 종류마다 물리적인
 글이 너무 길어져서 아래 주제는 이번 글에서 뺐다. 각 주제는 별도 포스트에서 다룰 예정이다.
 
 - SGLang의 구조: 같은 문제를 푸는 다른 serving engine인 SGLang이 server, scheduler, KV cache를 어떻게 나누는지 vLLM과 비교한다. [Inside SGLang](https://blog.liam.kim/posts/2026/10/Inside-sglang/)에서 다뤘다.
-- NCCL 초기화: 이 글은 GPU 하나를 가정했다. GPU 여러 개로 model을 나눠 띄울 때 worker process가 NCCL 통신을 언제, 어떻게 초기화하는지 본다.
+- NCCL 초기화: 이 글은 GPU 하나를 가정했다. GPU 여러 개로 model을 나눠 띄울 때 worker process가 NCCL 통신을 언제, 어떻게 초기화하는지 본다. [vLLM MNNVL all-reduce 버그 디버깅](https://blog.liam.kim/posts/2026/11/vLLM-MNNVL-AllReduce-Debugging/#nccl-communicator-초기화)의 NCCL communicator 초기화 절에서 다뤘다.
 - FlashInfer 같은 attention backend의 결합: [1.4](#14-block-table-token-위치에서-kv-cache-주소로)에서 본 `slot_mapping`과 attention metadata가 FlashAttention, FlashInfer 같은 backend로 어떻게 넘어가고, backend를 어떻게 고르는지 본다.
